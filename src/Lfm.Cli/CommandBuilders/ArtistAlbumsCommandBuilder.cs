@@ -21,10 +21,16 @@ public static class ArtistAlbumsCommandBuilder
         var depthOption = new Option<int?>("--depth", "Maximum number of items to search through (0 = unlimited, overrides --deep and config)");
         
         var timeoutOption = new Option<int?>("--timeout", "Search timeout in seconds (0 = no timeout, overrides config)");
-        timeoutOption.AddAlias("-t");
         
         var verboseOption = new Option<bool>("--verbose", "Show detailed progress information");
         verboseOption.AddAlias("-v");
+
+        var timingOption = new Option<bool>("--timing", "Show detailed API timing information (cache hits/misses and response times)");
+        timingOption.AddAlias("-t");
+
+        var timerOption = new Option<bool>("--timer", "Display total execution time");
+
+        var (forceCacheOption, forceApiOption, noCacheOption) = CommandOptionBuilders.BuildCacheOptions();
         
         var artistArg = new Argument<string>("artist", "Artist name");
 
@@ -36,14 +42,32 @@ public static class ArtistAlbumsCommandBuilder
             delayOption,
             depthOption,
             timeoutOption,
-            verboseOption
+            verboseOption,
+            timingOption,
+            forceCacheOption,
+            forceApiOption,
+            noCacheOption,
+            timerOption
         };
 
-        command.SetHandler(async (string artist, int limit, bool deep, int? delay, int? depth, int? timeout, bool verbose) =>
+        command.SetHandler(async (context) =>
         {
+            var artist = context.ParseResult.GetValueForArgument(artistArg);
+            var limit = context.ParseResult.GetValueForOption(limitOption);
+            var deep = context.ParseResult.GetValueForOption(deepOption);
+            var delay = context.ParseResult.GetValueForOption(delayOption);
+            var depth = context.ParseResult.GetValueForOption(depthOption);
+            var timeout = context.ParseResult.GetValueForOption(timeoutOption);
+            var verbose = context.ParseResult.GetValueForOption(verboseOption);
+            var timing = context.ParseResult.GetValueForOption(timingOption);
+            var forceCache = context.ParseResult.GetValueForOption(forceCacheOption);
+            var forceApi = context.ParseResult.GetValueForOption(forceApiOption);
+            var noCache = context.ParseResult.GetValueForOption(noCacheOption);
+            var timer = context.ParseResult.GetValueForOption(timerOption);
+            
             var artistAlbumsCommand = services.GetRequiredService<ArtistSearchCommand<Album, TopAlbums>>();
-            await artistAlbumsCommand.ExecuteAsync(artist, limit, deep, delay, depth, timeout, verbose);
-        }, artistArg, limitOption, deepOption, delayOption, depthOption, timeoutOption, verboseOption);
+            await artistAlbumsCommand.ExecuteAsync(artist, limit, deep, delay, depth, timeout, verbose, timing, forceCache, forceApi, noCache, timer);
+        });
 
         return command;
     }

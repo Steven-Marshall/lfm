@@ -14,16 +14,20 @@ public class AlbumsCommand : BaseCommand
         ILastFmApiClient apiClient,
         IConfigurationManager configManager,
         IDisplayService displayService,
-        ILogger<AlbumsCommand> logger)
-        : base(apiClient, configManager, logger)
+        ILogger<AlbumsCommand> logger,
+        ISymbolProvider symbolProvider)
+        : base(apiClient, configManager, logger, symbolProvider)
     {
         _displayService = displayService ?? throw new ArgumentNullException(nameof(displayService));
     }
 
-    public async Task ExecuteAsync(int limit, string period, string? username, string? range = null, int? delayMs = null, bool verbose = false)
+    public async Task ExecuteAsync(int limit, string period, string? username, string? range = null, int? delayMs = null, bool verbose = false, bool timing = false, bool forceCache = false, bool forceApi = false, bool noCache = false, bool timer = false)
     {
-        await ExecuteWithErrorHandlingAsync("albums command", async () =>
+        await ExecuteWithErrorHandlingAndTimerAsync("albums command", async () =>
         {
+            // Configure cache behavior and timing
+            ConfigureCaching(timing, forceCache, forceApi, noCache);
+
             if (!await ValidateApiKeyAsync())
                 return;
 
@@ -69,7 +73,7 @@ public class AlbumsCommand : BaseCommand
 
             if (verbose)
             {
-                Console.WriteLine($"♫ Getting top {limit} albums for {user} ({period})...\n");
+                Console.WriteLine($"Getting top {limit} albums for {user} ({period})...\n");
             }
 
             var result = await _apiClient.GetTopAlbumsAsync(user, period, limit);
@@ -85,7 +89,7 @@ public class AlbumsCommand : BaseCommand
             {
                 Console.WriteLine($"\nTotal albums: {result.Attributes.Total}");
             }
-        });
+        }, timer);
     }
 
 }

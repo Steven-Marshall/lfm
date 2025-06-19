@@ -3,6 +3,13 @@ using Microsoft.Extensions.Logging;
 
 namespace Lfm.Core.Configuration;
 
+public enum UnicodeSupport
+{
+    Auto,     // Auto-detect terminal capabilities
+    Enabled,  // Force Unicode symbols
+    Disabled  // Force ASCII fallbacks
+}
+
 public class LfmConfig
 {
     public string ApiKey { get; set; } = string.Empty;
@@ -12,6 +19,18 @@ public class LfmConfig
     public int ApiThrottleMs { get; set; } = 100;
     public int NormalSearchDepth { get; set; } = 10000;
     public int DeepSearchTimeoutSeconds { get; set; } = 300;
+    
+    // Cache Configuration
+    public bool CacheEnabled { get; set; } = true;
+    public int CacheExpiryMinutes { get; set; } = 10;
+    public int MaxCacheSizeMB { get; set; } = 100;
+    public int MaxCacheFiles { get; set; } = 10000;
+    public int MaxCacheAgeDays { get; set; } = 30;
+    public DateTime LastCacheCleanup { get; set; } = DateTime.MinValue;
+    public int CleanupIntervalHours { get; set; } = 6;
+    
+    // Display Configuration
+    public UnicodeSupport UnicodeSymbols { get; set; } = UnicodeSupport.Auto;
 }
 
 public interface IConfigurationManager

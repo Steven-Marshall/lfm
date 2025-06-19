@@ -4,6 +4,7 @@ using Lfm.Cli.Commands;
 using Lfm.Core.Configuration;
 using Lfm.Core.Models;
 using Lfm.Core.Services;
+using Lfm.Core.Services.Cache;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -24,7 +25,11 @@ class Program
             AlbumsCommandBuilder.Build(host.Services),
             ArtistTracksCommandBuilder.Build(host.Services),
             ArtistAlbumsCommandBuilder.Build(host.Services),
-            ConfigCommandBuilder.Build(host.Services)
+            ConfigCommandBuilder.Build(host.Services),
+            CacheStatusCommandBuilder.Build(host.Services),
+            CacheClearCommandBuilder.Build(host.Services),
+            TestCacheCommandBuilder.Build(host.Services),
+            BenchmarkCacheCommandBuilder.Build(host.Services)
         };
 
         return await rootCommand.InvokeAsync(args);
@@ -37,8 +42,15 @@ class Program
                 services.AddHttpClient();
                 
                 services.AddSingleton<IConfigurationManager, ConfigurationManager>();
+                services.AddSingleton<ICacheDirectoryHelper, CacheDirectoryHelper>();
+                services.AddSingleton<ISymbolProvider, SymbolProvider>();
                 
-                services.AddSingleton<ILastFmApiClient>(serviceProvider =>
+                // Cache services
+                services.AddSingleton<ICacheStorage, FileCacheStorage>();
+                services.AddSingleton<ICacheKeyGenerator, CacheKeyGenerator>();
+                
+                // Register the actual LastFm API client
+                services.AddSingleton<LastFmApiClient>(serviceProvider =>
                 {
                     var httpClientFactory = serviceProvider.GetRequiredService<IHttpClientFactory>();
                     var httpClient = httpClientFactory.CreateClient();
@@ -50,12 +62,28 @@ class Program
                     
                     return new LastFmApiClient(httpClient, logger, config.ApiKey);
                 });
+
+                // Register the cached wrapper as the main interface
+                services.AddSingleton<ILastFmApiClient>(serviceProvider =>
+                {
+                    var innerClient = serviceProvider.GetRequiredService<LastFmApiClient>();
+                    var cacheStorage = serviceProvider.GetRequiredService<ICacheStorage>();
+                    var keyGenerator = serviceProvider.GetRequiredService<ICacheKeyGenerator>();
+                    var logger = serviceProvider.GetRequiredService<ILogger<CachedLastFmApiClient>>();
+                    var configManager = serviceProvider.GetRequiredService<IConfigurationManager>();
+                    
+                    return new CachedLastFmApiClient(innerClient, cacheStorage, keyGenerator, logger, configManager, 10);
+                });
                 
                 services.AddTransient<IDisplayService, DisplayService>();
                 
                 services.AddTransient<ArtistsCommand>();
                 services.AddTransient<TracksCommand>();
                 services.AddTransient<AlbumsCommand>();
+                
+                // Cache management commands
+                services.AddTransient<CacheStatusCommand>();
+                services.AddTransient<CacheClearCommand>();
                 // Artist search commands using generic implementation
                 services.AddTransient<ArtistSearchCommand<Track, TopTracks>>(serviceProvider =>
                 {
@@ -63,12 +91,14 @@ class Program
                     var configManager = serviceProvider.GetRequiredService<IConfigurationManager>();
                     var displayService = serviceProvider.GetRequiredService<IDisplayService>();
                     var logger = serviceProvider.GetRequiredService<ILogger<ArtistSearchCommand<Track, TopTracks>>>();
+                    var symbolProvider = serviceProvider.GetRequiredService<ISymbolProvider>();
                     
                     return new ArtistSearchCommand<Track, TopTracks>(
                         apiClient,
                         configManager,
                         displayService,
                         logger,
+                        symbolProvider,
                         "tracks",
                         (user, period, limit, page) => apiClient.GetTopTracksAsync(user, period, limit, page),
                         response => response.Tracks,
@@ -82,12 +112,14 @@ class Program
                     var configManager = serviceProvider.GetRequiredService<IConfigurationManager>();
                     var displayService = serviceProvider.GetRequiredService<IDisplayService>();
                     var logger = serviceProvider.GetRequiredService<ILogger<ArtistSearchCommand<Album, TopAlbums>>>();
+                    var symbolProvider = serviceProvider.GetRequiredService<ISymbolProvider>();
                     
                     return new ArtistSearchCommand<Album, TopAlbums>(
                         apiClient,
                         configManager,
                         displayService,
                         logger,
+                        symbolProvider,
                         "albums",
                         (user, period, limit, page) => apiClient.GetTopAlbumsAsync(user, period, limit, page),
                         response => response.Albums,
@@ -98,7 +130,8 @@ class Program
                 {
                     var configManager = serviceProvider.GetRequiredService<IConfigurationManager>();
                     var logger = serviceProvider.GetRequiredService<ILogger<ConfigCommand>>();
-                    return new ConfigCommand(configManager, logger);
+                    var symbolProvider = serviceProvider.GetRequiredService<ISymbolProvider>();
+                    return new ConfigCommand(configManager, logger, symbolProvider);
                 });
             })
             .ConfigureLogging(logging =>

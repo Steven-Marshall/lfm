@@ -29,6 +29,7 @@ public class DisplayService : IDisplayService
             
             Console.WriteLine($"{rank,-4} {TruncateString(artist.Name, Display.ArtistNameMaxLength),-40} {plays,-10}");
         }
+        Console.WriteLine();
     }
 
     public void DisplayTracksForUser(List<Track> tracks, int startRank)
@@ -45,6 +46,7 @@ public class DisplayService : IDisplayService
             
             Console.WriteLine($"{rank,-4} {TruncateString(track.Name, Display.TrackNameMaxLength),-40} {TruncateString(track.Artist.Name, Display.SecondaryArtistNameMaxLength),-30} {plays,-10}");
         }
+        Console.WriteLine();
     }
 
     public void DisplayTracksForArtist(List<Track> tracks, int startRank)
@@ -60,6 +62,7 @@ public class DisplayService : IDisplayService
             
             Console.WriteLine($"{rank,-4} {TruncateString(track.Name, Display.TrackNameMaxLength),-40} {TruncateString(track.Artist.Name, Display.SecondaryArtistNameMaxLength),-30}");
         }
+        Console.WriteLine();
     }
 
     public void DisplayAlbums(List<Album> albums, int startRank)
@@ -76,6 +79,7 @@ public class DisplayService : IDisplayService
             
             Console.WriteLine($"{rank,-4} {TruncateString(album.Name, Display.AlbumNameMaxLength),-40} {TruncateString(album.Artist.Name, Display.SecondaryArtistNameMaxLength),-30} {plays,-10}");
         }
+        Console.WriteLine();
     }
 
     public void DisplayRangeInfo(string itemType, int startIndex, int endIndex, int actualCount, string total, bool verbose = false)

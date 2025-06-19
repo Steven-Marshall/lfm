@@ -30,6 +30,13 @@ public static class TracksCommandBuilder
         var verboseOption = new Option<bool>("--verbose", "Show detailed progress information");
         verboseOption.AddAlias("-v");
 
+        var timingOption = new Option<bool>("--timing", "Show detailed API timing information (cache hits/misses and response times)");
+        timingOption.AddAlias("-t");
+
+        var (forceCacheOption, forceApiOption, noCacheOption) = CommandOptionBuilders.BuildCacheOptions();
+
+        var timerOption = new Option<bool>("--timer", "Display total execution time");
+
         var command = new Command("tracks", "Get your top tracks with play counts, or global tracks for an artist")
         {
             limitOption,
@@ -38,14 +45,32 @@ public static class TracksCommandBuilder
             artistOption,
             rangeOption,
             delayOption,
-            verboseOption
+            verboseOption,
+            timingOption,
+            forceCacheOption,
+            forceApiOption,
+            noCacheOption,
+            timerOption
         };
 
-        command.SetHandler(async (int limit, string period, string user, string artist, string range, int? delay, bool verbose) =>
+        command.SetHandler(async (context) =>
         {
+            var limit = context.ParseResult.GetValueForOption(limitOption);
+            var period = context.ParseResult.GetValueForOption(periodOption);
+            var user = context.ParseResult.GetValueForOption(userOption);
+            var artist = context.ParseResult.GetValueForOption(artistOption);
+            var range = context.ParseResult.GetValueForOption(rangeOption);
+            var delay = context.ParseResult.GetValueForOption(delayOption);
+            var verbose = context.ParseResult.GetValueForOption(verboseOption);
+            var timing = context.ParseResult.GetValueForOption(timingOption);
+            var forceCache = context.ParseResult.GetValueForOption(forceCacheOption);
+            var forceApi = context.ParseResult.GetValueForOption(forceApiOption);
+            var noCache = context.ParseResult.GetValueForOption(noCacheOption);
+            var timer = context.ParseResult.GetValueForOption(timerOption);
+            
             var tracksCommand = services.GetRequiredService<TracksCommand>();
-            await tracksCommand.ExecuteAsync(limit, period, user, artist, range, delay, verbose);
-        }, limitOption, periodOption, userOption, artistOption, rangeOption, delayOption, verboseOption);
+            await tracksCommand.ExecuteAsync(limit, period ?? Defaults.TimePeriod, user, artist, range, delay, verbose, timing, forceCache, forceApi, noCache, timer);
+        });
 
         return command;
     }

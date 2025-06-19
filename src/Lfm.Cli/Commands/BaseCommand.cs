@@ -1,6 +1,7 @@
 using Lfm.Core.Configuration;
 using Lfm.Core.Services;
 using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 
 namespace Lfm.Cli.Commands;
 
@@ -12,15 +13,39 @@ public abstract class BaseCommand
     protected readonly ILastFmApiClient _apiClient;
     protected readonly IConfigurationManager _configManager;
     protected readonly ILogger _logger;
+    protected readonly ISymbolProvider _symbols;
 
     protected BaseCommand(
         ILastFmApiClient apiClient,
         IConfigurationManager configManager,
-        ILogger logger)
+        ILogger logger,
+        ISymbolProvider symbolProvider)
     {
         _apiClient = apiClient ?? throw new ArgumentNullException(nameof(apiClient));
         _configManager = configManager ?? throw new ArgumentNullException(nameof(configManager));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _symbols = symbolProvider ?? throw new ArgumentNullException(nameof(symbolProvider));
+    }
+
+    /// <summary>
+    /// Configures cache behavior and timing based on command flags
+    /// </summary>
+    protected void ConfigureCaching(bool timing = false, bool forceCache = false, bool forceApi = false, bool noCache = false)
+    {
+        if (_apiClient is CachedLastFmApiClient cachedClient)
+        {
+            if (timing)
+            {
+                cachedClient.EnableTiming = true;
+                cachedClient.TimingResults.Clear();
+            }
+            
+            // Set cache behavior based on flags
+            if (noCache) cachedClient.CacheBehavior = Lfm.Core.Configuration.CacheBehavior.NoCache;
+            else if (forceApi) cachedClient.CacheBehavior = Lfm.Core.Configuration.CacheBehavior.ForceApi;
+            else if (forceCache) cachedClient.CacheBehavior = Lfm.Core.Configuration.CacheBehavior.ForceCache;
+            else cachedClient.CacheBehavior = Lfm.Core.Configuration.CacheBehavior.Normal;
+        }
     }
 
     /// <summary>
@@ -185,7 +210,7 @@ public abstract class BaseCommand
     {
         if (verbose)
         {
-            Console.WriteLine($"♫ Getting {itemTypeName} {startIndex}-{endIndex} for {user} ({period})...\n");
+            Console.WriteLine($"Getting {itemTypeName} {startIndex}-{endIndex} for {user} ({period})...\n");
         }
         
         var allItems = new List<T>();
@@ -239,5 +264,101 @@ public abstract class BaseCommand
         
         var rangeItems = allItems.Take(rangeSize).ToList();
         return (rangeItems, totalCount);
+    }
+
+    /// <summary>
+    /// Displays timing information from cached API client if timing is enabled
+    /// </summary>
+    protected void DisplayTimingResults()
+    {
+        if (_apiClient is CachedLastFmApiClient cachedClient && cachedClient.EnableTiming)
+        {
+            var timingResults = cachedClient.TimingResults;
+            if (timingResults.Any())
+            {
+                Console.WriteLine($"\n{_symbols.Timer} API Timing Results:");
+                Console.WriteLine("Method              | Cache | Time (ms) | Details");
+                Console.WriteLine("--------------------+-------+-----------+----------");
+                
+                var totalTime = 0L;
+                var cacheHits = 0;
+                var totalCalls = timingResults.Count;
+                
+                foreach (var timing in timingResults)
+                {
+                    var status = timing.CacheHit ? " HIT " : "MISS";
+                    Console.WriteLine($"{timing.Method,-19} | {status} | {timing.ElapsedMs,8} | {timing.Details}");
+                    totalTime += timing.ElapsedMs;
+                    if (timing.CacheHit) cacheHits++;
+                }
+                
+                Console.WriteLine("--------------------+-------+-----------+----------");
+                Console.WriteLine($"Total: {totalCalls} calls, {cacheHits} cache hits ({(double)cacheHits/totalCalls*100:F1}%), {totalTime}ms");
+                
+                // Clear results for next command
+                timingResults.Clear();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Executes a command with standard error handling and optional timing measurement
+    /// </summary>
+    /// <param name="operation">Description of the operation</param>
+    /// <param name="commandLogic">The command logic to execute</param>
+    /// <param name="enableTimer">Whether to measure and display total execution time</param>
+    protected async Task ExecuteWithErrorHandlingAndTimerAsync(string operation, Func<Task> commandLogic, bool enableTimer = false)
+    {
+        Stopwatch? timer = null;
+        
+        if (enableTimer)
+        {
+            timer = Stopwatch.StartNew();
+        }
+        
+        try
+        {
+            await commandLogic();
+        }
+        catch (Exception ex)
+        {
+            HandleCommandError(ex, operation);
+        }
+        finally
+        {
+            if (timer != null)
+            {
+                timer.Stop();
+                Console.WriteLine($"\n{_symbols.Timer} Total execution time: {timer.ElapsedMilliseconds}ms ({timer.Elapsed.TotalSeconds:F2}s)");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Executes a command with optional end-to-end timing measurement
+    /// </summary>
+    /// <param name="commandLogic">The command logic to execute</param>
+    /// <param name="enableTimer">Whether to measure and display total execution time</param>
+    protected async Task ExecuteWithTimerAsync(Func<Task> commandLogic, bool enableTimer = false)
+    {
+        Stopwatch? timer = null;
+        
+        if (enableTimer)
+        {
+            timer = Stopwatch.StartNew();
+        }
+        
+        try
+        {
+            await commandLogic();
+        }
+        finally
+        {
+            if (timer != null)
+            {
+                timer.Stop();
+                Console.WriteLine($"\n{_symbols.Timer} Total execution time: {timer.ElapsedMilliseconds}ms ({timer.Elapsed.TotalSeconds:F2}s)");
+            }
+        }
     }
 }

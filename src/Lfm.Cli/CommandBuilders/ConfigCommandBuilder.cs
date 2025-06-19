@@ -31,6 +31,14 @@ public static class ConfigCommandBuilder
         var setTimeoutCommand = new Command("set-deep-timeout", "Set deep search timeout in seconds");
         var timeoutArg = new Argument<int>("seconds", "Timeout for deep searches in seconds (0 = no timeout)");
         setTimeoutCommand.AddArgument(timeoutArg);
+        
+        var setCacheExpiryCommand = new Command("set-cache-expiry", "Set cache expiry time in minutes");
+        var cacheExpiryArg = new Argument<int>("minutes", "Cache expiry time in minutes (default: 10)");
+        setCacheExpiryCommand.AddArgument(cacheExpiryArg);
+        
+        var setUnicodeCommand = new Command("set-unicode", "Set Unicode symbols mode");
+        var unicodeArg = new Argument<string>("mode", "Unicode mode: Auto, Enabled, or Disabled");
+        setUnicodeCommand.AddArgument(unicodeArg);
 
         setApiKeyCommand.SetHandler(async (string apiKey) =>
         {
@@ -67,6 +75,18 @@ public static class ConfigCommandBuilder
             var configCommand = services.GetRequiredService<ConfigCommand>();
             await configCommand.SetDeepTimeoutAsync(timeout);
         }, timeoutArg);
+        
+        setCacheExpiryCommand.SetHandler(async (int expiryMinutes) =>
+        {
+            var configCommand = services.GetRequiredService<ConfigCommand>();
+            await configCommand.SetCacheExpiryAsync(expiryMinutes);
+        }, cacheExpiryArg);
+        
+        setUnicodeCommand.SetHandler(async (string unicodeMode) =>
+        {
+            var configCommand = services.GetRequiredService<ConfigCommand>();
+            await configCommand.SetUnicodeSymbolsAsync(unicodeMode);
+        }, unicodeArg);
 
         command.AddCommand(setApiKeyCommand);
         command.AddCommand(setUserCommand);
@@ -74,6 +94,8 @@ public static class ConfigCommandBuilder
         command.AddCommand(setThrottleCommand);
         command.AddCommand(setDepthCommand);
         command.AddCommand(setTimeoutCommand);
+        command.AddCommand(setCacheExpiryCommand);
+        command.AddCommand(setUnicodeCommand);
 
         return command;
     }

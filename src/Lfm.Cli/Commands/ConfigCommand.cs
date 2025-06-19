@@ -8,13 +8,16 @@ public class ConfigCommand
 {
     private readonly IConfigurationManager _configManager;
     private readonly ILogger<ConfigCommand> _logger;
+    private readonly ISymbolProvider _symbols;
 
     public ConfigCommand(
         IConfigurationManager configManager,
-        ILogger<ConfigCommand> logger)
+        ILogger<ConfigCommand> logger,
+        ISymbolProvider symbolProvider)
     {
         _configManager = configManager ?? throw new ArgumentNullException(nameof(configManager));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _symbols = symbolProvider ?? throw new ArgumentNullException(nameof(symbolProvider));
     }
 
     public async Task SetApiKeyAsync(string apiKey)
@@ -23,7 +26,8 @@ public class ConfigCommand
         {
             if (string.IsNullOrWhiteSpace(apiKey))
             {
-                Console.WriteLine(ErrorMessages.EmptyApiKey);
+                Console.WriteLine($"{_symbols.Error} API key cannot be empty.");
+                Console.WriteLine($"{_symbols.Tip} Get your API key from: https://www.last.fm/api/account/create");
                 return;
             }
 
@@ -31,13 +35,13 @@ public class ConfigCommand
             config.ApiKey = apiKey.Trim();
             await _configManager.SaveAsync(config);
 
-            Console.WriteLine(ErrorMessages.ApiKeySaved);
+            Console.WriteLine($"{_symbols.Success} API key saved successfully.");
             Console.WriteLine(ErrorMessages.Format(ErrorMessages.ConfigSavedTo, _configManager.GetConfigPath()));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error setting API key");
-            Console.WriteLine(ErrorMessages.Format(ErrorMessages.GenericError, ex.Message));
+            Console.WriteLine($"{_symbols.Error} Error: {ex.Message}");
         }
     }
 
@@ -82,6 +86,16 @@ public class ConfigCommand
             Console.WriteLine($"API Throttle: {config.ApiThrottleMs}ms delay between requests");
             Console.WriteLine($"Normal Search Depth: {config.NormalSearchDepth:N0} items");
             Console.WriteLine($"Deep Search Timeout: {config.DeepSearchTimeoutSeconds} seconds");
+            Console.WriteLine();
+            Console.WriteLine("Cache Settings:");
+            Console.WriteLine($"Cache Enabled: {(config.CacheEnabled ? "✅ Yes" : "❌ No")}");
+            Console.WriteLine($"Cache Expiry: {config.CacheExpiryMinutes} minutes");
+            Console.WriteLine($"Max Cache Size: {config.MaxCacheSizeMB}MB");
+            Console.WriteLine($"Max Cache Files: {config.MaxCacheFiles:N0}");
+            Console.WriteLine($"Max Cache Age: {config.MaxCacheAgeDays} days");
+            Console.WriteLine();
+            Console.WriteLine("Display Settings:");
+            Console.WriteLine($"Unicode Symbols: {config.UnicodeSymbols}");
             
             if (string.IsNullOrEmpty(config.ApiKey))
             {
@@ -169,6 +183,62 @@ public class ConfigCommand
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error setting deep search timeout");
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.GenericError, ex.Message));
+        }
+    }
+
+    public async Task SetCacheExpiryAsync(int expiryMinutes)
+    {
+        try
+        {
+            if (expiryMinutes < 1)
+            {
+                Console.WriteLine("❌ Cache expiry must be >= 1 minute.");
+                return;
+            }
+
+            var config = await _configManager.LoadAsync();
+            config.CacheExpiryMinutes = expiryMinutes;
+            await _configManager.SaveAsync(config);
+
+            Console.WriteLine($"✅ Cache expiry set to {expiryMinutes} minutes.");
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.ConfigSavedTo, _configManager.GetConfigPath()));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error setting cache expiry");
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.GenericError, ex.Message));
+        }
+    }
+
+    public async Task SetUnicodeSymbolsAsync(string unicodeMode)
+    {
+        try
+        {
+            if (!Enum.TryParse<UnicodeSupport>(unicodeMode, true, out var mode))
+            {
+                Console.WriteLine("❌ Invalid Unicode mode. Valid options: Auto, Enabled, Disabled");
+                return;
+            }
+
+            var config = await _configManager.LoadAsync();
+            config.UnicodeSymbols = mode;
+            await _configManager.SaveAsync(config);
+
+            var description = mode switch
+            {
+                UnicodeSupport.Auto => "auto-detect terminal capabilities",
+                UnicodeSupport.Enabled => "always use Unicode symbols",
+                UnicodeSupport.Disabled => "always use ASCII fallbacks",
+                _ => mode.ToString()
+            };
+
+            Console.WriteLine($"✅ Unicode symbols set to {mode} ({description}).");
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.ConfigSavedTo, _configManager.GetConfigPath()));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error setting Unicode symbols");
             Console.WriteLine(ErrorMessages.Format(ErrorMessages.GenericError, ex.Message));
         }
     }

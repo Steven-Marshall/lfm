@@ -14,16 +14,20 @@ public class TracksCommand : BaseCommand
         ILastFmApiClient apiClient,
         IConfigurationManager configManager,
         IDisplayService displayService,
-        ILogger<TracksCommand> logger)
-        : base(apiClient, configManager, logger)
+        ILogger<TracksCommand> logger,
+        ISymbolProvider symbolProvider)
+        : base(apiClient, configManager, logger, symbolProvider)
     {
         _displayService = displayService ?? throw new ArgumentNullException(nameof(displayService));
     }
 
-    public async Task ExecuteAsync(int limit, string period, string? username, string? artist, string? range = null, int? delayMs = null, bool verbose = false)
+    public async Task ExecuteAsync(int limit, string period, string? username, string? artist, string? range = null, int? delayMs = null, bool verbose = false, bool timing = false, bool forceCache = false, bool forceApi = false, bool noCache = false, bool timer = false)
     {
-        await ExecuteWithErrorHandlingAsync("tracks command", async () =>
+        await ExecuteWithErrorHandlingAndTimerAsync("tracks command", async () =>
         {
+            // Configure cache behavior and timing
+            ConfigureCaching(timing, forceCache, forceApi, noCache);
+
             if (!await ValidateApiKeyAsync())
                 return;
 
@@ -37,7 +41,7 @@ public class TracksCommand : BaseCommand
 
                 if (verbose)
                 {
-                    Console.WriteLine($"♫ Getting top {limit} tracks for artist: {artist}...\n");
+                    Console.WriteLine($"Getting top {limit} tracks for artist: {artist}...\n");
                 }
                 
                 var artistResult = await _apiClient.GetArtistTopTracksAsync(artist, limit);
@@ -94,7 +98,7 @@ public class TracksCommand : BaseCommand
 
                 if (verbose)
                 {
-                    Console.WriteLine($"♫ Getting top {limit} tracks for {user} ({period})...\n");
+                    Console.WriteLine($"Getting top {limit} tracks for {user} ({period})...\n");
                 }
 
                 var result = await _apiClient.GetTopTracksAsync(user, period, limit);
@@ -108,7 +112,13 @@ public class TracksCommand : BaseCommand
                 _displayService.DisplayTracksForUser(result.Tracks, 1);
                 _displayService.DisplayTotalInfo("tracks", result.Attributes.Total, verbose);
             }
-        });
+
+            // Display timing results if enabled
+            if (timing)
+            {
+                DisplayTimingResults();
+            }
+        }, timer);
     }
 
 }

@@ -28,12 +28,13 @@ public class ArtistSearchCommand<T, TResponse> : BaseCommand
         IConfigurationManager configManager,
         IDisplayService displayService,
         ILogger logger,
+        ISymbolProvider symbolProvider,
         string itemTypeName,
         Func<string, string, int, int, Task<TResponse?>> apiCall,
         Func<TResponse, List<T>> extractItems,
         Func<T, string> getArtistName,
         Action<List<T>, int> displayMethod)
-        : base(apiClient, configManager, logger)
+        : base(apiClient, configManager, logger, symbolProvider)
     {
         _displayService = displayService ?? throw new ArgumentNullException(nameof(displayService));
         _itemTypeName = itemTypeName ?? throw new ArgumentNullException(nameof(itemTypeName));
@@ -43,10 +44,26 @@ public class ArtistSearchCommand<T, TResponse> : BaseCommand
         _displayMethod = displayMethod ?? throw new ArgumentNullException(nameof(displayMethod));
     }
 
-    public async Task ExecuteAsync(string artist, int limit, bool deep = false, int? delayMs = null, int? depth = null, int? timeoutSeconds = null, bool verbose = false)
+    public async Task ExecuteAsync(string artist, int limit, bool deep = false, int? delayMs = null, int? depth = null, int? timeoutSeconds = null, bool verbose = false, bool timing = false, bool forceCache = false, bool forceApi = false, bool noCache = false, bool timer = false)
     {
-        await ExecuteWithErrorHandlingAsync($"artist-{_itemTypeName} command", async () =>
+        await ExecuteWithErrorHandlingAndTimerAsync($"artist-{_itemTypeName} command", async () =>
         {
+            // Configure cache behavior and timing
+            if (_apiClient is CachedLastFmApiClient cachedClient)
+            {
+                if (timing)
+                {
+                    cachedClient.EnableTiming = true;
+                    cachedClient.TimingResults.Clear();
+                }
+                
+                // Set cache behavior based on flags
+                if (noCache) cachedClient.CacheBehavior = Lfm.Core.Configuration.CacheBehavior.NoCache;
+                else if (forceApi) cachedClient.CacheBehavior = Lfm.Core.Configuration.CacheBehavior.ForceApi;
+                else if (forceCache) cachedClient.CacheBehavior = Lfm.Core.Configuration.CacheBehavior.ForceCache;
+                else cachedClient.CacheBehavior = Lfm.Core.Configuration.CacheBehavior.Normal;
+            }
+
             if (!await ValidateApiKeyAsync())
                 return;
 
@@ -82,7 +99,7 @@ public class ArtistSearchCommand<T, TResponse> : BaseCommand
 
             if (verbose)
             {
-                Console.WriteLine($"♫ Getting your top {_itemTypeName} by {artist}...");
+                Console.WriteLine($"Getting your top {_itemTypeName} by {artist}...");
                 
                 // Display search parameters
                 if (maxItems == int.MaxValue)
@@ -237,6 +254,12 @@ public class ArtistSearchCommand<T, TResponse> : BaseCommand
                 // Clean up Ctrl+C handler
                 Console.CancelKeyPress -= CancelHandler;
             }
-        });
+
+            // Display timing results if enabled
+            if (timing)
+            {
+                DisplayTimingResults();
+            }
+        }, timer);
     }
 }

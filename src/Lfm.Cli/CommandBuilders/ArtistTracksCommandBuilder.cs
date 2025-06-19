@@ -26,6 +26,19 @@ public static class ArtistTracksCommandBuilder
         var verboseOption = new Option<bool>("--verbose", "Show detailed progress information");
         verboseOption.AddAlias("-v");
         
+        var timingOption = new Option<bool>("--timing", "Show detailed API timing information (cache hits/misses and response times)");
+        
+        var forceCacheOption = new Option<bool>("--force-cache", "Use cached data regardless of expiry time");
+        forceCacheOption.AddAlias("-fc");
+
+        var forceApiOption = new Option<bool>("--force-api", "Always call API and cache result, ignore existing cache");
+        forceApiOption.AddAlias("-fa");
+
+        var noCacheOption = new Option<bool>("--no-cache", "Disable caching entirely for this request");
+        noCacheOption.AddAlias("-nc");
+
+        var timerOption = new Option<bool>("--timer", "Display total execution time");
+        
         var artistArg = new Argument<string>("artist", "Artist name");
 
         var command = new Command("artist-tracks", "Get your most played tracks by a specific artist from your listening history")
@@ -36,14 +49,32 @@ public static class ArtistTracksCommandBuilder
             delayOption,
             depthOption,
             timeoutOption,
-            verboseOption
+            verboseOption,
+            timingOption,
+            forceCacheOption,
+            forceApiOption,
+            noCacheOption,
+            timerOption
         };
 
-        command.SetHandler(async (string artist, int limit, bool deep, int? delay, int? depth, int? timeout, bool verbose) =>
+        command.SetHandler(async (context) =>
         {
+            var artist = context.ParseResult.GetValueForArgument(artistArg);
+            var limit = context.ParseResult.GetValueForOption(limitOption);
+            var deep = context.ParseResult.GetValueForOption(deepOption);
+            var delay = context.ParseResult.GetValueForOption(delayOption);
+            var depth = context.ParseResult.GetValueForOption(depthOption);
+            var timeout = context.ParseResult.GetValueForOption(timeoutOption);
+            var verbose = context.ParseResult.GetValueForOption(verboseOption);
+            var timing = context.ParseResult.GetValueForOption(timingOption);
+            var forceCache = context.ParseResult.GetValueForOption(forceCacheOption);
+            var forceApi = context.ParseResult.GetValueForOption(forceApiOption);
+            var noCache = context.ParseResult.GetValueForOption(noCacheOption);
+            var timer = context.ParseResult.GetValueForOption(timerOption);
+            
             var artistTracksCommand = services.GetRequiredService<ArtistSearchCommand<Track, TopTracks>>();
-            await artistTracksCommand.ExecuteAsync(artist, limit, deep, delay, depth, timeout, verbose);
-        }, artistArg, limitOption, deepOption, delayOption, depthOption, timeoutOption, verboseOption);
+            await artistTracksCommand.ExecuteAsync(artist, limit, deep, delay, depth, timeout, verbose, timing, forceCache, forceApi, noCache, timer);
+        });
 
         return command;
     }
