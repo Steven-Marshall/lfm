@@ -57,8 +57,13 @@ lfm tracks --limit 20 --period 7day
 # Get your top albums with detailed timing
 lfm albums --timing
 
-# Get your top tracks by a specific artist
+# Get your top tracks by a specific artist (supports name variations)
 lfm artist-tracks "Radiohead"
+# Also works with: "radiohead", etc.
+
+# Get your top albums by a specific artist (supports name variations)  
+lfm artist-albums "Pink Floyd"
+# Also works with: "pink floyd", etc.
 
 # Get global top tracks for an artist (supports name variations)
 lfm tracks --artist "The Beatles"
@@ -227,10 +232,10 @@ The caching system provides significant performance improvements for repeated qu
 2. **Artist Not Found Issues**
    ```bash
    # The tool automatically corrects artist name variations
-   # These should all work for "The Beatles":
-   lfm artist-tracks "Beatles"
-   lfm artist-tracks "beatles" 
-   lfm artist-tracks "The Beatles"
+   # These commands support autocorrect for "The Beatles":
+   lfm artist-tracks "Beatles"        # Personal tracks by artist
+   lfm artist-albums "beatles"        # Personal albums by artist  
+   lfm tracks --artist "The Beatles"  # Global tracks by artist
    
    # If still not found, try the exact name from Last.fm website
    ```
