@@ -8,6 +8,7 @@ A powerful command-line interface for retrieving your Last.fm music statistics w
 - 🚀 **Smart Caching** - File-based cache system for improved performance
 - 🌍 **Cross-Platform** - Windows, Linux, and WSL support
 - 🎨 **Unicode Support** - Auto-detecting terminal capabilities with graceful ASCII fallbacks
+- 🔍 **Smart Artist Matching** - Automatic name correction for artist variations
 - ⚡ **Fast Performance** - Optimized API usage with configurable throttling
 - 🔧 **Flexible Configuration** - User-friendly config management
 - 📊 **Cache Management** - Built-in cache status and cleanup commands
@@ -59,8 +60,9 @@ lfm albums --timing
 # Get your top tracks by a specific artist
 lfm artist-tracks "Radiohead"
 
-# Get global top tracks for an artist
+# Get global top tracks for an artist (supports name variations)
 lfm tracks --artist "The Beatles"
+# Also works with: "Beatles", "beatles", etc.
 ```
 
 ### Cache Management
@@ -222,7 +224,18 @@ The caching system provides significant performance improvements for repeated qu
    lfm config set api-key YOUR_NEW_KEY
    ```
 
-2. **Unicode Display Issues**
+2. **Artist Not Found Issues**
+   ```bash
+   # The tool automatically corrects artist name variations
+   # These should all work for "The Beatles":
+   lfm artist-tracks "Beatles"
+   lfm artist-tracks "beatles" 
+   lfm artist-tracks "The Beatles"
+   
+   # If still not found, try the exact name from Last.fm website
+   ```
+
+3. **Unicode Display Issues**
    ```bash
    # Force ASCII mode if Unicode characters appear as "?"
    lfm config set unicode disabled
@@ -231,7 +244,7 @@ The caching system provides significant performance improvements for repeated qu
    lfm config set unicode auto
    ```
 
-3. **Performance Issues**
+4. **Performance Issues**
    ```bash
    # Check cache status
    lfm cache-status
@@ -243,7 +256,7 @@ The caching system provides significant performance improvements for repeated qu
    lfm benchmark-cache your-username
    ```
 
-4. **.NET Runtime Missing**
+5. **.NET Runtime Missing**
    - Download .NET 9 Runtime from https://dotnet.microsoft.com/download/dotnet/9.0
    - Choose "Run desktop apps" runtime for your platform
 

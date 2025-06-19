@@ -169,6 +169,7 @@ public class LastFmApiClient : ILastFmApiClient
                 ["method"] = "artist.getTopTracks",
                 ["artist"] = artist,
                 ["limit"] = limit.ToString(),
+                ["autocorrect"] = "1",
                 ["api_key"] = _apiKey,
                 ["format"] = "json"
             };
@@ -211,6 +212,7 @@ public class LastFmApiClient : ILastFmApiClient
                 ["method"] = "artist.getTopAlbums",
                 ["artist"] = artist,
                 ["limit"] = limit.ToString(),
+                ["autocorrect"] = "1",
                 ["api_key"] = _apiKey,
                 ["format"] = "json"
             };
