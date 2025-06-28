@@ -295,6 +295,54 @@ public class CachedLastFmApiClient : ILastFmApiClient
             }
         }
     }
+
+    public async Task<RecentTracks?> GetRecentTracksAsync(string username, DateTime from, DateTime to, int limit = 200, int page = 1)
+    {
+        var dateRange = DateRangeParser.FormatDateRange(from, to);
+        var cacheKey = _keyGenerator.ForRecentTracks(username, dateRange, limit, page);
+        
+        return await GetWithCacheAsync<RecentTracks>(
+            cacheKey,
+            async () => await _innerClient.GetRecentTracksAsync(username, from, to, limit, page),
+            "GetRecentTracks",
+            username, dateRange, limit, page);
+    }
+
+    public async Task<TopArtists?> GetTopArtistsForDateRangeAsync(string username, DateTime from, DateTime to, int limit = 10)
+    {
+        var dateRange = DateRangeParser.FormatDateRange(from, to);
+        var cacheKey = _keyGenerator.ForTopArtistsDateRange(username, dateRange, limit);
+        
+        return await GetWithCacheAsync<TopArtists>(
+            cacheKey,
+            async () => await _innerClient.GetTopArtistsForDateRangeAsync(username, from, to, limit),
+            "GetTopArtistsForDateRange",
+            username, dateRange, limit, 1);
+    }
+
+    public async Task<TopTracks?> GetTopTracksForDateRangeAsync(string username, DateTime from, DateTime to, int limit = 10)
+    {
+        var dateRange = DateRangeParser.FormatDateRange(from, to);
+        var cacheKey = _keyGenerator.ForTopTracksDateRange(username, dateRange, limit);
+        
+        return await GetWithCacheAsync<TopTracks>(
+            cacheKey,
+            async () => await _innerClient.GetTopTracksForDateRangeAsync(username, from, to, limit),
+            "GetTopTracksForDateRange",
+            username, dateRange, limit, 1);
+    }
+
+    public async Task<TopAlbums?> GetTopAlbumsForDateRangeAsync(string username, DateTime from, DateTime to, int limit = 10)
+    {
+        var dateRange = DateRangeParser.FormatDateRange(from, to);
+        var cacheKey = _keyGenerator.ForTopAlbumsDateRange(username, dateRange, limit);
+        
+        return await GetWithCacheAsync<TopAlbums>(
+            cacheKey,
+            async () => await _innerClient.GetTopAlbumsForDateRangeAsync(username, from, to, limit),
+            "GetTopAlbumsForDateRange",
+            username, dateRange, limit, 1);
+    }
     
     /// <summary>
     /// Attempts to cache the API result, handling errors gracefully

@@ -20,7 +20,7 @@ public class ArtistsCommand : BaseCommand
         _displayService = displayService ?? throw new ArgumentNullException(nameof(displayService));
     }
 
-    public async Task ExecuteAsync(int limit, string period, string? username, string? range = null, int? delayMs = null, bool verbose = false, bool timing = false, bool forceCache = false, bool forceApi = false, bool noCache = false, bool timer = false)
+    public async Task ExecuteAsync(int limit, string? period, string? username, string? range = null, int? delayMs = null, bool verbose = false, bool timing = false, bool forceCache = false, bool forceApi = false, bool noCache = false, bool timer = false, string? from = null, string? to = null, string? year = null)
     {
         await ExecuteWithErrorHandlingAndTimerAsync("artists command", async () =>
         {
@@ -34,6 +34,9 @@ public class ArtistsCommand : BaseCommand
             if (user == null)
                 return;
 
+            // Resolve period parameters (--period, --from/--to, or --year)
+            var (isDateRange, resolvedPeriod, fromDate, toDate) = ResolvePeriodParameters(period, from, to, year);
+            
             // Handle range logic
             if (!string.IsNullOrEmpty(range))
             {
@@ -44,6 +47,8 @@ public class ArtistsCommand : BaseCommand
                     return;
                 }
                 
+                // Note: Range queries with date ranges currently use period-based API calls
+                // This could be enhanced in the future to support date range + range queries
                 var (rangeArtists, totalCount) = await ExecuteRangeQueryAsync<Artist, TopArtists>(
                     startIndex,
                     endIndex,
@@ -52,7 +57,7 @@ public class ArtistsCommand : BaseCommand
                     response => response.Attributes.Total,
                     "artists",
                     user,
-                    period,
+                    resolvedPeriod,
                     delayMs,
                     verbose);
                 
@@ -67,12 +72,21 @@ public class ArtistsCommand : BaseCommand
                 return;
             }
 
+            // Display appropriate message based on query type
             if (verbose)
             {
-                Console.WriteLine($"Getting top {limit} artists for {user} ({period})...\n");
+                if (isDateRange && fromDate.HasValue && toDate.HasValue)
+                {
+                    Console.WriteLine($"Getting top {limit} artists for {user} ({DateRangeParser.FormatDateRange(fromDate.Value, toDate.Value)})...\n");
+                }
+                else
+                {
+                    Console.WriteLine($"Getting top {limit} artists for {user} ({resolvedPeriod})...\n");
+                }
             }
 
-            var result = await _apiClient.GetTopArtistsAsync(user, period, limit);
+            // Get artists using appropriate API method
+            var result = await GetTopArtistsWithPeriodAsync(user, isDateRange, resolvedPeriod, fromDate, toDate, limit);
 
             if (result?.Artists == null || !result.Artists.Any())
             {

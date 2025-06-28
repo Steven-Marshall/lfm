@@ -1,4 +1,5 @@
 using Lfm.Core.Configuration;
+using Lfm.Core.Models;
 using Lfm.Core.Services;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
@@ -45,6 +46,105 @@ public abstract class BaseCommand
             else if (forceApi) cachedClient.CacheBehavior = Lfm.Core.Configuration.CacheBehavior.ForceApi;
             else if (forceCache) cachedClient.CacheBehavior = Lfm.Core.Configuration.CacheBehavior.ForceCache;
             else cachedClient.CacheBehavior = Lfm.Core.Configuration.CacheBehavior.Normal;
+        }
+    }
+
+    /// <summary>
+    /// Resolves the time period to use based on provided parameters: --period, --from/--to, or --year
+    /// </summary>
+    /// <param name="periodStr">Period parameter (e.g., "overall", "12month")</param>
+    /// <param name="fromStr">From date parameter</param>
+    /// <param name="toStr">To date parameter</param>
+    /// <param name="yearStr">Year parameter</param>
+    /// <returns>Tuple with (isDateRange, period, fromDate, toDate) - period is used for API calls, dates for aggregation</returns>
+    protected (bool isDateRange, string period, DateTime? fromDate, DateTime? toDate) ResolvePeriodParameters(
+        string? periodStr, string? fromStr, string? toStr, string? yearStr)
+    {
+        try
+        {
+            // Validate parameter combinations
+            DateRangeParser.ValidateDateRangeParameters(periodStr, fromStr, toStr, yearStr);
+
+            // Handle --year parameter (highest priority after validation)
+            if (!string.IsNullOrWhiteSpace(yearStr))
+            {
+                var (from, to) = DateRangeParser.ParseYearRange(yearStr);
+                return (true, "daterange", from, to);
+            }
+
+            // Handle --from/--to parameters
+            if (!string.IsNullOrWhiteSpace(fromStr) && !string.IsNullOrWhiteSpace(toStr))
+            {
+                var (from, to) = DateRangeParser.ParseDateRange(fromStr, toStr);
+                return (true, "daterange", from, to);
+            }
+
+            // Handle --period parameter (or default)
+            var period = periodStr ?? "overall";
+            return (false, period, null, null);
+        }
+        catch (ArgumentException ex)
+        {
+            throw new InvalidOperationException(ex.Message, ex);
+        }
+    }
+
+    /// <summary>
+    /// Gets top artists using either period-based or date range API calls
+    /// </summary>
+    /// <param name="username">Username</param>
+    /// <param name="isDateRange">Whether to use date range API</param>
+    /// <param name="period">Period for period-based API calls</param>
+    /// <param name="fromDate">Start date for date range API calls</param>
+    /// <param name="toDate">End date for date range API calls</param>
+    /// <param name="limit">Number of items to return</param>
+    /// <param name="page">Page number (for period-based calls only)</param>
+    /// <returns>Top artists response or null</returns>
+    protected async Task<TopArtists?> GetTopArtistsWithPeriodAsync(
+        string username, bool isDateRange, string period, DateTime? fromDate, DateTime? toDate, 
+        int limit = 10, int page = 1)
+    {
+        if (isDateRange && fromDate.HasValue && toDate.HasValue)
+        {
+            return await _apiClient.GetTopArtistsForDateRangeAsync(username, fromDate.Value, toDate.Value, limit);
+        }
+        else
+        {
+            return await _apiClient.GetTopArtistsAsync(username, period, limit, page);
+        }
+    }
+
+    /// <summary>
+    /// Gets top tracks using either period-based or date range API calls
+    /// </summary>
+    protected async Task<TopTracks?> GetTopTracksWithPeriodAsync(
+        string username, bool isDateRange, string period, DateTime? fromDate, DateTime? toDate, 
+        int limit = 10, int page = 1)
+    {
+        if (isDateRange && fromDate.HasValue && toDate.HasValue)
+        {
+            return await _apiClient.GetTopTracksForDateRangeAsync(username, fromDate.Value, toDate.Value, limit);
+        }
+        else
+        {
+            return await _apiClient.GetTopTracksAsync(username, period, limit, page);
+        }
+    }
+
+    /// <summary>
+    /// Gets top albums using either period-based or date range API calls
+    /// </summary>
+    protected async Task<TopAlbums?> GetTopAlbumsWithPeriodAsync(
+        string username, bool isDateRange, string period, DateTime? fromDate, DateTime? toDate, 
+        int limit = 10, int page = 1)
+    {
+        if (isDateRange && fromDate.HasValue && toDate.HasValue)
+        {
+            return await _apiClient.GetTopAlbumsForDateRangeAsync(username, fromDate.Value, toDate.Value, limit);
+        }
+        else
+        {
+            return await _apiClient.GetTopAlbumsAsync(username, period, limit, page);
         }
     }
 

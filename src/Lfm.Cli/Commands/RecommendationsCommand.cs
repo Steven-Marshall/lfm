@@ -23,7 +23,7 @@ public class RecommendationsCommand : BaseCommand
 
     public async Task ExecuteAsync(
         int limit, 
-        string period, 
+        string? period, 
         string? username, 
         string? range = null, 
         int? delayMs = null, 
@@ -34,7 +34,11 @@ public class RecommendationsCommand : BaseCommand
         bool noCache = false, 
         bool timer = false,
         int recommendationLimit = 20,
-        int filter = 0)
+        int filter = 0,
+        int tracksPerArtist = 0,
+        string? from = null,
+        string? to = null,
+        string? year = null)
     {
         await ExecuteWithErrorHandlingAndTimerAsync("recommendations command", async () =>
         {
@@ -47,6 +51,9 @@ public class RecommendationsCommand : BaseCommand
             var user = await GetUsernameAsync(username);
             if (user == null)
                 return;
+
+            // Resolve period parameters (--period, --from/--to, or --year)
+            var (isDateRange, resolvedPeriod, fromDate, toDate) = ResolvePeriodParameters(period, from, to, year);
 
             // Step 1: Get user's top artists (reusing artists command logic)
             List<Artist> topArtists;
@@ -69,7 +76,7 @@ public class RecommendationsCommand : BaseCommand
                     response => response.Attributes.Total,
                     "artists",
                     user,
-                    period,
+                    resolvedPeriod,
                     delayMs,
                     verbose);
                 
@@ -86,10 +93,17 @@ public class RecommendationsCommand : BaseCommand
             {
                 if (verbose)
                 {
-                    Console.WriteLine($"Getting top {limit} artists for {user} ({period})...");
+                    if (isDateRange && fromDate.HasValue && toDate.HasValue)
+                    {
+                        Console.WriteLine($"Getting top {limit} artists for {user} ({DateRangeParser.FormatDateRange(fromDate.Value, toDate.Value)})...");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Getting top {limit} artists for {user} ({resolvedPeriod})...");
+                    }
                 }
 
-                var result = await _apiClient.GetTopArtistsAsync(user, period, limit);
+                var result = await GetTopArtistsWithPeriodAsync(user, isDateRange, resolvedPeriod, fromDate, toDate, limit);
 
                 if (result?.Artists == null || !result.Artists.Any())
                 {
@@ -220,7 +234,35 @@ public class RecommendationsCommand : BaseCommand
                 .Take(recommendationLimit)
                 .ToList();
             
-            // Step 5: Display results
+            // Step 5: Fetch top tracks if requested
+            var artistTracks = new ConcurrentDictionary<string, List<Track>>();
+            if (tracksPerArtist > 0)
+            {
+                if (verbose)
+                {
+                    Console.WriteLine($"\nFetching top {tracksPerArtist} tracks for each recommended artist...");
+                }
+
+                var trackTasks = filteredRecommendations.Select(async rec =>
+                {
+                    try
+                    {
+                        var tracks = await _apiClient.GetArtistTopTracksAsync(rec.Artist.Name, tracksPerArtist);
+                        if (tracks?.Tracks != null)
+                        {
+                            artistTracks[rec.Artist.Name] = tracks.Tracks;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to get tracks for {Artist}", rec.Artist.Name);
+                    }
+                }).ToArray();
+
+                await Task.WhenAll(trackTasks);
+            }
+
+            // Step 6: Display results
             if (!filteredRecommendations.Any())
             {
                 Console.WriteLine($"\nNo new recommendations found with filter >= {filter} plays.");
@@ -228,9 +270,15 @@ public class RecommendationsCommand : BaseCommand
                 return;
             }
             
-            Console.WriteLine($"\n🎵 Top {filteredRecommendations.Count} Recommendations (filter: >= {filter} plays)\n");
+            var playlistHeader = tracksPerArtist > 0 
+                ? $"🎵 Playlist: Top {filteredRecommendations.Count} Artists with {tracksPerArtist} tracks each (filter: >= {filter} plays)\n"
+                : $"🎵 Top {filteredRecommendations.Count} Recommendations (filter: >= {filter} plays)\n";
+            
+            Console.WriteLine($"\n{playlistHeader}");
             
             var index = 1;
+            var totalTracks = 0;
+            
             foreach (var rec in filteredRecommendations)
             {
                 var playCount = userPlayCounts.TryGetValue(rec.Artist.Name, out var pc) ? pc : 0;
@@ -244,9 +292,27 @@ public class RecommendationsCommand : BaseCommand
                 {
                     Console.WriteLine($"     Similar to: {string.Join(", ", rec.SimilarTo)}");
                 }
+
+                // Display tracks if requested
+                if (tracksPerArtist > 0 && artistTracks.TryGetValue(rec.Artist.Name, out var tracks))
+                {
+                    Console.WriteLine($"     Top tracks:");
+                    var trackIndex = 1;
+                    foreach (var track in tracks.Take(tracksPerArtist))
+                    {
+                        Console.WriteLine($"       {trackIndex}. {track.Name} ({track.PlayCount} plays)");
+                        trackIndex++;
+                        totalTracks++;
+                    }
+                }
                 
                 Console.WriteLine();
                 index++;
+            }
+
+            if (tracksPerArtist > 0)
+            {
+                Console.WriteLine($"📋 Playlist Summary: {totalTracks} tracks from {filteredRecommendations.Count} artists");
             }
             
             if (verbose)

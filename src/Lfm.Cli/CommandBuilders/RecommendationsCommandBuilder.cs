@@ -18,8 +18,15 @@ public static class RecommendationsCommandBuilder
         var artistLimitOption = new Option<int>("--artist-limit", () => Defaults.ItemLimit, "Number of top artists to analyze for recommendations");
         artistLimitOption.AddAlias("-a");
         
-        var periodOption = new Option<string>("--period", () => Defaults.TimePeriod, "Time period: overall, 7day, 1month, 3month, 6month, 12month");
+        var tracksPerArtistOption = new Option<int>("--tracks-per-artist", () => 0, "Number of top tracks to include per recommended artist (0 = artists only, default)");
+        tracksPerArtistOption.AddAlias("-tpa");
+        
+        var periodOption = new Option<string>("--period", "Time period: overall, 7day, 1month, 3month, 6month, 12month");
         periodOption.AddAlias("-p");
+        
+        var fromOption = new Option<string>("--from", "Start date for custom range (YYYY-MM-DD or YYYY)");
+        var toOption = new Option<string>("--to", "End date for custom range (YYYY-MM-DD or YYYY)");
+        var yearOption = new Option<string>("--year", "Single year for analysis (shortcut for --from YYYY --to YYYY)");
         
         var userOption = new Option<string>("--user", "Last.fm username (uses configured default if not specified)");
         userOption.AddAlias("-u");
@@ -45,7 +52,11 @@ public static class RecommendationsCommandBuilder
             limitOption,
             filterOption,
             artistLimitOption,
+            tracksPerArtistOption,
             periodOption,
+            fromOption,
+            toOption,
+            yearOption,
             userOption,
             rangeOption,
             delayOption,
@@ -62,7 +73,11 @@ public static class RecommendationsCommandBuilder
             var limit = context.ParseResult.GetValueForOption(limitOption);
             var filter = context.ParseResult.GetValueForOption(filterOption);
             var artistLimit = context.ParseResult.GetValueForOption(artistLimitOption);
+            var tracksPerArtist = context.ParseResult.GetValueForOption(tracksPerArtistOption);
             var period = context.ParseResult.GetValueForOption(periodOption);
+            var from = context.ParseResult.GetValueForOption(fromOption);
+            var to = context.ParseResult.GetValueForOption(toOption);
+            var year = context.ParseResult.GetValueForOption(yearOption);
             var user = context.ParseResult.GetValueForOption(userOption);
             var range = context.ParseResult.GetValueForOption(rangeOption);
             var delay = context.ParseResult.GetValueForOption(delayOption);
@@ -76,7 +91,7 @@ public static class RecommendationsCommandBuilder
             var recommendationsCommand = services.GetRequiredService<RecommendationsCommand>();
             await recommendationsCommand.ExecuteAsync(
                 artistLimit, 
-                period ?? Defaults.TimePeriod, 
+                period, 
                 user, 
                 range, 
                 delay, 
@@ -87,7 +102,11 @@ public static class RecommendationsCommandBuilder
                 noCache, 
                 timer,
                 limit,
-                filter);
+                filter,
+                tracksPerArtist,
+                from,
+                to,
+                year);
         });
 
         return command;
