@@ -25,6 +25,7 @@ class Program
             AlbumsCommandBuilder.Build(host.Services),
             ArtistTracksCommandBuilder.Build(host.Services),
             ArtistAlbumsCommandBuilder.Build(host.Services),
+            RecommendationsCommandBuilder.Build(host.Services),
             ConfigCommandBuilder.Build(host.Services),
             CacheStatusCommandBuilder.Build(host.Services),
             CacheClearCommandBuilder.Build(host.Services),
@@ -133,6 +134,7 @@ class Program
                     var symbolProvider = serviceProvider.GetRequiredService<ISymbolProvider>();
                     return new ConfigCommand(configManager, logger, symbolProvider);
                 });
+                services.AddTransient<RecommendationsCommand>();
             })
             .ConfigureLogging(logging =>
             {

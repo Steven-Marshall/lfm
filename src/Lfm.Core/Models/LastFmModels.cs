@@ -183,3 +183,35 @@ public class TopAlbumsAttributes
     [JsonPropertyName("perPage")]
     public string PerPage { get; set; } = "0";
 }
+public class SimilarArtist
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+    
+    [JsonPropertyName("mbid")]
+    public string Mbid { get; set; } = string.Empty;
+    
+    [JsonPropertyName("match")]
+    public string Match { get; set; } = "0";
+    
+    [JsonPropertyName("url")]
+    public string Url { get; set; } = string.Empty;
+    
+    [JsonPropertyName("streamable")]
+    public string Streamable { get; set; } = "0";
+}
+
+public class SimilarArtists
+{
+    [JsonPropertyName("artist")]
+    public List<SimilarArtist> Artists { get; set; } = new();
+    
+    [JsonPropertyName("@attr")]
+    public SimilarArtistsAttributes Attributes { get; set; } = new();
+}
+
+public class SimilarArtistsAttributes
+{
+    [JsonPropertyName("artist")]
+    public string Artist { get; set; } = string.Empty;
+}

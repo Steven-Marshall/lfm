@@ -12,6 +12,7 @@ public interface ILastFmApiClient
     Task<TopAlbums?> GetTopAlbumsAsync(string username, string period = "overall", int limit = 10, int page = 1);
     Task<TopTracks?> GetArtistTopTracksAsync(string artist, int limit = 10);
     Task<TopAlbums?> GetArtistTopAlbumsAsync(string artist, int limit = 10);
+    Task<SimilarArtists?> GetSimilarArtistsAsync(string artist, int limit = 50);
 }
 
 public class LastFmApiClient : ILastFmApiClient
@@ -242,6 +243,49 @@ public class LastFmApiClient : ILastFmApiClient
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting top albums for artist {Artist}", artist);
+            return null;
+        }
+    }
+
+    public async Task<SimilarArtists?> GetSimilarArtistsAsync(string artist, int limit = 50)
+    {
+        try
+        {
+            var parameters = new Dictionary<string, string>
+            {
+                ["method"] = "artist.getSimilar",
+                ["artist"] = artist,
+                ["limit"] = limit.ToString(),
+                ["autocorrect"] = "1",
+                ["api_key"] = _apiKey,
+                ["format"] = "json"
+            };
+
+            var response = await MakeRequestAsync(parameters);
+            if (response == null) return null;
+
+            using var document = JsonDocument.Parse(response);
+            var root = document.RootElement;
+
+            if (root.TryGetProperty("error", out _))
+            {
+                var error = root.GetProperty("error").GetInt32();
+                var message = root.GetProperty("message").GetString();
+                _logger.LogError("Last.fm API error {Error}: {Message}", error, message);
+                return null;
+            }
+
+            if (root.TryGetProperty("similarartists", out var similarArtistsElement))
+            {
+                var similarArtists = JsonSerializer.Deserialize<SimilarArtists>(similarArtistsElement.GetRawText(), GetJsonOptions());
+                return similarArtists;
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting similar artists for {Artist}", artist);
             return null;
         }
     }

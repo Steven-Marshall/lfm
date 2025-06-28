@@ -65,9 +65,10 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
 **Commands with Cache Support:**
 - ✅ `tracks` command (all cache flags)
 - ✅ `artist-tracks` command (all cache flags)  
-- ✅ `artists` command (all cache flags) - ✅ **COMPLETED**
-- ✅ `albums` command (all cache flags) - ✅ **COMPLETED**
-- ✅ `artist-albums` command (all cache flags) - ✅ **COMPLETED**
+- ✅ `artists` command (all cache flags)
+- ✅ `albums` command (all cache flags)
+- ✅ `artist-albums` command (all cache flags)
+- ✅ `recommendations` command (all cache flags)
 
 **Management Commands:**
 - ✅ `cache-status` - Comprehensive status display with warnings
@@ -102,6 +103,28 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
 - **Performance Achieved**: 119x speed improvement (6,783ms → 57ms for 10 API calls)
 - **Build Status**: ✅ Both Linux and Windows builds complete with 0 warnings, 0 errors
 - **Ready For**: User testing and validation
+
+### Session: 2025-01-28 (Recommendations Feature)
+- **Status**: ✅ COMPLETE - Music recommendations feature implemented
+- **Feature Added**: `recommendations` command for discovering new artists
+- **Implementation Details**:
+  - Uses Last.fm's `artist.getSimilar` API endpoint
+  - Analyzes user's top artists to find similar artists
+  - Filters out artists user already knows (configurable play count threshold)
+  - Scoring algorithm: similarity × occurrence count across multiple top artists
+  - Full cache support with existing infrastructure
+- **Key Components**:
+  - `GetSimilarArtistsAsync` method in API client and cached wrapper
+  - `SimilarArtist` and `SimilarArtists` models
+  - `RecommendationsCommand` with parallel similar artist fetching
+  - `RecommendationsCommandBuilder` with options for limit, filter, and artist count
+- **Command Options**:
+  - `--limit` / `-l`: Number of recommendations to return (default: 20)
+  - `--filter` / `-f`: Minimum play count filter (default: 0)
+  - `--artist-limit` / `-a`: Number of top artists to analyze
+  - All standard options: period, range, cache flags, verbose, timing
+- **Performance**: Benefits from cached artist data and parallel API calls
+- **Documentation**: README.md and CLAUDE.md updated
 
 ## Build/Test Commands
 

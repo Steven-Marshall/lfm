@@ -103,6 +103,17 @@ public class CachedLastFmApiClient : ILastFmApiClient
             artist, "n/a", limit, 1);
     }
 
+    public async Task<SimilarArtists?> GetSimilarArtistsAsync(string artist, int limit = 50)
+    {
+        var cacheKey = _keyGenerator.ForSimilarArtists(artist, limit);
+        
+        return await GetWithCacheAsync<SimilarArtists>(
+            cacheKey,
+            async () => await _innerClient.GetSimilarArtistsAsync(artist, limit),
+            "GetSimilarArtists",
+            artist, "n/a", limit, 1);
+    }
+
     /// <summary>
     /// Generic cache-aware method that handles different cache behaviors and cleanup.
     /// </summary>

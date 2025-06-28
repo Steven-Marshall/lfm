@@ -96,4 +96,10 @@ public static class CacheKeyExtensions
     /// </summary>
     public static string ForArtistTopAlbums(this ICacheKeyGenerator generator, string artist, int limit)
         => generator.GenerateKey("artist.getTopAlbums", artist, "n/a", limit, 1);
+
+    /// <summary>
+    /// Creates a cache key for artist.getSimilar API calls.
+    /// </summary>
+    public static string ForSimilarArtists(this ICacheKeyGenerator generator, string artist, int limit)
+        => generator.GenerateKey("artist.getSimilar", artist, "n/a", limit, 1);
 }

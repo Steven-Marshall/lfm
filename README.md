@@ -5,6 +5,7 @@ A powerful command-line interface for retrieving your Last.fm music statistics w
 ## Features
 
 - 🎵 **Comprehensive Statistics** - Top artists, tracks, and albums with play counts
+- 🎸 **Music Recommendations** - Discover new artists based on your listening history
 - 🚀 **Smart Caching** - File-based cache system for improved performance
 - 🌍 **Cross-Platform** - Windows, Linux, and WSL support
 - 🎨 **Unicode Support** - Auto-detecting terminal capabilities with graceful ASCII fallbacks
@@ -68,6 +69,13 @@ lfm artist-albums "Pink Floyd"
 # Get global top tracks for an artist (supports name variations)
 lfm tracks --artist "The Beatles"
 # Also works with: "Beatles", "beatles", etc.
+
+# Get personalized artist recommendations
+lfm recommendations
+# Exclude artists you already know (10+ plays)
+lfm recommendations --filter 10 --limit 20
+# Analyze more artists for better recommendations
+lfm recommendations --artist-limit 50 --period 12month --verbose
 ```
 
 ### Cache Management
@@ -109,6 +117,12 @@ lfm tracks --limit 5 --period 1month
 
 # Deep dive into a specific artist
 lfm artist-tracks "Pink Floyd" --limit 20 --timing
+
+# Discover new music
+lfm recommendations --filter 5 --limit 10
+# - Analyzes your top artists
+# - Finds similar artists you haven't listened to much
+# - Filter excludes artists with 5+ plays
 
 # Performance analysis
 lfm benchmark-cache your-username
