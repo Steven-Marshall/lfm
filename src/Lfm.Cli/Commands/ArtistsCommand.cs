@@ -7,20 +7,23 @@ namespace Lfm.Cli.Commands;
 
 public class ArtistsCommand : BaseCommand
 {
+    private readonly ILastFmService _lastFmService;
     private readonly IDisplayService _displayService;
 
     public ArtistsCommand(
         ILastFmApiClient apiClient,
         IConfigurationManager configManager,
+        ILastFmService lastFmService,
         IDisplayService displayService,
         ILogger<ArtistsCommand> logger,
         ISymbolProvider symbolProvider)
         : base(apiClient, configManager, logger, symbolProvider)
     {
+        _lastFmService = lastFmService ?? throw new ArgumentNullException(nameof(lastFmService));
         _displayService = displayService ?? throw new ArgumentNullException(nameof(displayService));
     }
 
-    public async Task ExecuteAsync(int limit, string period, string? username, string? range = null, int? delayMs = null, bool verbose = false, bool timing = false, bool forceCache = false, bool forceApi = false, bool noCache = false, bool timer = false)
+    public async Task ExecuteAsync(int limit, string? period, string? username, string? range = null, int? delayMs = null, bool verbose = false, bool timing = false, bool forceCache = false, bool forceApi = false, bool noCache = false, bool timer = false, string? from = null, string? to = null, string? year = null)
     {
         await ExecuteWithErrorHandlingAndTimerAsync("artists command", async () =>
         {
@@ -34,31 +37,32 @@ public class ArtistsCommand : BaseCommand
             if (user == null)
                 return;
 
-            // Handle range logic
+            // Resolve period parameters (--period, --from/--to, or --year)
+            var (isDateRange, resolvedPeriod, fromDate, toDate) = ResolvePeriodParameters(period, from, to, year);
+            
+            // Determine display period format for consistent messaging
+            var displayPeriod = isDateRange && fromDate.HasValue && toDate.HasValue 
+                ? DateRangeParser.FormatDateRange(fromDate.Value, toDate.Value)
+                : resolvedPeriod;
+            
+            // Handle range logic using service layer
             if (!string.IsNullOrEmpty(range))
             {
                 var (isValid, startIndex, endIndex, errorMessage) = ParseRange(range);
                 if (!isValid)
                 {
-                    Console.WriteLine(errorMessage);
+                    _displayService.DisplayValidationError(errorMessage ?? "Invalid range format");
                     return;
                 }
                 
-                var (rangeArtists, totalCount) = await ExecuteRangeQueryAsync<Artist, TopArtists>(
-                    startIndex,
-                    endIndex,
-                    _apiClient.GetTopArtistsAsync,
-                    response => response.Artists,
-                    response => response.Attributes.Total,
-                    "artists",
-                    user,
-                    period,
-                    delayMs,
-                    verbose);
+                _displayService.DisplayOperationStart("artists", user, displayPeriod, null, startIndex, endIndex, verbose);
+
+                // Use service layer for range query
+                var (rangeArtists, totalCount) = await _lastFmService.GetUserTopArtistsRangeAsync(user, resolvedPeriod, startIndex, endIndex);
                 
                 if (!rangeArtists.Any())
                 {
-                    Console.WriteLine(ErrorMessages.Format(ErrorMessages.NoItemsInRange, "artists"));
+                    _displayService.DisplayError(ErrorMessages.Format(ErrorMessages.NoItemsInRange, "artists"));
                     return;
                 }
                 
@@ -67,16 +71,23 @@ public class ArtistsCommand : BaseCommand
                 return;
             }
 
-            if (verbose)
-            {
-                Console.WriteLine($"Getting top {limit} artists for {user} ({period})...\n");
-            }
+            // Use standardized display service for operation start
+            _displayService.DisplayOperationStart("artists", user, displayPeriod, limit, verbose: verbose);
 
-            var result = await _apiClient.GetTopArtistsAsync(user, period, limit);
+            // Use service layer for basic queries
+            TopArtists? result;
+            if (isDateRange && fromDate.HasValue && toDate.HasValue)
+            {
+                result = await _lastFmService.GetUserTopArtistsForDateRangeAsync(user, fromDate.Value, toDate.Value, limit);
+            }
+            else
+            {
+                result = await _lastFmService.GetUserTopArtistsAsync(user, resolvedPeriod, limit);
+            }
 
             if (result?.Artists == null || !result.Artists.Any())
             {
-                Console.WriteLine(ErrorMessages.NoArtistsFound);
+                _displayService.DisplayError(ErrorMessages.NoArtistsFound);
                 return;
             }
 

@@ -25,6 +25,7 @@ class Program
             AlbumsCommandBuilder.Build(host.Services),
             ArtistTracksCommandBuilder.Build(host.Services),
             ArtistAlbumsCommandBuilder.Build(host.Services),
+            RecommendationsCommandBuilder.Build(host.Services),
             ConfigCommandBuilder.Build(host.Services),
             CacheStatusCommandBuilder.Build(host.Services),
             CacheClearCommandBuilder.Build(host.Services),
@@ -60,7 +61,7 @@ class Program
                     var configManager = serviceProvider.GetRequiredService<IConfigurationManager>();
                     var config = configManager.LoadAsync().GetAwaiter().GetResult();
                     
-                    return new LastFmApiClient(httpClient, logger, config.ApiKey);
+                    return new LastFmApiClient(httpClient, logger, config.ApiKey, config.ApiThrottleMs);
                 });
 
                 // Register the cached wrapper as the main interface
@@ -77,9 +78,13 @@ class Program
                 
                 services.AddTransient<IDisplayService, DisplayService>();
                 
+                // Service layer
+                services.AddTransient<ILastFmService, LastFmService>();
+                
                 services.AddTransient<ArtistsCommand>();
                 services.AddTransient<TracksCommand>();
                 services.AddTransient<AlbumsCommand>();
+                services.AddTransient<RecommendationsCommand>();
                 
                 // Cache management commands
                 services.AddTransient<CacheStatusCommand>();
@@ -133,6 +138,7 @@ class Program
                     var symbolProvider = serviceProvider.GetRequiredService<ISymbolProvider>();
                     return new ConfigCommand(configManager, logger, symbolProvider);
                 });
+                services.AddTransient<RecommendationsCommand>();
             })
             .ConfigureLogging(logging =>
             {

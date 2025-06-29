@@ -96,4 +96,34 @@ public static class CacheKeyExtensions
     /// </summary>
     public static string ForArtistTopAlbums(this ICacheKeyGenerator generator, string artist, int limit)
         => generator.GenerateKey("artist.getTopAlbums", artist, "n/a", limit, 1);
+
+    /// <summary>
+    /// Creates a cache key for artist.getSimilar API calls.
+    /// </summary>
+    public static string ForSimilarArtists(this ICacheKeyGenerator generator, string artist, int limit)
+        => generator.GenerateKey("artist.getSimilar", artist, "n/a", limit, 1);
+
+    /// <summary>
+    /// Creates a cache key for user.getRecentTracks API calls with date range.
+    /// </summary>
+    public static string ForRecentTracks(this ICacheKeyGenerator generator, string user, string dateRange, int limit, int page)
+        => generator.GenerateKey("user.getRecentTracks", user, dateRange, limit, page);
+
+    /// <summary>
+    /// Creates a cache key for date range top artists queries.
+    /// </summary>
+    public static string ForTopArtistsDateRange(this ICacheKeyGenerator generator, string user, string dateRange, int limit)
+        => generator.GenerateKey("daterange.getTopArtists", user, dateRange, limit, 1);
+
+    /// <summary>
+    /// Creates a cache key for date range top tracks queries.
+    /// </summary>
+    public static string ForTopTracksDateRange(this ICacheKeyGenerator generator, string user, string dateRange, int limit)
+        => generator.GenerateKey("daterange.getTopTracks", user, dateRange, limit, 1);
+
+    /// <summary>
+    /// Creates a cache key for date range top albums queries.
+    /// </summary>
+    public static string ForTopAlbumsDateRange(this ICacheKeyGenerator generator, string user, string dateRange, int limit)
+        => generator.GenerateKey("daterange.getTopAlbums", user, dateRange, limit, 1);
 }
