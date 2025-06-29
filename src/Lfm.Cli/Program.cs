@@ -61,7 +61,7 @@ class Program
                     var configManager = serviceProvider.GetRequiredService<IConfigurationManager>();
                     var config = configManager.LoadAsync().GetAwaiter().GetResult();
                     
-                    return new LastFmApiClient(httpClient, logger, config.ApiKey);
+                    return new LastFmApiClient(httpClient, logger, config.ApiKey, config.ApiThrottleMs);
                 });
 
                 // Register the cached wrapper as the main interface
@@ -78,9 +78,13 @@ class Program
                 
                 services.AddTransient<IDisplayService, DisplayService>();
                 
+                // Service layer
+                services.AddTransient<ILastFmService, LastFmService>();
+                
                 services.AddTransient<ArtistsCommand>();
                 services.AddTransient<TracksCommand>();
                 services.AddTransient<AlbumsCommand>();
+                services.AddTransient<RecommendationsCommand>();
                 
                 // Cache management commands
                 services.AddTransient<CacheStatusCommand>();

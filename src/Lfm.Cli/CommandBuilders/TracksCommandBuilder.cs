@@ -12,8 +12,12 @@ public static class TracksCommandBuilder
         var limitOption = new Option<int>("--limit", () => Defaults.ItemLimit, "Number of tracks to display");
         limitOption.AddAlias("-l");
         
-        var periodOption = new Option<string>("--period", () => Defaults.TimePeriod, "Time period: overall, 7day, 1month, 3month, 6month, 12month");
+        var periodOption = new Option<string>("--period", "Time period: overall, 7day, 1month, 3month, 6month, 12month");
         periodOption.AddAlias("-p");
+        
+        var fromOption = new Option<string>("--from", "Start date (YYYY-MM-DD or YYYY)");
+        var toOption = new Option<string>("--to", "End date (YYYY-MM-DD or YYYY)");
+        var yearOption = new Option<string>("--year", "Specific year (YYYY) - shortcut for entire year");
         
         var userOption = new Option<string>("--user", "Last.fm username (uses configured default if not specified)");
         userOption.AddAlias("-u");
@@ -41,6 +45,9 @@ public static class TracksCommandBuilder
         {
             limitOption,
             periodOption,
+            fromOption,
+            toOption,
+            yearOption,
             userOption,
             artistOption,
             rangeOption,
@@ -57,6 +64,9 @@ public static class TracksCommandBuilder
         {
             var limit = context.ParseResult.GetValueForOption(limitOption);
             var period = context.ParseResult.GetValueForOption(periodOption);
+            var from = context.ParseResult.GetValueForOption(fromOption);
+            var to = context.ParseResult.GetValueForOption(toOption);
+            var year = context.ParseResult.GetValueForOption(yearOption);
             var user = context.ParseResult.GetValueForOption(userOption);
             var artist = context.ParseResult.GetValueForOption(artistOption);
             var range = context.ParseResult.GetValueForOption(rangeOption);
@@ -69,7 +79,7 @@ public static class TracksCommandBuilder
             var timer = context.ParseResult.GetValueForOption(timerOption);
             
             var tracksCommand = services.GetRequiredService<TracksCommand>();
-            await tracksCommand.ExecuteAsync(limit, period ?? Defaults.TimePeriod, user, artist, range, delay, verbose, timing, forceCache, forceApi, noCache, timer);
+            await tracksCommand.ExecuteAsync(limit, period, user, artist, range, delay, verbose, timing, forceCache, forceApi, noCache, timer, from, to, year);
         });
 
         return command;

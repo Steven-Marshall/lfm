@@ -1,12 +1,14 @@
 using System.Text.Json;
 using System.Web;
 using Lfm.Core.Models;
+using Lfm.Core.Models.Results;
 using Microsoft.Extensions.Logging;
 
 namespace Lfm.Core.Services;
 
 public interface ILastFmApiClient
 {
+    // Legacy nullable methods (maintained for compatibility)
     Task<TopArtists?> GetTopArtistsAsync(string username, string period = "overall", int limit = 10, int page = 1);
     Task<TopTracks?> GetTopTracksAsync(string username, string period = "overall", int limit = 10, int page = 1);
     Task<TopAlbums?> GetTopAlbumsAsync(string username, string period = "overall", int limit = 10, int page = 1);
@@ -19,6 +21,20 @@ public interface ILastFmApiClient
     Task<TopArtists?> GetTopArtistsForDateRangeAsync(string username, DateTime from, DateTime to, int limit = 10);
     Task<TopTracks?> GetTopTracksForDateRangeAsync(string username, DateTime from, DateTime to, int limit = 10);
     Task<TopAlbums?> GetTopAlbumsForDateRangeAsync(string username, DateTime from, DateTime to, int limit = 10);
+    
+    // New Result-based methods for better error handling
+    Task<Result<TopArtists>> GetTopArtistsWithResultAsync(string username, string period = "overall", int limit = 10, int page = 1);
+    Task<Result<TopTracks>> GetTopTracksWithResultAsync(string username, string period = "overall", int limit = 10, int page = 1);
+    Task<Result<TopAlbums>> GetTopAlbumsWithResultAsync(string username, string period = "overall", int limit = 10, int page = 1);
+    Task<Result<TopTracks>> GetArtistTopTracksWithResultAsync(string artist, int limit = 10);
+    Task<Result<TopAlbums>> GetArtistTopAlbumsWithResultAsync(string artist, int limit = 10);
+    Task<Result<SimilarArtists>> GetSimilarArtistsWithResultAsync(string artist, int limit = 50);
+    
+    // Result-based date range methods
+    Task<Result<RecentTracks>> GetRecentTracksWithResultAsync(string username, DateTime from, DateTime to, int limit = 200, int page = 1);
+    Task<Result<TopArtists>> GetTopArtistsForDateRangeWithResultAsync(string username, DateTime from, DateTime to, int limit = 10);
+    Task<Result<TopTracks>> GetTopTracksForDateRangeWithResultAsync(string username, DateTime from, DateTime to, int limit = 10);
+    Task<Result<TopAlbums>> GetTopAlbumsForDateRangeWithResultAsync(string username, DateTime from, DateTime to, int limit = 10);
 }
 
 public class LastFmApiClient : ILastFmApiClient
@@ -26,13 +42,15 @@ public class LastFmApiClient : ILastFmApiClient
     private readonly HttpClient _httpClient;
     private readonly ILogger<LastFmApiClient> _logger;
     private readonly string _apiKey;
+    private readonly int _apiThrottleMs;
     private const string BaseUrl = "https://ws.audioscrobbler.com/2.0/";
 
-    public LastFmApiClient(HttpClient httpClient, ILogger<LastFmApiClient> logger, string apiKey)
+    public LastFmApiClient(HttpClient httpClient, ILogger<LastFmApiClient> logger, string apiKey, int apiThrottleMs = 100)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _apiKey = apiKey ?? throw new ArgumentNullException(nameof(apiKey));
+        _apiThrottleMs = apiThrottleMs;
     }
 
     public async Task<TopArtists?> GetTopArtistsAsync(string username, string period = "overall", int limit = 10, int page = 1)
@@ -363,6 +381,12 @@ public class LastFmApiClient : ILastFmApiClient
 
             while (hasMore)
             {
+                // Apply throttling for subsequent API calls to avoid overwhelming Last.fm
+                if (page > 1 && _apiThrottleMs > 0)
+                {
+                    await Task.Delay(_apiThrottleMs);
+                }
+
                 var recentTracks = await GetRecentTracksAsync(username, from, to, pageSize, page);
                 
                 if (recentTracks?.Tracks == null || !recentTracks.Tracks.Any())
@@ -462,6 +486,12 @@ public class LastFmApiClient : ILastFmApiClient
 
             while (hasMore)
             {
+                // Apply throttling for subsequent API calls to avoid overwhelming Last.fm
+                if (page > 1 && _apiThrottleMs > 0)
+                {
+                    await Task.Delay(_apiThrottleMs);
+                }
+
                 var recentTracks = await GetRecentTracksAsync(username, from, to, pageSize, page);
                 
                 if (recentTracks?.Tracks == null || !recentTracks.Tracks.Any())
@@ -543,23 +573,44 @@ public class LastFmApiClient : ILastFmApiClient
     {
         try
         {
+            _logger.LogInformation("Aggregating album data from {FromTo}", 
+                DateRangeParser.FormatDateRange(from, to));
+
             var albumCounts = new Dictionary<string, AlbumAggregation>(StringComparer.OrdinalIgnoreCase);
             var pageSize = 1000;
             var page = 1;
             var hasMore = true;
+            var totalProcessed = 0;
+            var tracksWithAlbumData = 0;
 
             while (hasMore)
             {
+                // Apply throttling for subsequent API calls to avoid overwhelming Last.fm
+                if (page > 1 && _apiThrottleMs > 0)
+                {
+                    await Task.Delay(_apiThrottleMs);
+                }
+
                 var recentTracks = await GetRecentTracksAsync(username, from, to, pageSize, page);
                 
                 if (recentTracks?.Tracks == null || !recentTracks.Tracks.Any())
                     break;
 
-                var validTracks = recentTracks.Tracks
-                    .Where(t => t.Attributes?.NowPlaying == null && !string.IsNullOrWhiteSpace(t.Album.Name))
+                var allValidTracks = recentTracks.Tracks
+                    .Where(t => t.Attributes?.NowPlaying == null)
+                    .ToList();
+                
+                var tracksWithAlbums = allValidTracks
+                    .Where(t => t.Album != null && !string.IsNullOrWhiteSpace(t.Album.Name))
                     .ToList();
 
-                foreach (var track in validTracks)
+                totalProcessed += allValidTracks.Count;
+                tracksWithAlbumData += tracksWithAlbums.Count;
+
+                _logger.LogDebug("Got {TrackCount} tracks for page {Page}, {AlbumTracks} with album data", 
+                    allValidTracks.Count, page, tracksWithAlbums.Count);
+
+                foreach (var track in tracksWithAlbums)
                 {
                     var albumKey = $"{track.Album.Name}|{track.Artist.Name}";
 
@@ -602,6 +653,9 @@ public class LastFmApiClient : ILastFmApiClient
                 })
                 .ToList();
 
+            _logger.LogInformation("Aggregated {TotalTracks} tracks into {UniqueAlbums} unique albums (from {TracksWithAlbumData} tracks with album data)", 
+                totalProcessed, albumCounts.Count, tracksWithAlbumData);
+
             return new TopAlbums
             {
                 Albums = topAlbums,
@@ -639,6 +693,114 @@ public class LastFmApiClient : ILastFmApiClient
         {
             _logger.LogError(ex, "HTTP error making request to Last.fm API");
             return null;
+        }
+    }
+
+    // New Result-based methods for better error handling
+    public async Task<Result<TopArtists>> GetTopArtistsWithResultAsync(string username, string period = "overall", int limit = 10, int page = 1)
+    {
+        return await ExecuteWithResultAsync(
+            () => GetTopArtistsAsync(username, period, limit, page),
+            $"getting top artists for user {username}");
+    }
+
+    public async Task<Result<TopTracks>> GetTopTracksWithResultAsync(string username, string period = "overall", int limit = 10, int page = 1)
+    {
+        return await ExecuteWithResultAsync(
+            () => GetTopTracksAsync(username, period, limit, page),
+            $"getting top tracks for user {username}");
+    }
+
+    public async Task<Result<TopAlbums>> GetTopAlbumsWithResultAsync(string username, string period = "overall", int limit = 10, int page = 1)
+    {
+        return await ExecuteWithResultAsync(
+            () => GetTopAlbumsAsync(username, period, limit, page),
+            $"getting top albums for user {username}");
+    }
+
+    public async Task<Result<TopTracks>> GetArtistTopTracksWithResultAsync(string artist, int limit = 10)
+    {
+        return await ExecuteWithResultAsync(
+            () => GetArtistTopTracksAsync(artist, limit),
+            $"getting top tracks for artist {artist}");
+    }
+
+    public async Task<Result<TopAlbums>> GetArtistTopAlbumsWithResultAsync(string artist, int limit = 10)
+    {
+        return await ExecuteWithResultAsync(
+            () => GetArtistTopAlbumsAsync(artist, limit),
+            $"getting top albums for artist {artist}");
+    }
+
+    public async Task<Result<SimilarArtists>> GetSimilarArtistsWithResultAsync(string artist, int limit = 50)
+    {
+        return await ExecuteWithResultAsync(
+            () => GetSimilarArtistsAsync(artist, limit),
+            $"getting similar artists for {artist}");
+    }
+
+    public async Task<Result<RecentTracks>> GetRecentTracksWithResultAsync(string username, DateTime from, DateTime to, int limit = 200, int page = 1)
+    {
+        return await ExecuteWithResultAsync(
+            () => GetRecentTracksAsync(username, from, to, limit, page),
+            $"getting recent tracks for user {username}");
+    }
+
+    public async Task<Result<TopArtists>> GetTopArtistsForDateRangeWithResultAsync(string username, DateTime from, DateTime to, int limit = 10)
+    {
+        return await ExecuteWithResultAsync(
+            () => GetTopArtistsForDateRangeAsync(username, from, to, limit),
+            $"getting top artists for user {username} date range");
+    }
+
+    public async Task<Result<TopTracks>> GetTopTracksForDateRangeWithResultAsync(string username, DateTime from, DateTime to, int limit = 10)
+    {
+        return await ExecuteWithResultAsync(
+            () => GetTopTracksForDateRangeAsync(username, from, to, limit),
+            $"getting top tracks for user {username} date range");
+    }
+
+    public async Task<Result<TopAlbums>> GetTopAlbumsForDateRangeWithResultAsync(string username, DateTime from, DateTime to, int limit = 10)
+    {
+        return await ExecuteWithResultAsync(
+            () => GetTopAlbumsForDateRangeAsync(username, from, to, limit),
+            $"getting top albums for user {username} date range");
+    }
+
+    private async Task<Result<T>> ExecuteWithResultAsync<T>(Func<Task<T?>> operation, string operationDescription) where T : class
+    {
+        try
+        {
+            var result = await operation();
+            if (result == null)
+            {
+                return Result<T>.Fail(new ErrorResult(
+                    ErrorType.ApiError,
+                    $"Failed {operationDescription}",
+                    "The Last.fm API returned no data or encountered an error"));
+            }
+            return Result<T>.Ok(result);
+        }
+        catch (HttpRequestException ex)
+        {
+            return Result<T>.Fail(new ErrorResult(
+                ErrorType.NetworkError,
+                $"Network error while {operationDescription}",
+                ex.Message));
+        }
+        catch (JsonException ex)
+        {
+            return Result<T>.Fail(new ErrorResult(
+                ErrorType.DataError,
+                $"Invalid response format while {operationDescription}",
+                ex.Message));
+        }
+        catch (Exception ex)
+        {
+            return Result<T>.Fail(new ErrorResult(
+                ErrorType.UnknownError,
+                $"Unexpected error while {operationDescription}",
+                ex.Message));
         }
     }
 

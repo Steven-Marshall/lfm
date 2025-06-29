@@ -126,6 +126,68 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
 - **Performance**: Benefits from cached artist data and parallel API calls
 - **Documentation**: README.md and CLAUDE.md updated
 
+### Session: 2025-06-28 (Albums Bug Fix & API Throttling)
+- **Status**: ✅ COMPLETE - Critical bug fixes and comprehensive API throttling
+- **Branch**: `refactor/service-layer`
+
+#### ✅ Albums Date Range Bug - FIXED
+**Problem**: `albums --year 2023` returned no results despite user having albums
+**Root Cause**: `AlbumInfo` model used `[JsonPropertyName("name")]` but Last.fm recent tracks API returns album names as `"#text"`
+**Solution**: Changed to `[JsonPropertyName("#text")]` to match API response format
+**Testing**: ✅ Verified working for all date ranges
+
+#### ✅ API Throttling Implementation - COMPLETE
+**Problem**: Aggressive API calls causing 500 Internal Server Errors from Last.fm
+**Root Cause Analysis**:
+- **Parallel execution**: Introduced in commit `7958f61` (June 28) for recommendations
+- **Missing throttling**: Date range aggregation had no delays between API calls
+- **No rate limiting**: Individual and paginated calls lacked throttling
+
+**Solutions Implemented**:
+
+1. **Removed Parallel Execution**:
+   - Converted `Task.Run` + `Task.WhenAll` to sequential loops
+   - Removed `ConcurrentDictionary`, switched to regular `Dictionary`
+   - Applied to recommendations similar artist + track fetching
+
+2. **Added Comprehensive Throttling** (100ms delays):
+   - **Date Range Aggregation**: `GetTopAlbumsForDateRangeAsync`, `GetTopTracksForDateRangeAsync`, `GetTopArtistsForDateRangeAsync`
+   - **Range Queries**: `ExecuteRangeQueryAsync` for `--range` parameters
+   - **Deep Search Operations**: `SearchUserTracksForArtistAsync`, `SearchUserAlbumsForArtistAsync`
+   - **Artist Play Count Mapping**: `GetUserArtistPlayCountsAsync`
+   - **Recommendations**: Sequential similar artist + track lookups
+
+3. **Preserved One-Shot Calls** (no throttling):
+   - `artists --period overall` - single API call
+   - `tracks --period overall` - single API call
+   - `albums --period overall` - single API call
+
+**Results**:
+- ✅ **API Reliability**: Eliminated 500 errors from aggressive requests
+- ✅ **Albums Bug Fixed**: Date ranges now return proper album results
+- ✅ **Performance**: One-shot calls remain fast, multi-call operations properly throttled
+- ✅ **Testing**: All functionality verified working across different scenarios
+
+#### ✅ Error Caching Analysis - VERIFIED SAFE
+**Investigation**: Checked if 500 errors were being cached
+**Finding**: `if (apiResult != null)` in cache - we **only cache successful results** ✅
+**Status**: No caching issues, 500 errors correctly not cached
+
+#### ✅ Configuration Integration
+- **Throttle Setting**: `ApiThrottleMs = 100` (configurable via `config set-throttle`)
+- **DI Integration**: Throttle value passed from config to `LastFmApiClient` constructor
+- **Applied Consistently**: All multi-call operations use configured throttle value
+
+**Build Status**: ✅ Clean build, 0 warnings, 0 errors
+**Architecture Status**: Comprehensive API throttling implemented, albums bug resolved
+
+#### ✅ Previous Phase 1 & 2 Refactoring (COMPLETED)
+**Service Layer**: ✅ Full `ILastFmService` with 13 core methods extracted
+**Display Logic**: ✅ Centralized via enhanced `IDisplayService`
+**Command Simplification**: ✅ Commands reduced to pure CLI concerns
+**Business Logic**: ✅ 370+ lines moved from commands to service layer
+**Error Handling**: ✅ Result<T> pattern and ErrorResult classification implemented
+
 ## Build/Test Commands
 
 ⚠️ **CRITICAL**: Always use `publish/` directory structure per DIRECTORY_STANDARDS.md ⚠️
@@ -205,3 +267,49 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
 **Investigation Tools Created:**
 - `DetectTest/DetectTest/Program.cs` - Standalone detection testing program (validated solution)
 - `src/Lfm.Cli/Commands/TestUnicodeCommand.cs` - In-app Unicode debugging command
+
+## Current Project Plans & Status
+
+### ✅ Primary Development - COMPLETE
+**All major architecture and functionality complete**. The CLI tool is fully functional with:
+- ✅ Complete service layer architecture 
+- ✅ Comprehensive API throttling and reliability
+- ✅ Full caching implementation with management
+- ✅ All core commands working (artists, tracks, albums, recommendations)
+- ✅ Date range support across all commands
+- ✅ Unicode symbol support with auto-detection
+- ✅ Clean build with 0 warnings, 0 errors
+
+### 📋 Future Enhancement Plans
+
+#### 1. **Progress Bar Implementation** 📊
+- **Status**: Detailed plan created in `progressbarproject.md`
+- **Goal**: Add progress bars for long-running operations (30+ seconds)
+- **Priority**: High value for user experience
+- **Effort**: 2-3 days implementation
+- **Key Benefits**: 
+  - Real-time feedback for date range aggregation
+  - Progress indicators for range queries and recommendations
+  - Professional feel for long operations
+- **Architecture**: IProgressReporter interface with Console/Null implementations
+- **Integration**: Leverages existing throttling points for minimal code changes
+
+#### 2. **Additional Features** (Future Considerations)
+- **Enhanced Filtering**: More sophisticated recommendation filters
+- **Export Functionality**: JSON/CSV export for query results  
+- **Playlist Generation**: Create playlists from recommendations
+- **Extended Analytics**: Advanced statistics and insights
+- **Configuration Enhancements**: More granular settings
+
+### 🎯 Current State Assessment
+- **Codebase Quality**: Excellent - clean architecture, comprehensive error handling
+- **Performance**: Optimized with 119x cache improvements + proper API throttling
+- **Reliability**: Robust with comprehensive error handling and graceful degradation
+- **User Experience**: Good foundation, progress bars would be primary UX enhancement
+- **Maintainability**: High - well-structured with clear separation of concerns
+
+### 📝 Development Notes
+- **Build Status**: ✅ Consistently clean builds across platforms
+- **Testing**: Manual testing comprehensive, all core functionality verified
+- **Documentation**: Well-documented with comprehensive README and session notes
+- **Configuration**: Flexible with user-configurable settings for all major behaviors

@@ -12,6 +12,9 @@ public interface ISymbolProvider
     string Stats { get; }
     string Settings { get; }
     string Cleanup { get; }
+    string Music { get; }
+    string Clipboard { get; }
+    string StopSign { get; }
 }
 
 public class SymbolProvider : ISymbolProvider
@@ -63,6 +66,9 @@ public class SymbolProvider : ISymbolProvider
     public string Stats => _useUnicode ? "📊" : "[STATS]";
     public string Settings => _useUnicode ? "⚙️" : "[SETTINGS]";
     public string Cleanup => _useUnicode ? "🧹" : "[CLEANUP]";
+    public string Music => _useUnicode ? "🎵" : "[MUSIC]";
+    public string Clipboard => _useUnicode ? "📋" : "[LIST]";
+    public string StopSign => _useUnicode ? "🛑" : "[STOP]";
 
 
     private static bool DetectUnicodeSupport()

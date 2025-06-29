@@ -2,26 +2,28 @@ using Lfm.Core.Configuration;
 using Lfm.Core.Models;
 using Lfm.Core.Services;
 using Microsoft.Extensions.Logging;
-using static Lfm.Core.Configuration.SearchConstants;
 
 namespace Lfm.Cli.Commands;
 
 public class AlbumsCommand : BaseCommand
 {
+    private readonly ILastFmService _lastFmService;
     private readonly IDisplayService _displayService;
 
     public AlbumsCommand(
         ILastFmApiClient apiClient,
         IConfigurationManager configManager,
+        ILastFmService lastFmService,
         IDisplayService displayService,
         ILogger<AlbumsCommand> logger,
         ISymbolProvider symbolProvider)
         : base(apiClient, configManager, logger, symbolProvider)
     {
+        _lastFmService = lastFmService ?? throw new ArgumentNullException(nameof(lastFmService));
         _displayService = displayService ?? throw new ArgumentNullException(nameof(displayService));
     }
 
-    public async Task ExecuteAsync(int limit, string period, string? username, string? range = null, int? delayMs = null, bool verbose = false, bool timing = false, bool forceCache = false, bool forceApi = false, bool noCache = false, bool timer = false)
+    public async Task ExecuteAsync(int limit, string? period, string? username, string? range = null, int? delayMs = null, bool verbose = false, bool timing = false, bool forceCache = false, bool forceApi = false, bool noCache = false, bool timer = false, string? from = null, string? to = null, string? year = null)
     {
         await ExecuteWithErrorHandlingAndTimerAsync("albums command", async () =>
         {
@@ -35,7 +37,15 @@ public class AlbumsCommand : BaseCommand
             if (user == null)
                 return;
 
-            // Handle range logic
+            // Resolve period parameters (--period, --from/--to, or --year)
+            var (isDateRange, resolvedPeriod, fromDate, toDate) = ResolvePeriodParameters(period, from, to, year);
+            
+            // Determine display period format for consistent messaging
+            var displayPeriod = isDateRange && fromDate.HasValue && toDate.HasValue 
+                ? DateRangeParser.FormatDateRange(fromDate.Value, toDate.Value)
+                : resolvedPeriod;
+
+            // Handle range logic using service layer
             if (!string.IsNullOrEmpty(range))
             {
                 var (isValid, startIndex, endIndex, errorMessage) = ParseRange(range);
@@ -45,17 +55,10 @@ public class AlbumsCommand : BaseCommand
                     return;
                 }
                 
-                var (rangeAlbums, totalCount) = await ExecuteRangeQueryAsync<Album, TopAlbums>(
-                    startIndex,
-                    endIndex,
-                    _apiClient.GetTopAlbumsAsync,
-                    response => response.Albums,
-                    response => response.Attributes.Total,
-                    "albums",
-                    user,
-                    period,
-                    delayMs,
-                    verbose);
+                _displayService.DisplayOperationStart("albums", user, displayPeriod, null, startIndex, endIndex, verbose);
+
+                // Use service layer for range query
+                var (rangeAlbums, totalCount) = await _lastFmService.GetUserTopAlbumsRangeAsync(user, resolvedPeriod, startIndex, endIndex);
                 
                 if (!rangeAlbums.Any())
                 {
@@ -64,32 +67,42 @@ public class AlbumsCommand : BaseCommand
                 }
                 
                 _displayService.DisplayAlbums(rangeAlbums, startIndex);
-                if (verbose)
+                _displayService.DisplayRangeInfo("albums", startIndex, endIndex, rangeAlbums.Count, totalCount, verbose);
+                return;
+            }
+
+            // Use standardized display service for operation start
+            _displayService.DisplayOperationStart("albums", user, displayPeriod, limit, verbose: verbose);
+
+            // Use service layer for basic query
+            TopAlbums? result;
+            if (isDateRange && fromDate.HasValue && toDate.HasValue)
+            {
+                result = await _lastFmService.GetUserTopAlbumsForDateRangeAsync(user, fromDate.Value, toDate.Value, limit);
+            }
+            else
+            {
+                result = await _lastFmService.GetUserTopAlbumsAsync(user, resolvedPeriod, limit);
+            }
+
+            if (result?.Albums == null || !result.Albums.Any())
+            {
+                if (isDateRange)
                 {
-                    Console.WriteLine($"\nShowing albums {startIndex}-{Math.Min(endIndex, startIndex + rangeAlbums.Count - 1)} of {totalCount}");
+                    _displayService.DisplayError("No albums found for the specified date range.");
+                    _displayService.DisplayError("Note: Album data depends on Last.fm's track metadata. Many tracks may not have complete album information.");
+                    _displayService.DisplayError("Try using --period overall or a different time period, or use the 'tracks' command instead.");
+                }
+                else
+                {
+                    _displayService.DisplayError(ErrorMessages.NoAlbumsFound);
                 }
                 return;
             }
 
-            if (verbose)
-            {
-                Console.WriteLine($"Getting top {limit} albums for {user} ({period})...\n");
-            }
-
-            var result = await _apiClient.GetTopAlbumsAsync(user, period, limit);
-
-            if (result?.Albums == null || !result.Albums.Any())
-            {
-                Console.WriteLine(ErrorMessages.NoAlbumsFound);
-                return;
-            }
-
             _displayService.DisplayAlbums(result.Albums, 1);
-            if (verbose)
-            {
-                Console.WriteLine($"\nTotal albums: {result.Attributes.Total}");
-            }
+            _displayService.DisplayTotalInfo("albums", result.Attributes.Total, verbose);
+
         }, timer);
     }
-
 }

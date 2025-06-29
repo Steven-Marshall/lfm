@@ -254,7 +254,7 @@ public class RecentTrack
 
 public class AlbumInfo
 {
-    [JsonPropertyName("name")]
+    [JsonPropertyName("#text")]
     public string Name { get; set; } = string.Empty;
     
     [JsonPropertyName("mbid")]
