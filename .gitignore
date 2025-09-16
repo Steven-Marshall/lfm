@@ -36,3 +36,6 @@ Thumbs.db
 
 # Last.fm specific
 *.lfm.config
+
+# Claude session files
+.claude/api-docs/
