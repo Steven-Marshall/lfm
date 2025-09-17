@@ -37,6 +37,9 @@ public class ArtistsCommand : BaseCommand
             if (user == null)
                 return;
 
+            // Validate limit parameter
+            ValidateLimit(limit);
+
             // Resolve period parameters (--period, --from/--to, or --year)
             var (isDateRange, resolvedPeriod, fromDate, toDate) = ResolvePeriodParameters(period, from, to, year);
             
@@ -48,10 +51,8 @@ public class ArtistsCommand : BaseCommand
             // Handle range logic using service layer
             if (!string.IsNullOrEmpty(range))
             {
-                var (isValid, startIndex, endIndex, errorMessage) = ParseRange(range);
-                if (!isValid)
+                if (!ValidateAndHandleRange(range, _displayService, out var startIndex, out var endIndex))
                 {
-                    _displayService.DisplayValidationError(errorMessage ?? "Invalid range format");
                     return;
                 }
                 

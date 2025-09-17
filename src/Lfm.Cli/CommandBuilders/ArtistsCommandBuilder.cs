@@ -9,18 +9,10 @@ public static class ArtistsCommandBuilder
 {
     public static Command Build(IServiceProvider services)
     {
-        var limitOption = new Option<int>("--limit", () => Defaults.ItemLimit, "Number of artists to display");
-        limitOption.AddAlias("-l");
-        
-        var periodOption = new Option<string>("--period", "Time period: overall, 7day, 1month, 3month, 6month, 12month");
-        periodOption.AddAlias("-p");
-        
-        var fromOption = new Option<string>("--from", "Start date (YYYY-MM-DD or YYYY)");
-        var toOption = new Option<string>("--to", "End date (YYYY-MM-DD or YYYY)");
-        var yearOption = new Option<string>("--year", "Specific year (YYYY) - shortcut for entire year");
-        
-        var userOption = new Option<string>("--user", "Last.fm username (uses configured default if not specified)");
-        userOption.AddAlias("-u");
+        var limitOption = StandardCommandOptions.CreateLimitOption("artists");
+        var periodOption = StandardCommandOptions.CreatePeriodOption();
+        var (fromOption, toOption, yearOption) = StandardCommandOptions.CreateDateOptions();
+        var userOption = StandardCommandOptions.CreateUserOption();
 
         var rangeOption = new Option<string>("--range", "Range of positions to display (e.g., --range 10-20 for positions 10-20, both inclusive)");
         rangeOption.AddAlias("-r");
@@ -28,13 +20,10 @@ public static class ArtistsCommandBuilder
         var delayOption = new Option<int?>("--delay", "Delay between API requests in milliseconds (0 = no throttling, overrides config)");
         delayOption.AddAlias("-d");
 
-        var verboseOption = new Option<bool>("--verbose", "Show detailed progress information");
-        verboseOption.AddAlias("-v");
-
+        var verboseOption = StandardCommandOptions.CreateVerboseOption();
         var timingOption = new Option<bool>("--timing", "Show detailed API timing information (cache hits/misses and response times)");
         timingOption.AddAlias("-t");
-
-        var timerOption = new Option<bool>("--timer", "Display total execution time");
+        var timerOption = StandardCommandOptions.CreateTimerOption();
 
         var (forceCacheOption, forceApiOption, noCacheOption) = CommandOptionBuilders.BuildCacheOptions();
 

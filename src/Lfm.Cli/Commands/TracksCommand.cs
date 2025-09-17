@@ -33,9 +33,15 @@ public class TracksCommand : BaseCommand
             if (!await ValidateApiKeyAsync())
                 return;
 
+            // Validate limit parameter
+            ValidateLimit(limit);
+
             // Handle artist-specific tracks (global Last.fm data)
             if (!string.IsNullOrEmpty(artist))
             {
+                // Validate artist parameter
+                ValidateArtist(artist);
+
                 if (!string.IsNullOrEmpty(range))
                 {
                     Console.WriteLine(ErrorMessages.RangeNotSupportedWithArtist);
@@ -76,10 +82,8 @@ public class TracksCommand : BaseCommand
             // Handle range logic using service layer
             if (!string.IsNullOrEmpty(range))
             {
-                var (isValid, startIndex, endIndex, errorMessage) = ParseRange(range);
-                if (!isValid)
+                if (!ValidateAndHandleRange(range, _displayService, out var startIndex, out var endIndex))
                 {
-                    Console.WriteLine(errorMessage);
                     return;
                 }
                 

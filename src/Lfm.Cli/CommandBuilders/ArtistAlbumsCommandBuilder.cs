@@ -10,8 +10,7 @@ public static class ArtistAlbumsCommandBuilder
 {
     public static Command Build(IServiceProvider services)
     {
-        var limitOption = new Option<int>("--limit", () => Defaults.ItemLimit, "Number of albums to display");
-        limitOption.AddAlias("-l");
+        var limitOption = StandardCommandOptions.CreateLimitOption("albums");
         
         var deepOption = new Option<bool>("--deep", "Search through ALL your albums (slower but comprehensive)");
         
@@ -22,13 +21,12 @@ public static class ArtistAlbumsCommandBuilder
         
         var timeoutOption = new Option<int?>("--timeout", "Search timeout in seconds (0 = no timeout, overrides config)");
         
-        var verboseOption = new Option<bool>("--verbose", "Show detailed progress information");
-        verboseOption.AddAlias("-v");
+        var verboseOption = StandardCommandOptions.CreateVerboseOption();
 
         var timingOption = new Option<bool>("--timing", "Show detailed API timing information (cache hits/misses and response times)");
         timingOption.AddAlias("-t");
 
-        var timerOption = new Option<bool>("--timer", "Display total execution time");
+        var timerOption = StandardCommandOptions.CreateTimerOption();
 
         var (forceCacheOption, forceApiOption, noCacheOption) = CommandOptionBuilders.BuildCacheOptions();
         

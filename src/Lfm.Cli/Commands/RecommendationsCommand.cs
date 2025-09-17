@@ -25,23 +25,24 @@ public class RecommendationsCommand : BaseCommand
     }
 
     public async Task ExecuteAsync(
-        int limit, 
-        string? period, 
-        string? username, 
-        string? range = null, 
-        int? delayMs = null, 
-        bool verbose = false, 
-        bool timing = false, 
-        bool forceCache = false, 
-        bool forceApi = false, 
-        bool noCache = false, 
+        int limit,
+        string? period,
+        string? username,
+        string? range = null,
+        int? delayMs = null,
+        bool verbose = false,
+        bool timing = false,
+        bool forceCache = false,
+        bool forceApi = false,
+        bool noCache = false,
         bool timer = false,
         int recommendationLimit = 20,
         int filter = 0,
         int tracksPerArtist = 0,
         string? from = null,
         string? to = null,
-        string? year = null)
+        string? year = null,
+        bool excludeTags = false)
     {
         await ExecuteWithErrorHandlingAndTimerAsync("recommendations command", async () =>
         {
@@ -55,6 +56,9 @@ public class RecommendationsCommand : BaseCommand
             if (user == null)
                 return;
 
+            // Validate limit parameter
+            ValidateLimit(limit);
+
             // Resolve period parameters (--period, --from/--to, or --year)
             var (isDateRange, resolvedPeriod, fromDate, toDate) = ResolvePeriodParameters(period, from, to, year);
 
@@ -67,10 +71,8 @@ public class RecommendationsCommand : BaseCommand
             int analysisLimit = limit;
             if (!string.IsNullOrEmpty(range))
             {
-                var (isValid, startIndex, endIndex, errorMessage) = ParseRange(range);
-                if (!isValid)
+                if (!ValidateAndHandleRange(range, _displayService, out var startIndex, out var endIndex))
                 {
-                    _displayService.DisplayValidationError(errorMessage ?? "Invalid range format");
                     return;
                 }
                 
@@ -107,7 +109,8 @@ public class RecommendationsCommand : BaseCommand
                     analysisLimit: analysisLimit,
                     recommendationLimit: recommendationLimit,
                     filterThreshold: filter,
-                    tracksPerArtist: tracksPerArtist);
+                    tracksPerArtist: tracksPerArtist,
+                    excludeTags: excludeTags);
             }
             else
             {
@@ -118,7 +121,8 @@ public class RecommendationsCommand : BaseCommand
                     recommendationLimit: recommendationLimit,
                     filterThreshold: filter,
                     tracksPerArtist: tracksPerArtist,
-                    period: resolvedPeriod);
+                    period: resolvedPeriod,
+                    excludeTags: excludeTags);
             }
 
             // Display results
@@ -128,10 +132,10 @@ public class RecommendationsCommand : BaseCommand
                 _displayService.DisplayError("Try lowering the filter value or analyzing a different time period.");
                 return;
             }
-            
+
             // Use centralized recommendations display
             _displayService.DisplayRecommendations(recommendations, filter, tracksPerArtist, verbose, _symbols);
-            
+
         }, timer);
     }
 }

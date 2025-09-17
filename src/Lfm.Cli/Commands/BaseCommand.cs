@@ -81,6 +81,7 @@ public abstract class BaseCommand
 
             // Handle --period parameter (or default)
             var period = periodStr ?? "overall";
+            ValidatePeriod(period);
             return (false, period, null, null);
         }
         catch (ArgumentException ex)
@@ -209,6 +210,64 @@ public abstract class BaseCommand
         }
         
         return (true, start, end, null);
+    }
+
+    /// <summary>
+    /// Validates that a period is supported by the Last.fm API
+    /// </summary>
+    /// <param name="period">Period to validate</param>
+    /// <exception cref="ArgumentException">Thrown when period is invalid</exception>
+    protected static void ValidatePeriod(string period)
+    {
+        var validPeriods = new HashSet<string>
+        {
+            "overall", "7day", "1month", "3month", "6month", "12month"
+        };
+
+        if (!validPeriods.Contains(period))
+        {
+            var validPeriodsStr = string.Join(", ", validPeriods.OrderBy(p => p));
+            throw new ArgumentException($"Invalid period '{period}'. Valid periods are: {validPeriodsStr}");
+        }
+    }
+
+    /// <summary>
+    /// Validates that a limit is within Last.fm API constraints
+    /// </summary>
+    /// <param name="limit">Limit to validate</param>
+    /// <exception cref="ArgumentException">Thrown when limit is invalid</exception>
+    protected static void ValidateLimit(int limit)
+    {
+        if (limit < 1 || limit > 1000)
+        {
+            throw new ArgumentException($"Invalid limit '{limit}'. Limit must be between 1 and 1000");
+        }
+    }
+
+    /// <summary>
+    /// Validates that a username is not empty or whitespace
+    /// </summary>
+    /// <param name="username">Username to validate</param>
+    /// <exception cref="ArgumentException">Thrown when username is invalid</exception>
+    protected static void ValidateUsername(string? username)
+    {
+        if (string.IsNullOrWhiteSpace(username))
+        {
+            throw new ArgumentException("Username cannot be empty");
+        }
+    }
+
+    /// <summary>
+    /// Validates that an artist name is not empty or whitespace
+    /// </summary>
+    /// <param name="artist">Artist name to validate</param>
+    /// <exception cref="ArgumentException">Thrown when artist name is invalid</exception>
+    protected static void ValidateArtist(string? artist)
+    {
+        if (string.IsNullOrWhiteSpace(artist))
+        {
+            throw new ArgumentException("Artist name cannot be empty");
+        }
     }
 
     /// <summary>
@@ -460,5 +519,42 @@ public abstract class BaseCommand
                 Console.WriteLine($"\n{_symbols.Timer} Total execution time: {timer.ElapsedMilliseconds}ms ({timer.Elapsed.TotalSeconds:F2}s)");
             }
         }
+    }
+
+    /// <summary>
+    /// Determines the display format for period information
+    /// </summary>
+    /// <param name="isDateRange">Whether this is a date range query</param>
+    /// <param name="fromDate">Start date for date range</param>
+    /// <param name="toDate">End date for date range</param>
+    /// <param name="resolvedPeriod">Standard period string</param>
+    /// <returns>Formatted period string for display</returns>
+    protected string GetDisplayPeriod(bool isDateRange, DateTime? fromDate, DateTime? toDate, string resolvedPeriod)
+    {
+        return isDateRange && fromDate.HasValue && toDate.HasValue
+            ? DateRangeParser.FormatDateRange(fromDate.Value, toDate.Value)
+            : resolvedPeriod;
+    }
+
+    /// <summary>
+    /// Validates range parameter and displays standardized error message if invalid
+    /// </summary>
+    /// <param name="range">Range string to validate</param>
+    /// <param name="displayService">Display service for error messages</param>
+    /// <param name="startIndex">Output start index if valid</param>
+    /// <param name="endIndex">Output end index if valid</param>
+    /// <returns>True if range is valid, false otherwise</returns>
+    protected bool ValidateAndHandleRange(string range, IDisplayService displayService, out int startIndex, out int endIndex)
+    {
+        var (isValid, start, end, errorMessage) = ParseRange(range);
+        if (!isValid)
+        {
+            displayService.DisplayValidationError(errorMessage ?? "Invalid range format");
+            startIndex = endIndex = 0;
+            return false;
+        }
+        startIndex = start;
+        endIndex = end;
+        return true;
     }
 }

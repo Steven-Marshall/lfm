@@ -10,8 +10,7 @@ public static class ArtistTracksCommandBuilder
 {
     public static Command Build(IServiceProvider services)
     {
-        var limitOption = new Option<int>("--limit", () => Defaults.ItemLimit, "Number of tracks to display");
-        limitOption.AddAlias("-l");
+        var limitOption = StandardCommandOptions.CreateLimitOption("tracks");
         
         var deepOption = new Option<bool>("--deep", "Search through ALL your tracks (slower but comprehensive)");
         
@@ -23,8 +22,7 @@ public static class ArtistTracksCommandBuilder
         var timeoutOption = new Option<int?>("--timeout", "Search timeout in seconds (0 = no timeout, overrides config)");
         timeoutOption.AddAlias("-t");
         
-        var verboseOption = new Option<bool>("--verbose", "Show detailed progress information");
-        verboseOption.AddAlias("-v");
+        var verboseOption = StandardCommandOptions.CreateVerboseOption();
         
         var timingOption = new Option<bool>("--timing", "Show detailed API timing information (cache hits/misses and response times)");
         
@@ -37,7 +35,7 @@ public static class ArtistTracksCommandBuilder
         var noCacheOption = new Option<bool>("--no-cache", "Disable caching entirely for this request");
         noCacheOption.AddAlias("-nc");
 
-        var timerOption = new Option<bool>("--timer", "Display total execution time");
+        var timerOption = StandardCommandOptions.CreateTimerOption();
         
         var artistArg = new Argument<string>("artist", "Artist name");
 

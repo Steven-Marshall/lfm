@@ -342,9 +342,25 @@ public class DisplayService : IDisplayService
             Console.WriteLine($"     Match: {rec.AverageSimilarity:P0} | Similar to {rec.OccurrenceCount} of your top artists");
             Console.WriteLine($"     Your plays: {rec.UserPlayCount}");
             
-            if (verbose && rec.SourceArtists.Count <= 5)
+            if (rec.SourceArtists.Count > 0)
             {
-                Console.WriteLine($"     Similar to: {string.Join(", ", rec.SourceArtists)}");
+                if (verbose)
+                {
+                    // In verbose mode, show all artists
+                    Console.WriteLine($"     Similar to: {string.Join(", ", rec.SourceArtists)}");
+                }
+                else if (rec.SourceArtists.Count <= 5)
+                {
+                    // Show all artists when 5 or fewer
+                    Console.WriteLine($"     Similar to: {string.Join(", ", rec.SourceArtists)}");
+                }
+                else
+                {
+                    // Show first 5 with "and X more" format when more than 5
+                    var firstFive = rec.SourceArtists.Take(5);
+                    var remaining = rec.SourceArtists.Count - 5;
+                    Console.WriteLine($"     Similar to: {string.Join(", ", firstFive)}... and {remaining} more");
+                }
             }
 
             // Display tracks if requested

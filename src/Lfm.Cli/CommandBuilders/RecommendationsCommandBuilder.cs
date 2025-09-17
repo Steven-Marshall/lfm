@@ -21,15 +21,9 @@ public static class RecommendationsCommandBuilder
         var tracksPerArtistOption = new Option<int>("--tracks-per-artist", () => 0, "Number of top tracks to include per recommended artist (0 = artists only, default)");
         tracksPerArtistOption.AddAlias("-tpa");
         
-        var periodOption = new Option<string>("--period", "Time period: overall, 7day, 1month, 3month, 6month, 12month");
-        periodOption.AddAlias("-p");
-        
-        var fromOption = new Option<string>("--from", "Start date for custom range (YYYY-MM-DD or YYYY)");
-        var toOption = new Option<string>("--to", "End date for custom range (YYYY-MM-DD or YYYY)");
-        var yearOption = new Option<string>("--year", "Single year for analysis (shortcut for --from YYYY --to YYYY)");
-        
-        var userOption = new Option<string>("--user", "Last.fm username (uses configured default if not specified)");
-        userOption.AddAlias("-u");
+        var periodOption = StandardCommandOptions.CreatePeriodOption();
+        var (fromOption, toOption, yearOption) = StandardCommandOptions.CreateDateOptions();
+        var userOption = StandardCommandOptions.CreateUserOption();
 
         var rangeOption = new Option<string>("--range", "Range of artists to analyze (e.g., --range 10-20 for positions 10-20, both inclusive)");
         rangeOption.AddAlias("-r");
@@ -37,13 +31,13 @@ public static class RecommendationsCommandBuilder
         var delayOption = new Option<int?>("--delay", "Delay between API requests in milliseconds (0 = no throttling, overrides config)");
         delayOption.AddAlias("-d");
 
-        var verboseOption = new Option<bool>("--verbose", "Show detailed progress information");
-        verboseOption.AddAlias("-v");
-
+        var verboseOption = StandardCommandOptions.CreateVerboseOption();
         var timingOption = new Option<bool>("--timing", "Show detailed API timing information (cache hits/misses and response times)");
         timingOption.AddAlias("-t");
+        var timerOption = StandardCommandOptions.CreateTimerOption();
 
-        var timerOption = new Option<bool>("--timer", "Display total execution time");
+        var excludeTagsOption = new Option<bool>("--exclude-tags", "Filter out artists based on excluded tags configured in settings");
+        excludeTagsOption.AddAlias("-et");
 
         var (forceCacheOption, forceApiOption, noCacheOption) = CommandOptionBuilders.BuildCacheOptions();
 
@@ -65,7 +59,8 @@ public static class RecommendationsCommandBuilder
             forceCacheOption,
             forceApiOption,
             noCacheOption,
-            timerOption
+            timerOption,
+            excludeTagsOption
         };
 
         command.SetHandler(async (context) =>
@@ -87,26 +82,28 @@ public static class RecommendationsCommandBuilder
             var forceApi = context.ParseResult.GetValueForOption(forceApiOption);
             var noCache = context.ParseResult.GetValueForOption(noCacheOption);
             var timer = context.ParseResult.GetValueForOption(timerOption);
-            
+            var excludeTags = context.ParseResult.GetValueForOption(excludeTagsOption);
+
             var recommendationsCommand = services.GetRequiredService<RecommendationsCommand>();
             await recommendationsCommand.ExecuteAsync(
-                artistLimit, 
-                period, 
-                user, 
-                range, 
-                delay, 
-                verbose, 
-                timing, 
-                forceCache, 
-                forceApi, 
-                noCache, 
+                artistLimit,
+                period,
+                user,
+                range,
+                delay,
+                verbose,
+                timing,
+                forceCache,
+                forceApi,
+                noCache,
                 timer,
                 limit,
                 filter,
                 tracksPerArtist,
                 from,
                 to,
-                year);
+                year,
+                excludeTags);
         });
 
         return command;
