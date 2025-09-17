@@ -40,6 +40,30 @@ public static class ConfigCommandBuilder
         var unicodeArg = new Argument<string>("mode", "Unicode mode: Auto, Enabled, or Disabled");
         setUnicodeCommand.AddArgument(unicodeArg);
 
+        // Tag filtering commands
+        var showExcludedTagsCommand = new Command("show-excluded-tags", "Display current excluded tags configuration");
+
+        var addExcludedTagCommand = new Command("add-excluded-tag", "Add one or more tags to the excluded tags list");
+        var addTagArg = new Argument<string[]>("tags", "One or more tags to exclude (e.g., 'classical', 'christmas', 'jazz')");
+        addExcludedTagCommand.AddArgument(addTagArg);
+
+        var removeExcludedTagCommand = new Command("remove-excluded-tag", "Remove one or more tags from the excluded tags list");
+        var removeTagArg = new Argument<string[]>("tags", "One or more tags to remove from exclusion list");
+        removeExcludedTagCommand.AddArgument(removeTagArg);
+
+        var clearExcludedTagsCommand = new Command("clear-excluded-tags", "Clear all excluded tags");
+
+        var setTagThresholdCommand = new Command("set-tag-threshold", "Set minimum tag count required for exclusion");
+        var thresholdArg = new Argument<int>("threshold", "Minimum tag count (default: 30)");
+        setTagThresholdCommand.AddArgument(thresholdArg);
+
+        var setMaxTagLookupsCommand = new Command("set-max-tag-lookups", "Set maximum API calls for tag filtering");
+        var maxLookupsArg = new Argument<int>("max-lookups", "Maximum API calls for tag lookups (default: 20)");
+        setMaxTagLookupsCommand.AddArgument(maxLookupsArg);
+
+        var enableTagFilteringCommand = new Command("enable-tag-filtering", "Enable tag filtering for recommendations");
+        var disableTagFilteringCommand = new Command("disable-tag-filtering", "Disable tag filtering for recommendations");
+
         setApiKeyCommand.SetHandler(async (string apiKey) =>
         {
             var configCommand = services.GetRequiredService<ConfigCommand>();
@@ -88,6 +112,54 @@ public static class ConfigCommandBuilder
             await configCommand.SetUnicodeSymbolsAsync(unicodeMode);
         }, unicodeArg);
 
+        showExcludedTagsCommand.SetHandler(async () =>
+        {
+            var configCommand = services.GetRequiredService<ConfigCommand>();
+            await configCommand.ShowExcludedTagsAsync();
+        });
+
+        addExcludedTagCommand.SetHandler(async (string[] tags) =>
+        {
+            var configCommand = services.GetRequiredService<ConfigCommand>();
+            await configCommand.AddExcludedTagsAsync(tags);
+        }, addTagArg);
+
+        removeExcludedTagCommand.SetHandler(async (string[] tags) =>
+        {
+            var configCommand = services.GetRequiredService<ConfigCommand>();
+            await configCommand.RemoveExcludedTagsAsync(tags);
+        }, removeTagArg);
+
+        clearExcludedTagsCommand.SetHandler(async () =>
+        {
+            var configCommand = services.GetRequiredService<ConfigCommand>();
+            await configCommand.ClearExcludedTagsAsync();
+        });
+
+        setTagThresholdCommand.SetHandler(async (int threshold) =>
+        {
+            var configCommand = services.GetRequiredService<ConfigCommand>();
+            await configCommand.SetTagThresholdAsync(threshold);
+        }, thresholdArg);
+
+        setMaxTagLookupsCommand.SetHandler(async (int maxLookups) =>
+        {
+            var configCommand = services.GetRequiredService<ConfigCommand>();
+            await configCommand.SetMaxTagLookupsAsync(maxLookups);
+        }, maxLookupsArg);
+
+        enableTagFilteringCommand.SetHandler(async () =>
+        {
+            var configCommand = services.GetRequiredService<ConfigCommand>();
+            await configCommand.SetTagFilteringEnabledAsync(true);
+        });
+
+        disableTagFilteringCommand.SetHandler(async () =>
+        {
+            var configCommand = services.GetRequiredService<ConfigCommand>();
+            await configCommand.SetTagFilteringEnabledAsync(false);
+        });
+
         command.AddCommand(setApiKeyCommand);
         command.AddCommand(setUserCommand);
         command.AddCommand(showCommand);
@@ -96,6 +168,14 @@ public static class ConfigCommandBuilder
         command.AddCommand(setTimeoutCommand);
         command.AddCommand(setCacheExpiryCommand);
         command.AddCommand(setUnicodeCommand);
+        command.AddCommand(showExcludedTagsCommand);
+        command.AddCommand(addExcludedTagCommand);
+        command.AddCommand(removeExcludedTagCommand);
+        command.AddCommand(clearExcludedTagsCommand);
+        command.AddCommand(setTagThresholdCommand);
+        command.AddCommand(setMaxTagLookupsCommand);
+        command.AddCommand(enableTagFilteringCommand);
+        command.AddCommand(disableTagFilteringCommand);
 
         return command;
     }

@@ -15,6 +15,7 @@ public interface ILastFmApiClient
     Task<TopTracks?> GetArtistTopTracksAsync(string artist, int limit = 10);
     Task<TopAlbums?> GetArtistTopAlbumsAsync(string artist, int limit = 10);
     Task<SimilarArtists?> GetSimilarArtistsAsync(string artist, int limit = 50);
+    Task<TopTags?> GetArtistTopTagsAsync(string artist, bool autocorrect = true);
     
     // Date range methods
     Task<RecentTracks?> GetRecentTracksAsync(string username, DateTime from, DateTime to, int limit = 200, int page = 1);
@@ -29,6 +30,7 @@ public interface ILastFmApiClient
     Task<Result<TopTracks>> GetArtistTopTracksWithResultAsync(string artist, int limit = 10);
     Task<Result<TopAlbums>> GetArtistTopAlbumsWithResultAsync(string artist, int limit = 10);
     Task<Result<SimilarArtists>> GetSimilarArtistsWithResultAsync(string artist, int limit = 50);
+    Task<Result<TopTags>> GetArtistTopTagsWithResultAsync(string artist, bool autocorrect = true);
     
     // Result-based date range methods
     Task<Result<RecentTracks>> GetRecentTracksWithResultAsync(string username, DateTime from, DateTime to, int limit = 200, int page = 1);
@@ -310,6 +312,48 @@ public class LastFmApiClient : ILastFmApiClient
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting similar artists for {Artist}", artist);
+            return null;
+        }
+    }
+
+    public async Task<TopTags?> GetArtistTopTagsAsync(string artist, bool autocorrect = true)
+    {
+        try
+        {
+            var parameters = new Dictionary<string, string>
+            {
+                ["method"] = "artist.getTopTags",
+                ["artist"] = artist,
+                ["autocorrect"] = autocorrect ? "1" : "0",
+                ["api_key"] = _apiKey,
+                ["format"] = "json"
+            };
+
+            var response = await MakeRequestAsync(parameters);
+            if (response == null) return null;
+
+            using var document = JsonDocument.Parse(response);
+            var root = document.RootElement;
+
+            if (root.TryGetProperty("error", out _))
+            {
+                var error = root.GetProperty("error").GetInt32();
+                var message = root.GetProperty("message").GetString();
+                _logger.LogError("Last.fm API error {Error}: {Message}", error, message);
+                return null;
+            }
+
+            if (root.TryGetProperty("toptags", out var topTagsElement))
+            {
+                var topTags = JsonSerializer.Deserialize<TopTags>(topTagsElement.GetRawText(), GetJsonOptions());
+                return topTags;
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting top tags for {Artist}", artist);
             return null;
         }
     }
@@ -737,6 +781,13 @@ public class LastFmApiClient : ILastFmApiClient
         return await ExecuteWithResultAsync(
             () => GetSimilarArtistsAsync(artist, limit),
             $"getting similar artists for {artist}");
+    }
+
+    public async Task<Result<TopTags>> GetArtistTopTagsWithResultAsync(string artist, bool autocorrect = true)
+    {
+        return await ExecuteWithResultAsync(
+            () => GetArtistTopTagsAsync(artist, autocorrect),
+            $"getting top tags for {artist}");
     }
 
     public async Task<Result<RecentTracks>> GetRecentTracksWithResultAsync(string username, DateTime from, DateTime to, int limit = 200, int page = 1)

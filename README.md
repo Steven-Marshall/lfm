@@ -76,6 +76,13 @@ lfm recommendations
 lfm recommendations --filter 10 --limit 20
 # Analyze more artists for better recommendations
 lfm recommendations --artist-limit 50 --period 12month --verbose
+
+# Filter out specific genres using tags (e.g., classical, christmas)
+lfm recommendations --exclude-tags --verbose
+# Configure excluded tags
+lfm config add-excluded-tag "classical"
+lfm config add-excluded-tag "christmas"
+lfm config show-excluded-tags
 ```
 
 ### Cache Management
@@ -123,6 +130,11 @@ lfm recommendations --filter 5 --limit 10
 # - Analyzes your top artists
 # - Finds similar artists you haven't listened to much
 # - Filter excludes artists with 5+ plays
+
+# Discover new music with genre filtering
+lfm recommendations --exclude-tags --filter 5 --limit 20
+# - Additionally filters out genres based on your configured tags
+# - Useful for excluding classical, christmas, or other unwanted genres
 
 # Performance analysis
 lfm benchmark-cache your-username

@@ -328,3 +328,27 @@ internal class AlbumAggregation
     public string Mbid { get; set; } = string.Empty;
     public ArtistInfo Artist { get; set; } = new();
 }
+
+public class Tag
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("count")]
+    public int Count { get; set; } = 0;
+}
+
+public class TopTags
+{
+    [JsonPropertyName("tag")]
+    public List<Tag> Tags { get; set; } = new();
+
+    [JsonPropertyName("@attr")]
+    public TopTagsAttributes Attributes { get; set; } = new();
+}
+
+public class TopTagsAttributes
+{
+    [JsonPropertyName("artist")]
+    public string Artist { get; set; } = string.Empty;
+}

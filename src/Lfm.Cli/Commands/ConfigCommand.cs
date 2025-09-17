@@ -96,7 +96,32 @@ public class ConfigCommand
             Console.WriteLine();
             Console.WriteLine("Display Settings:");
             Console.WriteLine($"Unicode Symbols: {config.UnicodeSymbols}");
-            
+
+            Console.WriteLine();
+            Console.WriteLine("🏷️ Tag Filtering:");
+            Console.WriteLine($"Filtering Enabled: {(config.EnableTagFiltering ? "✅ Yes" : "❌ No")}");
+            Console.WriteLine($"Tag Threshold: {config.TagFilterThreshold} (minimum tag count for exclusion)");
+            Console.WriteLine($"Max API Lookups: {config.MaxTagLookups} (per recommendation request)");
+
+            if (config.ExcludedTags.Any())
+            {
+                var tagCount = config.ExcludedTags.Count;
+                var displayTags = tagCount <= 5
+                    ? string.Join(", ", config.ExcludedTags.OrderBy(t => t))
+                    : string.Join(", ", config.ExcludedTags.OrderBy(t => t).Take(5)) + $", ... (+{tagCount - 5} more)";
+
+                Console.WriteLine($"Excluded Tags ({tagCount}): {displayTags}");
+
+                if (tagCount > 5)
+                {
+                    Console.WriteLine($"  💡 Use 'lfm config show-excluded-tags' to see all {tagCount} tags");
+                }
+            }
+            else
+            {
+                Console.WriteLine("Excluded Tags: None configured");
+            }
+
             if (string.IsNullOrEmpty(config.ApiKey))
             {
                 Console.WriteLine();
@@ -104,6 +129,13 @@ public class ConfigCommand
                 Console.WriteLine("1. Get an API key from: https://www.last.fm/api/account/create");
                 Console.WriteLine("2. Set it with: lfm config set-api-key <your-api-key>");
                 Console.WriteLine("3. Set your username: lfm config set-user <your-username>");
+            }
+            else if (config.ExcludedTags.Any() && !config.EnableTagFiltering)
+            {
+                Console.WriteLine();
+                Console.WriteLine("💡 Tag Filtering Tip:");
+                Console.WriteLine("You have excluded tags configured but filtering is disabled.");
+                Console.WriteLine("Enable with: lfm config enable-tag-filtering");
             }
         }
         catch (Exception ex)
@@ -239,6 +271,359 @@ public class ConfigCommand
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error setting Unicode symbols");
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.GenericError, ex.Message));
+        }
+    }
+
+    public async Task ShowExcludedTagsAsync()
+    {
+        try
+        {
+            var config = await _configManager.LoadAsync();
+
+            Console.WriteLine($"{_symbols.Settings} Current excluded tags configuration:");
+            Console.WriteLine($"  Filtering enabled: {(config.EnableTagFiltering ? _symbols.Success : _symbols.Error)} {config.EnableTagFiltering}");
+            Console.WriteLine($"  Tag threshold: {config.TagFilterThreshold}");
+            Console.WriteLine($"  Excluded tags ({config.ExcludedTags.Count}):");
+
+            if (config.ExcludedTags.Any())
+            {
+                foreach (var tag in config.ExcludedTags.OrderBy(t => t))
+                {
+                    Console.WriteLine($"    - {tag}");
+                }
+            }
+            else
+            {
+                Console.WriteLine($"    {_symbols.Error} No tags excluded");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error showing excluded tags");
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.GenericError, ex.Message));
+        }
+    }
+
+    public async Task AddExcludedTagsAsync(string[] tags)
+    {
+        if (tags == null || tags.Length == 0)
+        {
+            Console.WriteLine($"{_symbols.Error} No tags provided.");
+            return;
+        }
+
+        try
+        {
+            var config = await _configManager.LoadAsync();
+            var addedTags = new List<string>();
+            var skippedTags = new List<string>();
+
+            foreach (var tag in tags)
+            {
+                if (string.IsNullOrWhiteSpace(tag))
+                {
+                    skippedTags.Add($"'{tag}' (empty)");
+                    continue;
+                }
+
+                var trimmedTag = tag.Trim();
+                if (config.ExcludedTags.Any(t => string.Equals(t, trimmedTag, StringComparison.OrdinalIgnoreCase)))
+                {
+                    skippedTags.Add($"'{trimmedTag}' (already excluded)");
+                    continue;
+                }
+
+                config.ExcludedTags.Add(trimmedTag);
+                addedTags.Add(trimmedTag);
+            }
+
+            if (addedTags.Any())
+            {
+                await _configManager.SaveAsync(config);
+
+                if (addedTags.Count == 1)
+                {
+                    Console.WriteLine($"{_symbols.Success} Added '{addedTags[0]}' to excluded tags.");
+                }
+                else
+                {
+                    Console.WriteLine($"{_symbols.Success} Added {addedTags.Count} tags to excluded tags:");
+                    foreach (var tag in addedTags)
+                    {
+                        Console.WriteLine($"  + {tag}");
+                    }
+                }
+
+                Console.WriteLine($"  Total excluded tags: {config.ExcludedTags.Count}");
+                Console.WriteLine(ErrorMessages.Format(ErrorMessages.ConfigSavedTo, _configManager.GetConfigPath()));
+            }
+
+            if (skippedTags.Any())
+            {
+                Console.WriteLine($"{_symbols.StopSign} Skipped {skippedTags.Count} tags:");
+                foreach (var skipped in skippedTags)
+                {
+                    Console.WriteLine($"  - {skipped}");
+                }
+            }
+
+            if (!addedTags.Any() && !skippedTags.Any())
+            {
+                Console.WriteLine($"{_symbols.Error} No valid tags to add.");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error adding excluded tags");
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.GenericError, ex.Message));
+        }
+    }
+
+    public async Task AddExcludedTagAsync(string tag)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(tag))
+            {
+                Console.WriteLine($"{_symbols.Error} Tag cannot be empty.");
+                return;
+            }
+
+            var config = await _configManager.LoadAsync();
+            var trimmedTag = tag.Trim();
+
+            if (config.ExcludedTags.Any(t => string.Equals(t, trimmedTag, StringComparison.OrdinalIgnoreCase)))
+            {
+                Console.WriteLine($"{_symbols.StopSign} Tag '{trimmedTag}' is already excluded.");
+                return;
+            }
+
+            config.ExcludedTags.Add(trimmedTag);
+            await _configManager.SaveAsync(config);
+
+            Console.WriteLine($"{_symbols.Success} Added '{trimmedTag}' to excluded tags.");
+            Console.WriteLine($"  Total excluded tags: {config.ExcludedTags.Count}");
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.ConfigSavedTo, _configManager.GetConfigPath()));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error adding excluded tag");
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.GenericError, ex.Message));
+        }
+    }
+
+    public async Task RemoveExcludedTagsAsync(string[] tags)
+    {
+        if (tags == null || tags.Length == 0)
+        {
+            Console.WriteLine($"{_symbols.Error} No tags provided.");
+            return;
+        }
+
+        try
+        {
+            var config = await _configManager.LoadAsync();
+            var removedTags = new List<string>();
+            var notFoundTags = new List<string>();
+
+            foreach (var tag in tags)
+            {
+                if (string.IsNullOrWhiteSpace(tag))
+                {
+                    notFoundTags.Add($"'{tag}' (empty)");
+                    continue;
+                }
+
+                var trimmedTag = tag.Trim();
+                var removed = config.ExcludedTags.RemoveAll(t =>
+                    string.Equals(t, trimmedTag, StringComparison.OrdinalIgnoreCase));
+
+                if (removed > 0)
+                {
+                    removedTags.Add(trimmedTag);
+                }
+                else
+                {
+                    notFoundTags.Add($"'{trimmedTag}' (not found)");
+                }
+            }
+
+            if (removedTags.Any())
+            {
+                await _configManager.SaveAsync(config);
+
+                if (removedTags.Count == 1)
+                {
+                    Console.WriteLine($"{_symbols.Success} Removed '{removedTags[0]}' from excluded tags.");
+                }
+                else
+                {
+                    Console.WriteLine($"{_symbols.Success} Removed {removedTags.Count} tags from excluded tags:");
+                    foreach (var tag in removedTags)
+                    {
+                        Console.WriteLine($"  - {tag}");
+                    }
+                }
+
+                Console.WriteLine($"  Total excluded tags: {config.ExcludedTags.Count}");
+                Console.WriteLine(ErrorMessages.Format(ErrorMessages.ConfigSavedTo, _configManager.GetConfigPath()));
+            }
+
+            if (notFoundTags.Any())
+            {
+                Console.WriteLine($"{_symbols.StopSign} Could not remove {notFoundTags.Count} tags:");
+                foreach (var notFound in notFoundTags)
+                {
+                    Console.WriteLine($"  - {notFound}");
+                }
+            }
+
+            if (!removedTags.Any() && !notFoundTags.Any())
+            {
+                Console.WriteLine($"{_symbols.Error} No valid tags to remove.");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error removing excluded tags");
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.GenericError, ex.Message));
+        }
+    }
+
+    public async Task RemoveExcludedTagAsync(string tag)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(tag))
+            {
+                Console.WriteLine($"{_symbols.Error} Tag cannot be empty.");
+                return;
+            }
+
+            var config = await _configManager.LoadAsync();
+            var trimmedTag = tag.Trim();
+
+            var removed = config.ExcludedTags.RemoveAll(t =>
+                string.Equals(t, trimmedTag, StringComparison.OrdinalIgnoreCase));
+
+            if (removed == 0)
+            {
+                Console.WriteLine($"{_symbols.StopSign} Tag '{trimmedTag}' was not found in excluded tags.");
+                return;
+            }
+
+            await _configManager.SaveAsync(config);
+
+            Console.WriteLine($"{_symbols.Success} Removed '{trimmedTag}' from excluded tags.");
+            Console.WriteLine($"  Total excluded tags: {config.ExcludedTags.Count}");
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.ConfigSavedTo, _configManager.GetConfigPath()));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error removing excluded tag");
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.GenericError, ex.Message));
+        }
+    }
+
+    public async Task ClearExcludedTagsAsync()
+    {
+        try
+        {
+            var config = await _configManager.LoadAsync();
+            var count = config.ExcludedTags.Count;
+
+            if (count == 0)
+            {
+                Console.WriteLine($"{_symbols.StopSign} No excluded tags to clear.");
+                return;
+            }
+
+            config.ExcludedTags.Clear();
+            await _configManager.SaveAsync(config);
+
+            Console.WriteLine($"{_symbols.Success} Cleared all {count} excluded tags.");
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.ConfigSavedTo, _configManager.GetConfigPath()));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error clearing excluded tags");
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.GenericError, ex.Message));
+        }
+    }
+
+    public async Task SetTagThresholdAsync(int threshold)
+    {
+        try
+        {
+            if (threshold < 0)
+            {
+                Console.WriteLine($"{_symbols.Error} Threshold must be >= 0.");
+                return;
+            }
+
+            var config = await _configManager.LoadAsync();
+            config.TagFilterThreshold = threshold;
+            await _configManager.SaveAsync(config);
+
+            Console.WriteLine($"{_symbols.Success} Tag filter threshold set to {threshold}.");
+            Console.WriteLine($"  Only tags with count >= {threshold} will trigger exclusion.");
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.ConfigSavedTo, _configManager.GetConfigPath()));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error setting tag threshold");
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.GenericError, ex.Message));
+        }
+    }
+
+    public async Task SetMaxTagLookupsAsync(int maxLookups)
+    {
+        try
+        {
+            if (maxLookups < 0)
+            {
+                Console.WriteLine($"{_symbols.Error} Max tag lookups must be >= 0.");
+                return;
+            }
+
+            var config = await _configManager.LoadAsync();
+            config.MaxTagLookups = maxLookups;
+            await _configManager.SaveAsync(config);
+
+            Console.WriteLine($"{_symbols.Success} Max tag lookups set to {maxLookups}.");
+            Console.WriteLine($"  Tag filtering will use at most {maxLookups} API calls per recommendation request.");
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.ConfigSavedTo, _configManager.GetConfigPath()));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error setting max tag lookups");
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.GenericError, ex.Message));
+        }
+    }
+
+    public async Task SetTagFilteringEnabledAsync(bool enabled)
+    {
+        try
+        {
+            var config = await _configManager.LoadAsync();
+            config.EnableTagFiltering = enabled;
+            await _configManager.SaveAsync(config);
+
+            var status = enabled ? "enabled" : "disabled";
+            Console.WriteLine($"{_symbols.Success} Tag filtering has been {status}.");
+
+            if (enabled && !config.ExcludedTags.Any())
+            {
+                Console.WriteLine($"{_symbols.Tip} No excluded tags configured yet. Add tags using:");
+                Console.WriteLine("  lfm config add-excluded-tag \"classical\"");
+            }
+
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.ConfigSavedTo, _configManager.GetConfigPath()));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error setting tag filtering enabled state");
             Console.WriteLine(ErrorMessages.Format(ErrorMessages.GenericError, ex.Message));
         }
     }

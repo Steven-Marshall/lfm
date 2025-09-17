@@ -20,7 +20,9 @@ public class CachedLastFmApiClient : ILastFmApiClient
     private readonly ILogger<CachedLastFmApiClient> _logger;
     private readonly IConfigurationManager _configManager;
     private readonly int _defaultCacheExpiryMinutes;
-    
+    private DateTime _lastApiCallTime = DateTime.MinValue;
+    private readonly SemaphoreSlim _throttleSemaphore = new(1, 1);
+
     public bool EnableTiming { get; set; } = false;
     public List<TimingInfo> TimingResults { get; } = new();
     public CacheBehavior CacheBehavior { get; set; } = CacheBehavior.Normal;
@@ -115,6 +117,17 @@ public class CachedLastFmApiClient : ILastFmApiClient
             artist, "n/a", limit, 1);
     }
 
+    public async Task<TopTags?> GetArtistTopTagsAsync(string artist, bool autocorrect = true)
+    {
+        var cacheKey = _keyGenerator.ForArtistTopTags(artist, autocorrect);
+
+        return await GetWithCacheAsync<TopTags>(
+            cacheKey,
+            async () => await _innerClient.GetArtistTopTagsAsync(artist, autocorrect),
+            "GetArtistTopTags",
+            artist, autocorrect.ToString(), 1, 1);
+    }
+
     /// <summary>
     /// Generic cache-aware method that handles different cache behaviors and cleanup.
     /// </summary>
@@ -144,6 +157,10 @@ public class CachedLastFmApiClient : ILastFmApiClient
             if (effectiveBehavior == CacheBehavior.NoCache)
             {
                 _logger.LogDebug("Cache disabled for {Method}, calling API directly", methodName);
+
+                // Apply throttling for no-cache API calls
+                await ApplyApiThrottlingAsync(config.ApiThrottleMs);
+
                 var directResult = await apiCall();
                 
                 if (EnableTiming && stopwatch != null)
@@ -165,6 +182,10 @@ public class CachedLastFmApiClient : ILastFmApiClient
             if (effectiveBehavior == CacheBehavior.ForceApi)
             {
                 _logger.LogDebug("Force API mode for {Method}, bypassing cache", methodName);
+
+                // Apply throttling for forced API calls too
+                await ApplyApiThrottlingAsync(config.ApiThrottleMs);
+
                 var forceApiResult = await apiCall();
                 
                 if (forceApiResult != null)
@@ -229,8 +250,12 @@ public class CachedLastFmApiClient : ILastFmApiClient
                 }
             }
 
-            // Cache miss or expired - call API
+            // Cache miss or expired - call API with throttling
             _logger.LogDebug("Cache miss for {Method} with params {Params}, calling API", methodName, string.Join(", ", logParams));
+
+            // Apply throttling only for actual API calls (not cache hits)
+            await ApplyApiThrottlingAsync(config.ApiThrottleMs);
+
             var apiResult = await apiCall();
             
             if (apiResult != null)
@@ -260,6 +285,11 @@ public class CachedLastFmApiClient : ILastFmApiClient
             try
             {
                 _logger.LogInformation("Falling back to direct API call for {Method}", methodName);
+
+                // Apply throttling for fallback API calls
+                var config2 = await _configManager.LoadAsync();
+                await ApplyApiThrottlingAsync(config2.ApiThrottleMs);
+
                 var fallbackResult = await apiCall();
                 
                 if (EnableTiming && stopwatch != null)
@@ -385,7 +415,39 @@ public class CachedLastFmApiClient : ILastFmApiClient
             return false;
         }
     }
-    
+
+    /// <summary>
+    /// Applies throttling only for actual API calls, not cache hits.
+    /// This ensures we respect rate limits without slowing down cached responses.
+    /// </summary>
+    private async Task ApplyApiThrottlingAsync(int throttleMs)
+    {
+        if (throttleMs <= 0)
+        {
+            return; // No throttling configured
+        }
+
+        await _throttleSemaphore.WaitAsync();
+        try
+        {
+            var timeSinceLastCall = DateTime.UtcNow - _lastApiCallTime;
+            var requiredDelay = TimeSpan.FromMilliseconds(throttleMs);
+
+            if (timeSinceLastCall < requiredDelay)
+            {
+                var delayNeeded = requiredDelay - timeSinceLastCall;
+                _logger.LogDebug("Throttling API call for {DelayMs}ms", delayNeeded.TotalMilliseconds);
+                await Task.Delay(delayNeeded);
+            }
+
+            _lastApiCallTime = DateTime.UtcNow;
+        }
+        finally
+        {
+            _throttleSemaphore.Release();
+        }
+    }
+
     /// <summary>
     /// Performs cache cleanup if needed based on configuration
     /// </summary>
@@ -493,6 +555,17 @@ public class CachedLastFmApiClient : ILastFmApiClient
             async () => await _innerClient.GetSimilarArtistsWithResultAsync(artist, limit),
             "GetSimilarArtists",
             artist, "n/a", limit, 1);
+    }
+
+    public async Task<Result<TopTags>> GetArtistTopTagsWithResultAsync(string artist, bool autocorrect = true)
+    {
+        var cacheKey = _keyGenerator.ForArtistTopTags(artist, autocorrect);
+
+        return await GetWithCacheResultAsync<TopTags>(
+            cacheKey,
+            async () => await _innerClient.GetArtistTopTagsWithResultAsync(artist, autocorrect),
+            "GetArtistTopTags",
+            artist, autocorrect.ToString(), 1, 1);
     }
 
     public async Task<Result<RecentTracks>> GetRecentTracksWithResultAsync(string username, DateTime from, DateTime to, int limit = 200, int page = 1)

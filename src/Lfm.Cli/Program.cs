@@ -77,7 +77,8 @@ class Program
                 });
                 
                 services.AddTransient<IDisplayService, DisplayService>();
-                
+                services.AddTransient<ITagFilterService, TagFilterService>();
+
                 // Service layer
                 services.AddTransient<ILastFmService, LastFmService>();
                 

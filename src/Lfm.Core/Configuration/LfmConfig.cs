@@ -31,6 +31,18 @@ public class LfmConfig
     
     // Display Configuration
     public UnicodeSupport UnicodeSymbols { get; set; } = UnicodeSupport.Auto;
+
+    // Tag Filtering Configuration
+    public List<string> ExcludedTags { get; set; } = new()
+    {
+        "classical", "classical music", "opera", "symphony", "orchestral",
+        "baroque", "romantic era", "contemporary classical", "chamber music",
+        "choral", "classical crossover"
+    };
+
+    public int TagFilterThreshold { get; set; } = 30;
+    public bool EnableTagFiltering { get; set; } = false;
+    public int MaxTagLookups { get; set; } = 20;
 }
 
 public interface IConfigurationManager

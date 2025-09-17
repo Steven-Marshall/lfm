@@ -88,23 +88,25 @@ public interface ILastFmService
     /// <summary>
     /// Generates personalized music recommendations based on user's listening history
     /// </summary>
-    Task<List<RecommendationResult>> GetMusicRecommendationsAsync(string username, 
-        int analysisLimit = 20, 
-        int recommendationLimit = 20, 
-        int filterThreshold = 0, 
-        int tracksPerArtist = 0, 
-        string period = "overall");
+    Task<List<RecommendationResult>> GetMusicRecommendationsAsync(string username,
+        int analysisLimit = 20,
+        int recommendationLimit = 20,
+        int filterThreshold = 0,
+        int tracksPerArtist = 0,
+        string period = "overall",
+        bool excludeTags = false);
     
     /// <summary>
     /// Generates personalized music recommendations based on user's listening history for a specific date range
     /// </summary>
-    Task<List<RecommendationResult>> GetMusicRecommendationsForDateRangeAsync(string username, 
-        DateTime from, 
+    Task<List<RecommendationResult>> GetMusicRecommendationsForDateRangeAsync(string username,
+        DateTime from,
         DateTime to,
-        int analysisLimit = 20, 
-        int recommendationLimit = 20, 
-        int filterThreshold = 0, 
-        int tracksPerArtist = 0);
+        int analysisLimit = 20,
+        int recommendationLimit = 20,
+        int filterThreshold = 0,
+        int tracksPerArtist = 0,
+        bool excludeTags = false);
     
     /// <summary>
     /// Builds a comprehensive map of user's artist play counts
@@ -121,12 +123,13 @@ public interface ILastFmService
     /// <summary>
     /// Gets music recommendations with comprehensive error handling
     /// </summary>
-    Task<Result<List<RecommendationResult>>> GetMusicRecommendationsWithResultAsync(string username, 
-        int analysisLimit = 20, 
-        int recommendationLimit = 20, 
-        int filterThreshold = 0, 
-        int tracksPerArtist = 0, 
-        string period = "overall");
+    Task<Result<List<RecommendationResult>>> GetMusicRecommendationsWithResultAsync(string username,
+        int analysisLimit = 20,
+        int recommendationLimit = 20,
+        int filterThreshold = 0,
+        int tracksPerArtist = 0,
+        string period = "overall",
+        bool excludeTags = false);
 
     /// <summary>
     /// Validates user configuration (API key, username, etc.)

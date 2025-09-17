@@ -104,6 +104,12 @@ public static class CacheKeyExtensions
         => generator.GenerateKey("artist.getSimilar", artist, "n/a", limit, 1);
 
     /// <summary>
+    /// Creates a cache key for artist.getTopTags API calls.
+    /// </summary>
+    public static string ForArtistTopTags(this ICacheKeyGenerator generator, string artist, bool autocorrect)
+        => generator.GenerateKey("artist.getTopTags", artist, autocorrect ? "autocorrect" : "noautocorrect", 1, 1);
+
+    /// <summary>
     /// Creates a cache key for user.getRecentTracks API calls with date range.
     /// </summary>
     public static string ForRecentTracks(this ICacheKeyGenerator generator, string user, string dateRange, int limit, int page)

@@ -74,6 +74,9 @@ public class ArtistSearchCommand<T, TResponse> : BaseCommand
             if (!ValidateArtistName(artist))
                 return;
 
+            // Validate limit parameter
+            ValidateLimit(limit);
+
             // Load config for search parameters
             var config = await _configManager.LoadAsync();
             
