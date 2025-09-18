@@ -340,8 +340,7 @@ public class DisplayService : IDisplayService
         {
             Console.WriteLine($"{index,3}. {rec.ArtistName}");
             Console.WriteLine($"     Match: {rec.AverageSimilarity:P0} | Similar to {rec.OccurrenceCount} of your top artists");
-            Console.WriteLine($"     Your plays: {rec.UserPlayCount}");
-            
+
             if (rec.SourceArtists.Count > 0)
             {
                 if (verbose)
@@ -362,6 +361,8 @@ public class DisplayService : IDisplayService
                     Console.WriteLine($"     Similar to: {string.Join(", ", firstFive)}... and {remaining} more");
                 }
             }
+
+            Console.WriteLine($"     Your plays: {rec.UserPlayCount}");
 
             // Display tracks if requested
             if (tracksPerArtist > 0 && rec.TopTracks != null)
