@@ -58,6 +58,12 @@ lfm tracks --limit 20 --period 7day
 # Get your top albums with detailed timing
 lfm albums --timing
 
+# Get your top artists for a specific year
+lfm artists --year 2023
+
+# Get your top tracks for a custom date range
+lfm tracks --from 2024-01-01 --to 2024-06-30
+
 # Get your top tracks by a specific artist (supports name variations)
 lfm artist-tracks "Radiohead"
 # Also works with: "radiohead", etc.
@@ -112,8 +118,11 @@ lfm cache-clear --all
 
 #### Filtering & Ranges
 - `--range 10-20` - Display specific position ranges
-- `--limit 50` - Number of results to display
+- `--limit 50` - Number of results to display (1-1000)
 - `--period overall|7day|1month|3month|6month|12month`
+- `--from YYYY-MM-DD` - Start date for custom date range
+- `--to YYYY-MM-DD` - End date for custom date range
+- `--year YYYY` - Shortcut for entire year (e.g., `--year 2023`)
 
 ### Example Workflows
 
@@ -322,6 +331,6 @@ This project is open source. See the repository for license details.
 
 ---
 
-**Version**: 1.1.0  
-**Author**: Steven Marshall  
+**Version**: 1.2.0
+**Author**: Steven Marshall
 **Repository**: https://github.com/Steven-Marshall/lfm
