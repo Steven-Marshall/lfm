@@ -8,9 +8,9 @@
     <AssemblyName>lfm</AssemblyName>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>false</SelfContained>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <Authors>Steven Marshall</Authors>
-    <Description>Last.fm CLI tool with caching and Unicode support</Description>
+    <Description>Last.fm CLI tool with caching, tag filtering, and Unicode support</Description>
   </PropertyGroup>
 
   <ItemGroup>
