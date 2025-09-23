@@ -6,6 +6,7 @@ A powerful command-line interface for retrieving your Last.fm music statistics w
 
 - 🎵 **Comprehensive Statistics** - Top artists, tracks, and albums with play counts
 - 🎸 **Music Recommendations** - Discover new artists based on your listening history
+- 🎧 **Spotify Integration** - Queue tracks and create playlists directly from your Last.fm data
 - 🚀 **Smart Caching** - File-based cache system for improved performance
 - 🌍 **Cross-Platform** - Windows, Linux, and WSL support
 - 🎨 **Unicode Support** - Auto-detecting terminal capabilities with graceful ASCII fallbacks
@@ -89,6 +90,31 @@ lfm recommendations --exclude-tags --verbose
 lfm config add-excluded-tag "classical"
 lfm config add-excluded-tag "christmas"
 lfm config show-excluded-tags
+```
+
+### Spotify Integration
+
+```bash
+# Configure Spotify (requires Spotify app credentials)
+lfm config set-spotify-client-id YOUR_CLIENT_ID
+lfm config set-spotify-client-secret YOUR_CLIENT_SECRET
+
+# Queue your top tracks directly to Spotify
+lfm tracks --period 7day --limit 20 --playnow
+# With specific device
+lfm tracks --period 1month --playnow --device "Web Player (Chrome)"
+
+# Create Spotify playlists from your Last.fm data
+lfm tracks --year 2024 --limit 50 --playlist "My 2024 Favorites"
+lfm recommendations --limit 30 --tracks-per-artist 2 --playlist "Discover Weekly"
+
+# Manage Spotify devices
+lfm spotify devices
+lfm config set-spotify-default-device "iPhone"
+
+# Manage Spotify playlists
+lfm spotify list-playlists
+lfm spotify delete-playlists "lfm-*"  # Delete all lfm-created playlists
 ```
 
 ### Cache Management
@@ -179,6 +205,11 @@ lfm config set default-limit 20
 
 # Enable/disable Unicode symbols
 lfm config set unicode enabled|disabled|auto
+
+# Spotify configuration
+lfm config set-spotify-client-id YOUR_CLIENT_ID
+lfm config set-spotify-client-secret YOUR_CLIENT_SECRET
+lfm config set-spotify-default-device "Device Name"
 ```
 
 ## Cache System

@@ -43,6 +43,22 @@ public class LfmConfig
     public int TagFilterThreshold { get; set; } = 30;
     public bool EnableTagFiltering { get; set; } = false;
     public int MaxTagLookups { get; set; } = 20;
+
+    // Spotify Configuration
+    public SpotifyConfig Spotify { get; set; } = new();
+    public string DefaultPlayer { get; set; } = "text"; // "text", "spotify"
+}
+
+public class SpotifyConfig
+{
+    public string ClientId { get; set; } = string.Empty;
+    public string ClientSecret { get; set; } = string.Empty;
+    public string RefreshToken { get; set; } = string.Empty;
+    public string DefaultDevice { get; set; } = string.Empty;
+    public int RateLimitDelayMs { get; set; } = 100;
+    public int SearchTimeoutMs { get; set; } = 5000;
+    public int MaxRetries { get; set; } = 3;
+    public bool FallbackToLooseSearch { get; set; } = true;
 }
 
 public interface IConfigurationManager

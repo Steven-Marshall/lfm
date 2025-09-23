@@ -28,6 +28,14 @@ public static class TracksCommandBuilder
         timingOption.AddAlias("-t");
         var timerOption = StandardCommandOptions.CreateTimerOption();
 
+        var playNowOption = new Option<bool>("--playnow", "Queue tracks to Spotify and start playing immediately");
+        var playlistOption = new Option<string>("--playlist", "Save tracks to a Spotify playlist with the given name");
+        playlistOption.AddAlias("-pl");
+        var shuffleOption = new Option<bool>("--shuffle", "Shuffle the order when sending to Spotify");
+        shuffleOption.AddAlias("-s");
+        var deviceOption = new Option<string>("--device", "Specific Spotify device to use (overrides config default)");
+        deviceOption.AddAlias("-dev");
+
         var (forceCacheOption, forceApiOption, noCacheOption) = CommandOptionBuilders.BuildCacheOptions();
 
         var command = new Command("tracks", "Get your top tracks with play counts, or global tracks for an artist")
@@ -46,7 +54,11 @@ public static class TracksCommandBuilder
             forceCacheOption,
             forceApiOption,
             noCacheOption,
-            timerOption
+            timerOption,
+            playNowOption,
+            playlistOption,
+            shuffleOption,
+            deviceOption
         };
 
         command.SetHandler(async (context) =>
@@ -66,9 +78,13 @@ public static class TracksCommandBuilder
             var forceApi = context.ParseResult.GetValueForOption(forceApiOption);
             var noCache = context.ParseResult.GetValueForOption(noCacheOption);
             var timer = context.ParseResult.GetValueForOption(timerOption);
-            
+            var playNow = context.ParseResult.GetValueForOption(playNowOption);
+            var playlist = context.ParseResult.GetValueForOption(playlistOption);
+            var shuffle = context.ParseResult.GetValueForOption(shuffleOption);
+            var device = context.ParseResult.GetValueForOption(deviceOption);
+
             var tracksCommand = services.GetRequiredService<TracksCommand>();
-            await tracksCommand.ExecuteAsync(limit, period, user, artist, range, delay, verbose, timing, forceCache, forceApi, noCache, timer, from, to, year);
+            await tracksCommand.ExecuteAsync(limit, period, user, artist, range, delay, verbose, timing, forceCache, forceApi, noCache, timer, from, to, year, playNow, playlist, shuffle, device);
         });
 
         return command;

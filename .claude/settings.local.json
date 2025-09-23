@@ -75,7 +75,17 @@
       "Bash(claude mcp:*)",
       "Bash(git checkout:*)",
       "Bash(lfm recommendations:*)",
-      "Bash(lfm config:*)"
+      "Bash(lfm config:*)",
+      "WebSearch",
+      "Bash(.\\publish\\win-x64\\lfm.exe dj:*)",
+      "Bash(./publish/win-x64/lfm.exe dj:*)",
+      "WebFetch(domain:developer.spotify.com)",
+      "Bash(./publish/win-x64/lfm.exe --help)",
+      "Bash(./publish/win-x64/lfm.exe recommendations:*)",
+      "Bash(./publish/win-x64/lfm.exe config:*)",
+      "Bash(./publish/win-x64/lfm.exe tracks:*)",
+      "Bash(./publish/win-x64/lfm.exe spotify devices)",
+      "Bash(./publish/win-x64/lfm.exe spotify:*)"
     ],
     "deny": []
   }

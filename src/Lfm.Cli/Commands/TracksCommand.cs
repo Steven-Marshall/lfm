@@ -1,3 +1,4 @@
+using Lfm.Cli.Services;
 using Lfm.Core.Configuration;
 using Lfm.Core.Models;
 using Lfm.Core.Services;
@@ -9,21 +10,24 @@ public class TracksCommand : BaseCommand
 {
     private readonly ILastFmService _lastFmService;
     private readonly IDisplayService _displayService;
+    private readonly ISpotifyStreamingService _spotifyStreamingService;
 
     public TracksCommand(
         ILastFmApiClient apiClient,
         IConfigurationManager configManager,
         ILastFmService lastFmService,
         IDisplayService displayService,
+        ISpotifyStreamingService spotifyStreamingService,
         ILogger<TracksCommand> logger,
         ISymbolProvider symbolProvider)
         : base(apiClient, configManager, logger, symbolProvider)
     {
         _lastFmService = lastFmService ?? throw new ArgumentNullException(nameof(lastFmService));
         _displayService = displayService ?? throw new ArgumentNullException(nameof(displayService));
+        _spotifyStreamingService = spotifyStreamingService ?? throw new ArgumentNullException(nameof(spotifyStreamingService));
     }
 
-    public async Task ExecuteAsync(int limit, string? period, string? username, string? artist, string? range = null, int? delayMs = null, bool verbose = false, bool timing = false, bool forceCache = false, bool forceApi = false, bool noCache = false, bool timer = false, string? from = null, string? to = null, string? year = null)
+    public async Task ExecuteAsync(int limit, string? period, string? username, string? artist, string? range = null, int? delayMs = null, bool verbose = false, bool timing = false, bool forceCache = false, bool forceApi = false, bool noCache = false, bool timer = false, string? from = null, string? to = null, string? year = null, bool playNow = false, string? playlist = null, bool shuffle = false, string? device = null)
     {
         await ExecuteWithErrorHandlingAndTimerAsync("tracks command", async () =>
         {
@@ -63,6 +67,14 @@ public class TracksCommand : BaseCommand
                 }
 
                 _displayService.DisplayTracksForArtist(artistResult.Tracks, 1);
+
+                // Stream to Spotify if requested
+                if ((playNow || !string.IsNullOrEmpty(playlist)) && artistResult.Tracks.Any())
+                {
+                    var playlistTitle = $"Top Tracks by {artist}";
+                    await _spotifyStreamingService.StreamTracksAsync(artistResult.Tracks, playNow, playlist, playlistTitle, shuffle, device);
+                }
+
                 return;
             }
 
@@ -100,6 +112,16 @@ public class TracksCommand : BaseCommand
                 
                 _displayService.DisplayTracksForUser(rangeTracks, startIndex);
                 _displayService.DisplayRangeInfo("tracks", startIndex, endIndex, rangeTracks.Count, totalCount, verbose);
+
+                // Stream to Spotify if requested
+                if ((playNow || !string.IsNullOrEmpty(playlist)) && rangeTracks.Any())
+                {
+                    var playlistTitle = $"Top Tracks for {user}";
+                    if (!string.IsNullOrEmpty(displayPeriod))
+                        playlistTitle += $" ({displayPeriod})";
+                    await _spotifyStreamingService.StreamTracksAsync(rangeTracks, playNow, playlist, playlistTitle, shuffle, device);
+                }
+
                 return;
             }
 
@@ -125,6 +147,15 @@ public class TracksCommand : BaseCommand
 
             _displayService.DisplayTracksForUser(result.Tracks, 1);
             _displayService.DisplayTotalInfo("tracks", result.Attributes.Total, verbose);
+
+            // Stream to Spotify if requested
+            if ((playNow || !string.IsNullOrEmpty(playlist)) && result.Tracks.Any())
+            {
+                var playlistTitle = $"Top Tracks for {user}";
+                if (!string.IsNullOrEmpty(displayPeriod))
+                    playlistTitle += $" ({displayPeriod})";
+                await _spotifyStreamingService.StreamTracksAsync(result.Tracks, playNow, playlist, playlistTitle, shuffle, device);
+            }
 
         }, timer);
     }

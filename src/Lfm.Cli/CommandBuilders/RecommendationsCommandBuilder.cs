@@ -18,7 +18,7 @@ public static class RecommendationsCommandBuilder
         var artistLimitOption = new Option<int>("--artist-limit", () => Defaults.ItemLimit, "Number of top artists to analyze for recommendations");
         artistLimitOption.AddAlias("-a");
         
-        var tracksPerArtistOption = new Option<int>("--tracks-per-artist", () => 0, "Number of top tracks to include per recommended artist (0 = artists only, default)");
+        var tracksPerArtistOption = new Option<int>("--tracks-per-artist", () => 0, "Number of top tracks to include per recommended artist (default: 0 for display only, 1 when using --playnow or --playlist)");
         tracksPerArtistOption.AddAlias("-tpa");
         
         var periodOption = StandardCommandOptions.CreatePeriodOption();
@@ -38,6 +38,14 @@ public static class RecommendationsCommandBuilder
 
         var excludeTagsOption = new Option<bool>("--exclude-tags", "Filter out artists based on excluded tags configured in settings");
         excludeTagsOption.AddAlias("-et");
+
+        var playNowOption = new Option<bool>("--playnow", "Queue recommendations to Spotify and start playing immediately");
+        var playlistOption = new Option<string>("--playlist", "Save recommendations to a Spotify playlist with the given name");
+        playlistOption.AddAlias("-pl");
+        var shuffleOption = new Option<bool>("--shuffle", "Shuffle the order when sending to Spotify");
+        shuffleOption.AddAlias("-s");
+        var deviceOption = new Option<string>("--device", "Specific Spotify device to use (overrides config default)");
+        deviceOption.AddAlias("-dev");
 
         var (forceCacheOption, forceApiOption, noCacheOption) = CommandOptionBuilders.BuildCacheOptions();
 
@@ -60,7 +68,11 @@ public static class RecommendationsCommandBuilder
             forceApiOption,
             noCacheOption,
             timerOption,
-            excludeTagsOption
+            excludeTagsOption,
+            playNowOption,
+            playlistOption,
+            shuffleOption,
+            deviceOption
         };
 
         command.SetHandler(async (context) =>
@@ -83,6 +95,10 @@ public static class RecommendationsCommandBuilder
             var noCache = context.ParseResult.GetValueForOption(noCacheOption);
             var timer = context.ParseResult.GetValueForOption(timerOption);
             var excludeTags = context.ParseResult.GetValueForOption(excludeTagsOption);
+            var playNow = context.ParseResult.GetValueForOption(playNowOption);
+            var playlist = context.ParseResult.GetValueForOption(playlistOption);
+            var shuffle = context.ParseResult.GetValueForOption(shuffleOption);
+            var device = context.ParseResult.GetValueForOption(deviceOption);
 
             var recommendationsCommand = services.GetRequiredService<RecommendationsCommand>();
             await recommendationsCommand.ExecuteAsync(
@@ -103,7 +119,11 @@ public static class RecommendationsCommandBuilder
                 from,
                 to,
                 year,
-                excludeTags);
+                excludeTags,
+                playNow,
+                playlist,
+                shuffle,
+                device);
         });
 
         return command;

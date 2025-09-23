@@ -64,6 +64,23 @@ public static class ConfigCommandBuilder
         var enableTagFilteringCommand = new Command("enable-tag-filtering", "Enable tag filtering for recommendations");
         var disableTagFilteringCommand = new Command("disable-tag-filtering", "Disable tag filtering for recommendations");
 
+        // Spotify configuration commands
+        var setSpotifyClientIdCommand = new Command("set-spotify-client-id", "Set your Spotify Client ID");
+        var spotifyClientIdArg = new Argument<string>("client-id", "Your Spotify Client ID from developer dashboard");
+        setSpotifyClientIdCommand.AddArgument(spotifyClientIdArg);
+
+        var setSpotifyClientSecretCommand = new Command("set-spotify-client-secret", "Set your Spotify Client Secret");
+        var spotifyClientSecretArg = new Argument<string>("client-secret", "Your Spotify Client Secret from developer dashboard");
+        setSpotifyClientSecretCommand.AddArgument(spotifyClientSecretArg);
+
+        var clearSpotifyRefreshTokenCommand = new Command("clear-spotify-refresh-token", "Clear Spotify refresh token to force re-authorization");
+
+        var setSpotifyDefaultDeviceCommand = new Command("set-spotify-default-device", "Set default Spotify device for playback");
+        var spotifyDeviceArg = new Argument<string>("device-name", "Name of the Spotify device (use 'lfm spotify devices' to list)");
+        setSpotifyDefaultDeviceCommand.AddArgument(spotifyDeviceArg);
+
+        var clearSpotifyDefaultDeviceCommand = new Command("clear-spotify-default-device", "Clear default Spotify device (use automatic selection)");
+
         setApiKeyCommand.SetHandler(async (string apiKey) =>
         {
             var configCommand = services.GetRequiredService<ConfigCommand>();
@@ -160,6 +177,36 @@ public static class ConfigCommandBuilder
             await configCommand.SetTagFilteringEnabledAsync(false);
         });
 
+        setSpotifyClientIdCommand.SetHandler(async (string clientId) =>
+        {
+            var configCommand = services.GetRequiredService<ConfigCommand>();
+            await configCommand.SetSpotifyClientIdAsync(clientId);
+        }, spotifyClientIdArg);
+
+        setSpotifyClientSecretCommand.SetHandler(async (string clientSecret) =>
+        {
+            var configCommand = services.GetRequiredService<ConfigCommand>();
+            await configCommand.SetSpotifyClientSecretAsync(clientSecret);
+        }, spotifyClientSecretArg);
+
+        clearSpotifyRefreshTokenCommand.SetHandler(async () =>
+        {
+            var configCommand = services.GetRequiredService<ConfigCommand>();
+            await configCommand.ClearSpotifyRefreshTokenAsync();
+        });
+
+        setSpotifyDefaultDeviceCommand.SetHandler(async (string deviceName) =>
+        {
+            var configCommand = services.GetRequiredService<ConfigCommand>();
+            await configCommand.SetSpotifyDefaultDeviceAsync(deviceName);
+        }, spotifyDeviceArg);
+
+        clearSpotifyDefaultDeviceCommand.SetHandler(async () =>
+        {
+            var configCommand = services.GetRequiredService<ConfigCommand>();
+            await configCommand.ClearSpotifyDefaultDeviceAsync();
+        });
+
         command.AddCommand(setApiKeyCommand);
         command.AddCommand(setUserCommand);
         command.AddCommand(showCommand);
@@ -176,6 +223,11 @@ public static class ConfigCommandBuilder
         command.AddCommand(setMaxTagLookupsCommand);
         command.AddCommand(enableTagFilteringCommand);
         command.AddCommand(disableTagFilteringCommand);
+        command.AddCommand(setSpotifyClientIdCommand);
+        command.AddCommand(setSpotifyClientSecretCommand);
+        command.AddCommand(clearSpotifyRefreshTokenCommand);
+        command.AddCommand(setSpotifyDefaultDeviceCommand);
+        command.AddCommand(clearSpotifyDefaultDeviceCommand);
 
         return command;
     }

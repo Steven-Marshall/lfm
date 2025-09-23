@@ -126,6 +126,58 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
 - **Performance**: Benefits from cached artist data and parallel API calls
 - **Documentation**: README.md and CLAUDE.md updated
 
+### Session: 2025-09-19 (Spotify Device Management & Auto-Playback)
+- **Status**: ✅ COMPLETE - Advanced Spotify device selection and automatic playback implemented
+- **Major Features Added**:
+  - **Device Management System**: Comprehensive device listing, configuration, and selection
+  - **Automatic Playback Start**: Resolves issue where queueing failed when no active Spotify session
+  - **Device Selection Priority**: CLI parameter > config default > active device > smart prioritization
+- **Implementation Details**:
+  - Device selection logic with 4-tier priority system
+  - Automatic playback initiation when no active session (starts first track, queues remaining)
+  - Config file storage for default device preferences
+  - Command-line device override capabilities
+- **New Commands Added**:
+  - `lfm spotify devices` - List available Spotify devices with status/volume
+  - `lfm config set-spotify-default-device "Device Name"` - Set config default
+  - `lfm config clear-spotify-default-device` - Clear config default
+  - `--device` / `-dev` option on tracks/recommendations commands
+- **Key Technical Components**:
+  - Enhanced `EnsurePlaybackActiveAsync` with device parameter and priority logic
+  - New `StartPlaybackAsync` method for playback initiation via Spotify Web API
+  - `DefaultDevice` field added to `SpotifyConfig` with config management
+  - Updated interface signatures throughout service layer for device parameter flow
+- **Device Selection Logic** (src/Lfm.Spotify/SpotifyStreamer.cs:525-572):
+  1. CLI `--device` parameter (highest priority)
+  2. Config file `DefaultDevice` setting
+  3. Currently active Spotify device
+  4. Smart prioritization: Computer > Smartphone > Speaker > other
+- **Automatic Playback** (src/Lfm.Spotify/SpotifyStreamer.cs:65-83):
+  - Detects when no active playback session exists
+  - Starts playing first track on selected device using `/v1/me/player/play` endpoint
+  - Queues remaining tracks normally via existing queue mechanism
+- **Status**: All device management functionality working correctly
+- **Next Steps**: User validation and real-world testing
+
+### Known Issues for Future Sessions
+
+#### 🐛 Recommendations Duplicate Track Bug
+- **Issue**: Recommendations showing duplicate tracks with slight variations
+- **Example**: Wings showing both "Live And Let Die - 2018 Remaster" and "Live and Let Die"
+- **Root Cause**: Last.fm API returns multiple versions/remasters as separate tracks
+- **Potential Solutions**:
+  - Implement track name normalization (remove remaster suffixes, clean punctuation)
+  - Add duplicate detection based on similarity scoring
+  - Filter tracks by release date preference (original vs remaster)
+- **Impact**: Low priority - doesn't break functionality but reduces recommendation quality
+- **Location**: Likely in recommendations track fetching logic (RecommendationsCommand.cs)
+
+#### 🔍 Future Enhancement Opportunities
+- **Progress Bars**: As documented in progressbarproject.md for long-running operations
+- **Enhanced Track Filtering**: More sophisticated duplicate detection across all commands
+- **Device Auto-Discovery**: Automatic detection of new Spotify devices
+- **Playlist Export**: JSON/CSV export functionality for query results
+
 ### Session: 2025-06-28 (Albums Bug Fix & API Throttling)
 - **Status**: ✅ COMPLETE - Critical bug fixes and comprehensive API throttling
 - **Branch**: `refactor/service-layer`

@@ -1,0 +1,57 @@
+using Lfm.Core.Models;
+using Lfm.Spotify.Models;
+
+namespace Lfm.Spotify;
+
+/// <summary>
+/// Interface for streaming playlists to different music players
+/// </summary>
+public interface IPlaylistStreamer
+{
+    /// <summary>
+    /// Name of the streaming service
+    /// </summary>
+    string Name { get; }
+
+    /// <summary>
+    /// Check if the streaming service is available
+    /// </summary>
+    Task<bool> IsAvailableAsync();
+
+    /// <summary>
+    /// Queue tracks for immediate playback
+    /// </summary>
+    Task<PlaylistStreamResult> QueueTracksAsync(List<Track> tracks, string? device = null);
+
+    /// <summary>
+    /// Save tracks as a named playlist
+    /// </summary>
+    Task<PlaylistStreamResult> SavePlaylistAsync(List<Track> tracks, string playlistName, string? device = null);
+
+    /// <summary>
+    /// Get user's playlists
+    /// </summary>
+    Task<List<PlaylistInfo>> GetUserPlaylistsAsync();
+
+    /// <summary>
+    /// Delete/unfollow a playlist
+    /// </summary>
+    Task<bool> DeletePlaylistAsync(string playlistId);
+
+    /// <summary>
+    /// Get available Spotify devices
+    /// </summary>
+    Task<List<SpotifyDevice>> GetDevicesAsync();
+}
+
+/// <summary>
+/// Result of playlist streaming operation
+/// </summary>
+public class PlaylistStreamResult
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
+    public int TracksProcessed { get; set; }
+    public int TracksFound { get; set; }
+    public List<string> NotFoundTracks { get; set; } = new();
+}

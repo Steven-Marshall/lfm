@@ -1,3 +1,4 @@
+using Lfm.Cli.Services;
 using Lfm.Core.Configuration;
 using Lfm.Core.Models;
 using Lfm.Core.Models.Results;
@@ -10,18 +11,21 @@ public class RecommendationsCommand : BaseCommand
 {
     private readonly ILastFmService _lastFmService;
     private readonly IDisplayService _displayService;
+    private readonly ISpotifyStreamingService _spotifyStreamingService;
 
     public RecommendationsCommand(
         ILastFmApiClient apiClient,
         IConfigurationManager configManager,
         ILastFmService lastFmService,
         IDisplayService displayService,
+        ISpotifyStreamingService spotifyStreamingService,
         ILogger<RecommendationsCommand> logger,
         ISymbolProvider symbolProvider)
         : base(apiClient, configManager, logger, symbolProvider)
     {
         _lastFmService = lastFmService ?? throw new ArgumentNullException(nameof(lastFmService));
         _displayService = displayService ?? throw new ArgumentNullException(nameof(displayService));
+        _spotifyStreamingService = spotifyStreamingService ?? throw new ArgumentNullException(nameof(spotifyStreamingService));
     }
 
     public async Task ExecuteAsync(
@@ -42,12 +46,26 @@ public class RecommendationsCommand : BaseCommand
         string? from = null,
         string? to = null,
         string? year = null,
-        bool excludeTags = false)
+        bool excludeTags = false,
+        bool playNow = false,
+        string? playlist = null,
+        bool shuffle = false,
+        string? device = null)
     {
         await ExecuteWithErrorHandlingAndTimerAsync("recommendations command", async () =>
         {
             // Configure cache behavior and timing
             ConfigureCaching(timing, forceCache, forceApi, noCache);
+
+            // If Spotify streaming is requested and tracksPerArtist is still 0 (default), set it to 1
+            if ((playNow || !string.IsNullOrEmpty(playlist)) && tracksPerArtist == 0)
+            {
+                tracksPerArtist = 1;
+                if (verbose)
+                {
+                    Console.WriteLine("Setting tracks-per-artist to 1 for Spotify streaming...");
+                }
+            }
 
             if (!await ValidateApiKeyAsync())
                 return;
@@ -135,6 +153,18 @@ public class RecommendationsCommand : BaseCommand
 
             // Use centralized recommendations display
             _displayService.DisplayRecommendations(recommendations, filter, tracksPerArtist, verbose, _symbols);
+
+            // Stream to Spotify if requested
+            if ((playNow || !string.IsNullOrEmpty(playlist)) && recommendations.Any())
+            {
+                var playlistTitle = "Music Recommendations";
+                if (!string.IsNullOrEmpty(resolvedPeriod))
+                    playlistTitle += $" (based on {resolvedPeriod})";
+                else if (isDateRange)
+                    playlistTitle += $" (based on {from} to {to})";
+
+                await _spotifyStreamingService.StreamRecommendationsAsync(recommendations, playNow, playlist, playlistTitle, shuffle, device);
+            }
 
         }, timer);
     }

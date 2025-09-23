@@ -1,6 +1,7 @@
 using System.CommandLine;
 using Lfm.Cli.CommandBuilders;
 using Lfm.Cli.Commands;
+using Lfm.Cli.Services;
 using Lfm.Core.Configuration;
 using Lfm.Core.Models;
 using Lfm.Core.Services;
@@ -30,7 +31,8 @@ class Program
             CacheStatusCommandBuilder.Build(host.Services),
             CacheClearCommandBuilder.Build(host.Services),
             TestCacheCommandBuilder.Build(host.Services),
-            BenchmarkCacheCommandBuilder.Build(host.Services)
+            BenchmarkCacheCommandBuilder.Build(host.Services),
+            SpotifyCommandBuilder.Build(host.Services)
         };
 
         return await rootCommand.InvokeAsync(args);
@@ -81,11 +83,21 @@ class Program
 
                 // Service layer
                 services.AddTransient<ILastFmService, LastFmService>();
+                services.AddTransient<ISpotifyStreamingService, SpotifyStreamingService>();
+
+                // Spotify services
+                services.AddTransient<Lfm.Spotify.IPlaylistStreamer>(serviceProvider =>
+                {
+                    var configManager = serviceProvider.GetRequiredService<IConfigurationManager>();
+                    var config = configManager.LoadAsync().GetAwaiter().GetResult();
+                    return new Lfm.Spotify.SpotifyStreamer(config.Spotify, configManager);
+                });
                 
                 services.AddTransient<ArtistsCommand>();
                 services.AddTransient<TracksCommand>();
                 services.AddTransient<AlbumsCommand>();
                 services.AddTransient<RecommendationsCommand>();
+                services.AddTransient<SpotifyCommand>();
                 
                 // Cache management commands
                 services.AddTransient<CacheStatusCommand>();

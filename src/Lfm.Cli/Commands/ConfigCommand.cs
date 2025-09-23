@@ -98,6 +98,17 @@ public class ConfigCommand
             Console.WriteLine($"Unicode Symbols: {config.UnicodeSymbols}");
 
             Console.WriteLine();
+            Console.WriteLine("Spotify Integration:");
+            Console.WriteLine($"Client ID: {(string.IsNullOrEmpty(config.Spotify.ClientId) ? "❌ Not set" : "✅ Set")}");
+            Console.WriteLine($"Client Secret: {(string.IsNullOrEmpty(config.Spotify.ClientSecret) ? "❌ Not set" : "✅ Set")}");
+            Console.WriteLine($"Refresh Token: {(string.IsNullOrEmpty(config.Spotify.RefreshToken) ? "❌ Not set" : "✅ Set")}");
+            Console.WriteLine($"Rate Limit Delay: {config.Spotify.RateLimitDelayMs}ms");
+            Console.WriteLine($"Search Timeout: {config.Spotify.SearchTimeoutMs}ms");
+            Console.WriteLine($"Max Retries: {config.Spotify.MaxRetries}");
+            Console.WriteLine($"Fallback Search: {(config.Spotify.FallbackToLooseSearch ? "✅ Yes" : "❌ No")}");
+            Console.WriteLine($"Default Device: {(string.IsNullOrEmpty(config.Spotify.DefaultDevice) ? "❌ Not set" : config.Spotify.DefaultDevice)}");
+
+            Console.WriteLine();
             Console.WriteLine("🏷️ Tag Filtering:");
             Console.WriteLine($"Filtering Enabled: {(config.EnableTagFiltering ? "✅ Yes" : "❌ No")}");
             Console.WriteLine($"Tag Threshold: {config.TagFilterThreshold} (minimum tag count for exclusion)");
@@ -625,6 +636,127 @@ public class ConfigCommand
         {
             _logger.LogError(ex, "Error setting tag filtering enabled state");
             Console.WriteLine(ErrorMessages.Format(ErrorMessages.GenericError, ex.Message));
+        }
+    }
+
+    public async Task SetSpotifyClientIdAsync(string clientId)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(clientId))
+            {
+                Console.WriteLine($"{_symbols.Error} Spotify Client ID cannot be empty.");
+                Console.WriteLine($"{_symbols.Tip} Get your Client ID from: https://developer.spotify.com/dashboard");
+                return;
+            }
+
+            var config = await _configManager.LoadAsync();
+            config.Spotify.ClientId = clientId.Trim();
+            await _configManager.SaveAsync(config);
+
+            Console.WriteLine($"{_symbols.Success} Spotify Client ID saved successfully.");
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.ConfigSavedTo, _configManager.GetConfigPath()));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error setting Spotify Client ID");
+            Console.WriteLine($"{_symbols.Error} Error: {ex.Message}");
+        }
+    }
+
+    public async Task SetSpotifyClientSecretAsync(string clientSecret)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(clientSecret))
+            {
+                Console.WriteLine($"{_symbols.Error} Spotify Client Secret cannot be empty.");
+                Console.WriteLine($"{_symbols.Tip} Get your Client Secret from: https://developer.spotify.com/dashboard");
+                return;
+            }
+
+            var config = await _configManager.LoadAsync();
+            config.Spotify.ClientSecret = clientSecret.Trim();
+            await _configManager.SaveAsync(config);
+
+            Console.WriteLine($"{_symbols.Success} Spotify Client Secret saved successfully.");
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.ConfigSavedTo, _configManager.GetConfigPath()));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error setting Spotify Client Secret");
+            Console.WriteLine($"{_symbols.Error} Error: {ex.Message}");
+        }
+    }
+
+    public async Task ClearSpotifyRefreshTokenAsync()
+    {
+        try
+        {
+            var config = await _configManager.LoadAsync();
+            config.Spotify.RefreshToken = string.Empty;
+            await _configManager.SaveAsync(config);
+
+            Console.WriteLine($"{_symbols.Success} Spotify refresh token cleared.");
+            Console.WriteLine($"{_symbols.Tip} Next Spotify command will require re-authorization with updated permissions.");
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.ConfigSavedTo, _configManager.GetConfigPath()));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error clearing Spotify refresh token");
+            Console.WriteLine($"{_symbols.Error} Error: {ex.Message}");
+        }
+    }
+
+    public async Task SetSpotifyDefaultDeviceAsync(string deviceName)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(deviceName))
+            {
+                Console.WriteLine($"{_symbols.Error} Device name cannot be empty.");
+                Console.WriteLine($"{_symbols.Tip} Use 'lfm spotify devices' to see available devices.");
+                return;
+            }
+
+            var config = await _configManager.LoadAsync();
+            config.Spotify.DefaultDevice = deviceName.Trim();
+            await _configManager.SaveAsync(config);
+
+            Console.WriteLine($"{_symbols.Success} Default Spotify device set to: {deviceName.Trim()}");
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.ConfigSavedTo, _configManager.GetConfigPath()));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error setting Spotify default device");
+            Console.WriteLine($"{_symbols.Error} Error: {ex.Message}");
+        }
+    }
+
+    public async Task ClearSpotifyDefaultDeviceAsync()
+    {
+        try
+        {
+            var config = await _configManager.LoadAsync();
+            var previousDevice = config.Spotify.DefaultDevice;
+            config.Spotify.DefaultDevice = string.Empty;
+            await _configManager.SaveAsync(config);
+
+            if (!string.IsNullOrEmpty(previousDevice))
+            {
+                Console.WriteLine($"{_symbols.Success} Default Spotify device cleared (was: {previousDevice}).");
+            }
+            else
+            {
+                Console.WriteLine($"{_symbols.Success} Default Spotify device cleared.");
+            }
+            Console.WriteLine($"Will now use automatic device selection.");
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.ConfigSavedTo, _configManager.GetConfigPath()));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error clearing Spotify default device");
+            Console.WriteLine($"{_symbols.Error} Error: {ex.Message}");
         }
     }
 }
