@@ -25,6 +25,9 @@ public static class AlbumsCommandBuilder
         timingOption.AddAlias("-t");
         var timerOption = StandardCommandOptions.CreateTimerOption();
 
+        var jsonOption = new Option<bool>("--json", "Output results in JSON format");
+        jsonOption.AddAlias("-j");
+
         var (forceCacheOption, forceApiOption, noCacheOption) = CommandOptionBuilders.BuildCacheOptions();
 
         var command = new Command("albums", "Get your top albums with play counts")
@@ -42,7 +45,8 @@ public static class AlbumsCommandBuilder
             forceCacheOption,
             forceApiOption,
             noCacheOption,
-            timerOption
+            timerOption,
+            jsonOption
         };
 
         command.SetHandler(async (context) =>
@@ -61,9 +65,10 @@ public static class AlbumsCommandBuilder
             var forceApi = context.ParseResult.GetValueForOption(forceApiOption);
             var noCache = context.ParseResult.GetValueForOption(noCacheOption);
             var timer = context.ParseResult.GetValueForOption(timerOption);
-            
+            var json = context.ParseResult.GetValueForOption(jsonOption);
+
             var albumsCommand = services.GetRequiredService<AlbumsCommand>();
-            await albumsCommand.ExecuteAsync(limit, period, user, range, delay, verbose, timing, forceCache, forceApi, noCache, timer, from, to, year);
+            await albumsCommand.ExecuteAsync(limit, period, user, range, delay, verbose, timing, forceCache, forceApi, noCache, timer, from, to, year, json);
         });
 
         return command;

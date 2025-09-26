@@ -80,17 +80,20 @@ public class TagFilterService : ITagFilterService
             try
             {
                 // Throttling now handled by CachedLastFmApiClient
+                _logger.LogInformation("TAG FILTER - Checking tags for artist: {ArtistName}", artistName);
 
                 var artistTags = await _apiClient.GetArtistTopTagsAsync(artistName, autocorrect: true);
 
                 if (ShouldExcludeArtist(artistTags, config))
                 {
                     excludedCount++;
-                    _logger.LogDebug("Excluded artist: {ArtistName}", artistName);
+                    var excludedTags = GetExcludedTagsForArtist(artistTags, config);
+                    _logger.LogInformation("TAG FILTER - EXCLUDED {ArtistName} for tags: {ExcludedTags}", artistName, string.Join(", ", excludedTags));
                 }
                 else
                 {
                     filteredArtists.Add(artistName);
+                    _logger.LogInformation("TAG FILTER - INCLUDED {ArtistName} (no problematic tags found)", artistName);
                 }
             }
             catch (Exception ex)
@@ -105,5 +108,21 @@ public class TagFilterService : ITagFilterService
             filteredArtists.Count, excludedCount);
 
         return (filteredArtists, excludedCount);
+    }
+
+    /// <summary>
+    /// Gets the specific tags that caused an artist to be excluded
+    /// </summary>
+    private List<string> GetExcludedTagsForArtist(TopTags? artistTags, LfmConfig config)
+    {
+        if (artistTags?.Tags == null || !artistTags.Tags.Any())
+            return new List<string>();
+
+        return artistTags.Tags
+            .Where(tag => tag.Count >= config.TagFilterThreshold &&
+                         config.ExcludedTags.Any(excludedTag =>
+                             string.Equals(excludedTag, tag.Name, StringComparison.OrdinalIgnoreCase)))
+            .Select(tag => $"{tag.Name}:{tag.Count}")
+            .ToList();
     }
 }

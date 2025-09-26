@@ -1,0 +1,19 @@
+{
+  "name": "lfm-mcp-server",
+  "version": "1.0.0",
+  "description": "Model Context Protocol server for Last.fm CLI integration",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node server.js"
+  },
+  "keywords": ["mcp", "last.fm", "music", "cli"],
+  "author": "LFM CLI Project",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.6.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.Linq;
 using Lfm.Cli.Commands;
 using Microsoft.Extensions.DependencyInjection;
 using static Lfm.Core.Configuration.SearchConstants;
@@ -9,17 +10,16 @@ public static class RecommendationsCommandBuilder
 {
     public static Command Build(IServiceProvider services)
     {
-        var limitOption = new Option<int>("--limit", () => 20, "Number of recommendations to display");
-        limitOption.AddAlias("-l");
-        
+        // Playlist generation options - mutually exclusive
+        var totalTracksOption = StandardCommandOptions.CreateTotalTracksOption();
+        var totalArtistsOption = StandardCommandOptions.CreateTotalArtistsOption(20); // default 20 artists like before
+        var tracksPerArtistOption = StandardCommandOptions.CreateTracksPerArtistOption(1);
+
         var filterOption = new Option<int>("--filter", () => 0, "Minimum play count to filter out (exclude artists with >= this many plays)");
         filterOption.AddAlias("-f");
-        
+
         var artistLimitOption = new Option<int>("--artist-limit", () => Defaults.ItemLimit, "Number of top artists to analyze for recommendations");
         artistLimitOption.AddAlias("-a");
-        
-        var tracksPerArtistOption = new Option<int>("--tracks-per-artist", () => 0, "Number of top tracks to include per recommended artist (default: 0 for display only, 1 when using --playnow or --playlist)");
-        tracksPerArtistOption.AddAlias("-tpa");
         
         var periodOption = StandardCommandOptions.CreatePeriodOption();
         var (fromOption, toOption, yearOption) = StandardCommandOptions.CreateDateOptions();
@@ -47,14 +47,18 @@ public static class RecommendationsCommandBuilder
         var deviceOption = new Option<string>("--device", "Specific Spotify device to use (overrides config default)");
         deviceOption.AddAlias("-dev");
 
+        var jsonOption = new Option<bool>("--json", "Output results in JSON format");
+        jsonOption.AddAlias("-j");
+
         var (forceCacheOption, forceApiOption, noCacheOption) = CommandOptionBuilders.BuildCacheOptions();
 
         var command = new Command("recommendations", "Get artist recommendations based on your listening history")
         {
-            limitOption,
+            totalTracksOption,
+            totalArtistsOption,
+            tracksPerArtistOption,
             filterOption,
             artistLimitOption,
-            tracksPerArtistOption,
             periodOption,
             fromOption,
             toOption,
@@ -72,15 +76,17 @@ public static class RecommendationsCommandBuilder
             playNowOption,
             playlistOption,
             shuffleOption,
-            deviceOption
+            deviceOption,
+            jsonOption
         };
 
         command.SetHandler(async (context) =>
         {
-            var limit = context.ParseResult.GetValueForOption(limitOption);
+            var totalTracks = context.ParseResult.GetValueForOption(totalTracksOption);
+            var totalArtists = context.ParseResult.GetValueForOption(totalArtistsOption);
+            var tracksPerArtist = context.ParseResult.GetValueForOption(tracksPerArtistOption);
             var filter = context.ParseResult.GetValueForOption(filterOption);
             var artistLimit = context.ParseResult.GetValueForOption(artistLimitOption);
-            var tracksPerArtist = context.ParseResult.GetValueForOption(tracksPerArtistOption);
             var period = context.ParseResult.GetValueForOption(periodOption);
             var from = context.ParseResult.GetValueForOption(fromOption);
             var to = context.ParseResult.GetValueForOption(toOption);
@@ -99,6 +105,33 @@ public static class RecommendationsCommandBuilder
             var playlist = context.ParseResult.GetValueForOption(playlistOption);
             var shuffle = context.ParseResult.GetValueForOption(shuffleOption);
             var device = context.ParseResult.GetValueForOption(deviceOption);
+            var json = context.ParseResult.GetValueForOption(jsonOption);
+
+            // Validate mutual exclusivity - check if user explicitly provided both
+            var hasExplicitTotalTracks = context.ParseResult.Tokens.Any(t =>
+                t.Value == "--totaltracks" || t.Value == "-tt");
+            var hasExplicitTotalArtists = context.ParseResult.Tokens.Any(t =>
+                t.Value == "--totalartists" || t.Value == "-ta");
+
+            if (hasExplicitTotalTracks && hasExplicitTotalArtists)
+            {
+                Console.Error.WriteLine("Error: Cannot specify both --totaltracks and --totalartists. Choose one.");
+                context.ExitCode = 1;
+                return;
+            }
+
+            // Calculate the actual limit based on what was specified
+            int limit;
+            if (totalTracks.HasValue)
+            {
+                // Calculate number of artists needed for the track count
+                limit = (int)Math.Ceiling((double)totalTracks.Value / tracksPerArtist);
+            }
+            else
+            {
+                // Use totalArtists (which has a default of 20)
+                limit = totalArtists ?? 20;
+            }
 
             var recommendationsCommand = services.GetRequiredService<RecommendationsCommand>();
             await recommendationsCommand.ExecuteAsync(
@@ -123,7 +156,8 @@ public static class RecommendationsCommandBuilder
                 playNow,
                 playlist,
                 shuffle,
-                device);
+                device,
+                json);
         });
 
         return command;

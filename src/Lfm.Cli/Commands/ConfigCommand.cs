@@ -98,6 +98,11 @@ public class ConfigCommand
             Console.WriteLine($"Unicode Symbols: {config.UnicodeSymbols}");
 
             Console.WriteLine();
+            Console.WriteLine("Playlist Diversity:");
+            Console.WriteLine($"Date Range Multiplier: {config.DateRangeDiversityMultiplier} (affects toptracks --year/--from/--to sampling)");
+            Console.WriteLine($"Max Empty Windows: {config.MaxEmptyWindows} (search persistence for diverse playlists)");
+
+            Console.WriteLine();
             Console.WriteLine("Spotify Integration:");
             Console.WriteLine($"Client ID: {(string.IsNullOrEmpty(config.Spotify.ClientId) ? "❌ Not set" : "✅ Set")}");
             Console.WriteLine($"Client Secret: {(string.IsNullOrEmpty(config.Spotify.ClientSecret) ? "❌ Not set" : "✅ Set")}");
@@ -639,6 +644,33 @@ public class ConfigCommand
         }
     }
 
+    public async Task SetApiDebugLoggingEnabledAsync(bool enabled)
+    {
+        try
+        {
+            var config = await _configManager.LoadAsync();
+            config.EnableApiDebugLogging = enabled;
+            await _configManager.SaveAsync(config);
+
+            var status = enabled ? "enabled" : "disabled";
+            Console.WriteLine($"{_symbols.Success} API debug logging has been {status}.");
+
+            if (enabled)
+            {
+                Console.WriteLine($"{_symbols.Tip} Debug logging will generate detailed output for all API calls.");
+                Console.WriteLine("  This may significantly increase log verbosity and performance impact.");
+                Console.WriteLine("  Use 'lfm config disable-debug-logging' to turn it off when debugging is complete.");
+            }
+
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.ConfigSavedTo, _configManager.GetConfigPath()));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error setting API debug logging enabled state");
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.GenericError, ex.Message));
+        }
+    }
+
     public async Task SetSpotifyClientIdAsync(string clientId)
     {
         try
@@ -756,6 +788,62 @@ public class ConfigCommand
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error clearing Spotify default device");
+            Console.WriteLine($"{_symbols.Error} Error: {ex.Message}");
+        }
+    }
+
+    public async Task SetDateRangeMultiplierAsync(int multiplier)
+    {
+        try
+        {
+            if (multiplier < 1 || multiplier > 100)
+            {
+                Console.WriteLine($"{_symbols.Error} Multiplier must be between 1 and 100.");
+                Console.WriteLine($"{_symbols.Tip} Higher values = more diverse playlists but slower performance.");
+                return;
+            }
+
+            var config = await _configManager.LoadAsync();
+            var previousMultiplier = config.DateRangeDiversityMultiplier;
+            config.DateRangeDiversityMultiplier = multiplier;
+            await _configManager.SaveAsync(config);
+
+            Console.WriteLine($"{_symbols.Success} Date range diversity multiplier set to: {multiplier} (was: {previousMultiplier})");
+            Console.WriteLine("This affects toptracks commands with date ranges (--year, --from/--to).");
+            Console.WriteLine($"{_symbols.Tip} Sample size formula: limit × tracks-per-artist × {multiplier}");
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.ConfigSavedTo, _configManager.GetConfigPath()));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error setting date range diversity multiplier");
+            Console.WriteLine($"{_symbols.Error} Error: {ex.Message}");
+        }
+    }
+
+    public async Task SetMaxEmptyWindowsAsync(int maxWindows)
+    {
+        try
+        {
+            if (maxWindows < 1 || maxWindows > 50)
+            {
+                Console.WriteLine($"{_symbols.Error} Max empty windows must be between 1 and 50.");
+                Console.WriteLine($"{_symbols.Tip} Higher values = more thorough searching but slower performance for diverse playlists.");
+                return;
+            }
+
+            var config = await _configManager.LoadAsync();
+            var previousValue = config.MaxEmptyWindows;
+            config.MaxEmptyWindows = maxWindows;
+            await _configManager.SaveAsync(config);
+
+            Console.WriteLine($"{_symbols.Success} Max empty windows set to: {maxWindows} (was: {previousValue})");
+            Console.WriteLine("This affects toptracks commands when searching for artist diversity.");
+            Console.WriteLine($"{_symbols.Tip} Algorithm will search through {maxWindows} consecutive empty windows before giving up.");
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.ConfigSavedTo, _configManager.GetConfigPath()));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error setting max empty windows");
             Console.WriteLine($"{_symbols.Error} Error: {ex.Message}");
         }
     }

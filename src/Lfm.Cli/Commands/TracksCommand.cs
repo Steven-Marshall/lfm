@@ -1,8 +1,8 @@
-using Lfm.Cli.Services;
 using Lfm.Core.Configuration;
 using Lfm.Core.Models;
 using Lfm.Core.Services;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 
 namespace Lfm.Cli.Commands;
 
@@ -10,24 +10,21 @@ public class TracksCommand : BaseCommand
 {
     private readonly ILastFmService _lastFmService;
     private readonly IDisplayService _displayService;
-    private readonly ISpotifyStreamingService _spotifyStreamingService;
 
     public TracksCommand(
         ILastFmApiClient apiClient,
         IConfigurationManager configManager,
         ILastFmService lastFmService,
         IDisplayService displayService,
-        ISpotifyStreamingService spotifyStreamingService,
         ILogger<TracksCommand> logger,
         ISymbolProvider symbolProvider)
         : base(apiClient, configManager, logger, symbolProvider)
     {
         _lastFmService = lastFmService ?? throw new ArgumentNullException(nameof(lastFmService));
         _displayService = displayService ?? throw new ArgumentNullException(nameof(displayService));
-        _spotifyStreamingService = spotifyStreamingService ?? throw new ArgumentNullException(nameof(spotifyStreamingService));
     }
 
-    public async Task ExecuteAsync(int limit, string? period, string? username, string? artist, string? range = null, int? delayMs = null, bool verbose = false, bool timing = false, bool forceCache = false, bool forceApi = false, bool noCache = false, bool timer = false, string? from = null, string? to = null, string? year = null, bool playNow = false, string? playlist = null, bool shuffle = false, string? device = null)
+    public async Task ExecuteAsync(int limit, string? period, string? username, string? artist, string? range = null, int? delayMs = null, bool verbose = false, bool timing = false, bool forceCache = false, bool forceApi = false, bool noCache = false, bool timer = false, string? from = null, string? to = null, string? year = null, bool json = false)
     {
         await ExecuteWithErrorHandlingAndTimerAsync("tracks command", async () =>
         {
@@ -52,7 +49,7 @@ public class TracksCommand : BaseCommand
                     return;
                 }
 
-                if (verbose)
+                if (verbose && !json)
                 {
                     Console.WriteLine($"Getting top {limit} tracks for artist: {artist}...\n");
                 }
@@ -62,17 +59,38 @@ public class TracksCommand : BaseCommand
                 
                 if (artistResult?.Tracks == null || !artistResult.Tracks.Any())
                 {
-                    Console.WriteLine(ErrorMessages.Format(ErrorMessages.NoArtistItemsFound, "tracks", artist));
+                    if (json)
+                    {
+                        var emptyArtistResult = new Dictionary<string, object>
+                        {
+                            ["track"] = new object[0],
+                            ["@attr"] = new Dictionary<string, string>
+                            {
+                                ["artist"] = artist,
+                                ["totalPages"] = "0",
+                                ["page"] = "1",
+                                ["total"] = "0",
+                                ["perPage"] = limit.ToString()
+                            }
+                        };
+                        var jsonOutput = JsonSerializer.Serialize(emptyArtistResult, new JsonSerializerOptions { WriteIndented = true });
+                        Console.WriteLine(jsonOutput);
+                    }
+                    else
+                    {
+                        Console.WriteLine(ErrorMessages.Format(ErrorMessages.NoArtistItemsFound, "tracks", artist));
+                    }
                     return;
                 }
 
-                _displayService.DisplayTracksForArtist(artistResult.Tracks, 1);
-
-                // Stream to Spotify if requested
-                if ((playNow || !string.IsNullOrEmpty(playlist)) && artistResult.Tracks.Any())
+                if (json)
                 {
-                    var playlistTitle = $"Top Tracks by {artist}";
-                    await _spotifyStreamingService.StreamTracksAsync(artistResult.Tracks, playNow, playlist, playlistTitle, shuffle, device);
+                    var jsonOutput = JsonSerializer.Serialize(artistResult, new JsonSerializerOptions { WriteIndented = true });
+                    Console.WriteLine(jsonOutput);
+                }
+                else
+                {
+                    _displayService.DisplayTracksForArtist(artistResult.Tracks, 1);
                 }
 
                 return;
@@ -99,34 +117,58 @@ public class TracksCommand : BaseCommand
                     return;
                 }
                 
-                _displayService.DisplayOperationStart("tracks", user, displayPeriod, null, startIndex, endIndex, verbose);
+                if (!json)
+                {
+                    _displayService.DisplayOperationStart("tracks", user, displayPeriod, null, startIndex, endIndex, verbose);
+                }
 
                 // Use service layer for range query
                 var (rangeTracks, totalCount) = await _lastFmService.GetUserTopTracksRangeAsync(user, resolvedPeriod, startIndex, endIndex);
                 
                 if (!rangeTracks.Any())
                 {
-                    Console.WriteLine(ErrorMessages.Format(ErrorMessages.NoItemsInRange, "tracks"));
+                    if (json)
+                    {
+                        var emptyRangeResult = new
+                        {
+                            tracks = new object[0],
+                            range = new { start = startIndex, end = endIndex, count = 0 },
+                            total = totalCount
+                        };
+                        var jsonOutput = JsonSerializer.Serialize(emptyRangeResult, new JsonSerializerOptions { WriteIndented = true });
+                        Console.WriteLine(jsonOutput);
+                    }
+                    else
+                    {
+                        Console.WriteLine(ErrorMessages.Format(ErrorMessages.NoItemsInRange, "tracks"));
+                    }
                     return;
                 }
                 
-                _displayService.DisplayTracksForUser(rangeTracks, startIndex);
-                _displayService.DisplayRangeInfo("tracks", startIndex, endIndex, rangeTracks.Count, totalCount, verbose);
-
-                // Stream to Spotify if requested
-                if ((playNow || !string.IsNullOrEmpty(playlist)) && rangeTracks.Any())
+                if (json)
                 {
-                    var playlistTitle = $"Top Tracks for {user}";
-                    if (!string.IsNullOrEmpty(displayPeriod))
-                        playlistTitle += $" ({displayPeriod})";
-                    await _spotifyStreamingService.StreamTracksAsync(rangeTracks, playNow, playlist, playlistTitle, shuffle, device);
+                    var jsonOutput = JsonSerializer.Serialize(new
+                    {
+                        tracks = rangeTracks,
+                        range = new { start = startIndex, end = endIndex, count = rangeTracks.Count },
+                        total = totalCount
+                    }, new JsonSerializerOptions { WriteIndented = true });
+                    Console.WriteLine(jsonOutput);
+                }
+                else
+                {
+                    _displayService.DisplayTracksForUser(rangeTracks, startIndex);
+                    _displayService.DisplayRangeInfo("tracks", startIndex, endIndex, rangeTracks.Count, totalCount, verbose);
                 }
 
                 return;
             }
 
             // Use standardized display service for operation start
-            _displayService.DisplayOperationStart("tracks", user, displayPeriod, limit, verbose: verbose);
+            if (!json)
+            {
+                _displayService.DisplayOperationStart("tracks", user, displayPeriod, limit, verbose: verbose);
+            }
 
             // Use service layer for basic query
             TopTracks? result;
@@ -141,20 +183,39 @@ public class TracksCommand : BaseCommand
 
             if (result?.Tracks == null || !result.Tracks.Any())
             {
-                Console.WriteLine(ErrorMessages.NoTracksFound);
+                if (json)
+                {
+                    var emptyResult = new Dictionary<string, object>
+                    {
+                        ["track"] = new object[0],
+                        ["@attr"] = new Dictionary<string, string>
+                        {
+                            ["user"] = user,
+                            ["totalPages"] = "0",
+                            ["page"] = "1",
+                            ["total"] = "0",
+                            ["perPage"] = limit.ToString()
+                        }
+                    };
+                    var jsonOutput = JsonSerializer.Serialize(emptyResult, new JsonSerializerOptions { WriteIndented = true });
+                    Console.WriteLine(jsonOutput);
+                }
+                else
+                {
+                    Console.WriteLine(ErrorMessages.NoTracksFound);
+                }
                 return;
             }
 
-            _displayService.DisplayTracksForUser(result.Tracks, 1);
-            _displayService.DisplayTotalInfo("tracks", result.Attributes.Total, verbose);
-
-            // Stream to Spotify if requested
-            if ((playNow || !string.IsNullOrEmpty(playlist)) && result.Tracks.Any())
+            if (json)
             {
-                var playlistTitle = $"Top Tracks for {user}";
-                if (!string.IsNullOrEmpty(displayPeriod))
-                    playlistTitle += $" ({displayPeriod})";
-                await _spotifyStreamingService.StreamTracksAsync(result.Tracks, playNow, playlist, playlistTitle, shuffle, device);
+                var jsonOutput = JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true });
+                Console.WriteLine(jsonOutput);
+            }
+            else
+            {
+                _displayService.DisplayTracksForUser(result.Tracks, 1);
+                _displayService.DisplayTotalInfo("tracks", result.Attributes.Total, verbose);
             }
 
         }, timer);

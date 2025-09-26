@@ -23,6 +23,8 @@ class Program
         {
             ArtistsCommandBuilder.Build(host.Services),
             TracksCommandBuilder.Build(host.Services),
+            TopTracksCommandBuilder.Build(host.Services),
+            MixtapeCommandBuilder.Build(host.Services),
             AlbumsCommandBuilder.Build(host.Services),
             ArtistTracksCommandBuilder.Build(host.Services),
             ArtistAlbumsCommandBuilder.Build(host.Services),
@@ -32,7 +34,8 @@ class Program
             CacheClearCommandBuilder.Build(host.Services),
             TestCacheCommandBuilder.Build(host.Services),
             BenchmarkCacheCommandBuilder.Build(host.Services),
-            SpotifyCommandBuilder.Build(host.Services)
+            SpotifyCommandBuilder.Build(host.Services),
+            ApiStatusCommandBuilder.Build(host.Services)
         };
 
         return await rootCommand.InvokeAsync(args);
@@ -95,6 +98,8 @@ class Program
                 
                 services.AddTransient<ArtistsCommand>();
                 services.AddTransient<TracksCommand>();
+                services.AddTransient<TopTracksCommand>();
+                services.AddTransient<MixtapeCommand>();
                 services.AddTransient<AlbumsCommand>();
                 services.AddTransient<RecommendationsCommand>();
                 services.AddTransient<SpotifyCommand>();
@@ -102,6 +107,7 @@ class Program
                 // Cache management commands
                 services.AddTransient<CacheStatusCommand>();
                 services.AddTransient<CacheClearCommand>();
+                services.AddTransient<ApiStatusCommand>();
                 // Artist search commands using generic implementation
                 services.AddTransient<ArtistSearchCommand<Track, TopTracks>>(serviceProvider =>
                 {
@@ -153,11 +159,37 @@ class Program
                 });
                 services.AddTransient<RecommendationsCommand>();
             })
-            .ConfigureLogging(logging =>
+            .ConfigureLogging((context, logging) =>
             {
                 logging.ClearProviders();
                 logging.AddConsole();
-                logging.SetMinimumLevel(LogLevel.Warning);
+
+                // Check if API debug logging is enabled in config
+                try
+                {
+                    var configPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "lfm", "config.json");
+                    if (File.Exists(configPath))
+                    {
+                        var configJson = File.ReadAllText(configPath);
+                        if (configJson.Contains("\"enableApiDebugLogging\": true"))
+                        {
+                            logging.SetMinimumLevel(LogLevel.Information);
+                        }
+                        else
+                        {
+                            logging.SetMinimumLevel(LogLevel.Warning);
+                        }
+                    }
+                    else
+                    {
+                        logging.SetMinimumLevel(LogLevel.Warning);
+                    }
+                }
+                catch
+                {
+                    // If config loading fails, default to Warning level
+                    logging.SetMinimumLevel(LogLevel.Warning);
+                }
             });
 
 }

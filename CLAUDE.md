@@ -240,6 +240,30 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
 **Business Logic**: ✅ 370+ lines moved from commands to service layer
 **Error Handling**: ✅ Result<T> pattern and ErrorResult classification implemented
 
+### Session: 2025-09-24 (TopTracks Command & Architectural Separation)
+- **Status**: ✅ COMPLETE - New toptracks command with artist diversity algorithm
+- **Major Accomplishments**:
+  - **Architectural Separation**: Clean separation between information (`tracks`) and action (`toptracks`) commands
+  - **TopTracks Command**: New command implementing expanding window algorithm for maximum artist diversity
+  - **Dual Algorithm Approach**: Expanding windows for periods, large sample filtering for date ranges
+  - **Configurable Diversity**: User-configurable `DateRangeDiversityMultiplier` setting with CLI management
+  - **MCP Integration**: Updated MCP server with new `lfm_toptracks` tool
+  - **Performance Optimization**: Resolved API throttling issues and cache expiry problems
+  - **Command Naming**: Final naming settled on `toptracks` for clarity and consistency
+- **Key Technical Components**:
+  - `TopTracksCommand.cs`: Diverse playlist generation with tracks-per-artist limiting
+  - `TopTracksCommandBuilder.cs`: CLI interface for new command with `--tracks-per-artist` parameter
+  - `LfmConfig.cs`: Added `DateRangeDiversityMultiplier` property (default: 10)
+  - `ConfigCommand.cs`: Added `SetDateRangeMultiplierAsync` method with validation
+  - Updated MCP server with clean command separation
+- **Algorithm Details**:
+  - **Period Queries**: Expanding window algorithm (1-20, 21-40, 41-60...) for optimal diversity
+  - **Date Range Queries**: Large sample approach using configurable multiplier (limit × tracks-per-artist × multiplier)
+  - **Performance**: Pragmatic approach balancing diversity with API efficiency
+- **User Experience**: Preview mode by default, action only with `--playlist` or `--playnow`
+- **Documentation**: Updated README.md with new command examples and configuration options
+- **Build Status**: ✅ Clean build, fully functional, ready for user testing
+
 ## Build/Test Commands
 
 ⚠️ **CRITICAL**: Always use `publish/` directory structure per DIRECTORY_STANDARDS.md ⚠️

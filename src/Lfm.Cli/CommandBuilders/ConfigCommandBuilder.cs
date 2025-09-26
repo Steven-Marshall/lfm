@@ -64,6 +64,9 @@ public static class ConfigCommandBuilder
         var enableTagFilteringCommand = new Command("enable-tag-filtering", "Enable tag filtering for recommendations");
         var disableTagFilteringCommand = new Command("disable-tag-filtering", "Disable tag filtering for recommendations");
 
+        var enableDebugLoggingCommand = new Command("enable-debug-logging", "Enable detailed API debug logging");
+        var disableDebugLoggingCommand = new Command("disable-debug-logging", "Disable detailed API debug logging");
+
         // Spotify configuration commands
         var setSpotifyClientIdCommand = new Command("set-spotify-client-id", "Set your Spotify Client ID");
         var spotifyClientIdArg = new Argument<string>("client-id", "Your Spotify Client ID from developer dashboard");
@@ -80,6 +83,14 @@ public static class ConfigCommandBuilder
         setSpotifyDefaultDeviceCommand.AddArgument(spotifyDeviceArg);
 
         var clearSpotifyDefaultDeviceCommand = new Command("clear-spotify-default-device", "Clear default Spotify device (use automatic selection)");
+
+        var setDateRangeMultiplierCommand = new Command("set-date-range-multiplier", "Set diversity multiplier for date range playlist queries");
+        var multiplierArg = new Argument<int>("multiplier", "Multiplier for sample size (default: 10, higher = more diverse but slower)");
+        setDateRangeMultiplierCommand.AddArgument(multiplierArg);
+
+        var setMaxEmptyWindowsCommand = new Command("set-max-empty-windows", "Set maximum empty windows for playlist diversity search");
+        var maxWindowsArg = new Argument<int>("windows", "Max empty windows to search through (default: 5, higher = more thorough but slower)");
+        setMaxEmptyWindowsCommand.AddArgument(maxWindowsArg);
 
         setApiKeyCommand.SetHandler(async (string apiKey) =>
         {
@@ -177,6 +188,18 @@ public static class ConfigCommandBuilder
             await configCommand.SetTagFilteringEnabledAsync(false);
         });
 
+        enableDebugLoggingCommand.SetHandler(async () =>
+        {
+            var configCommand = services.GetRequiredService<ConfigCommand>();
+            await configCommand.SetApiDebugLoggingEnabledAsync(true);
+        });
+
+        disableDebugLoggingCommand.SetHandler(async () =>
+        {
+            var configCommand = services.GetRequiredService<ConfigCommand>();
+            await configCommand.SetApiDebugLoggingEnabledAsync(false);
+        });
+
         setSpotifyClientIdCommand.SetHandler(async (string clientId) =>
         {
             var configCommand = services.GetRequiredService<ConfigCommand>();
@@ -207,6 +230,18 @@ public static class ConfigCommandBuilder
             await configCommand.ClearSpotifyDefaultDeviceAsync();
         });
 
+        setDateRangeMultiplierCommand.SetHandler(async (int multiplier) =>
+        {
+            var configCommand = services.GetRequiredService<ConfigCommand>();
+            await configCommand.SetDateRangeMultiplierAsync(multiplier);
+        }, multiplierArg);
+
+        setMaxEmptyWindowsCommand.SetHandler(async (int windows) =>
+        {
+            var configCommand = services.GetRequiredService<ConfigCommand>();
+            await configCommand.SetMaxEmptyWindowsAsync(windows);
+        }, maxWindowsArg);
+
         command.AddCommand(setApiKeyCommand);
         command.AddCommand(setUserCommand);
         command.AddCommand(showCommand);
@@ -223,11 +258,15 @@ public static class ConfigCommandBuilder
         command.AddCommand(setMaxTagLookupsCommand);
         command.AddCommand(enableTagFilteringCommand);
         command.AddCommand(disableTagFilteringCommand);
+        command.AddCommand(enableDebugLoggingCommand);
+        command.AddCommand(disableDebugLoggingCommand);
         command.AddCommand(setSpotifyClientIdCommand);
         command.AddCommand(setSpotifyClientSecretCommand);
         command.AddCommand(clearSpotifyRefreshTokenCommand);
         command.AddCommand(setSpotifyDefaultDeviceCommand);
         command.AddCommand(clearSpotifyDefaultDeviceCommand);
+        command.AddCommand(setDateRangeMultiplierCommand);
+        command.AddCommand(setMaxEmptyWindowsCommand);
 
         return command;
     }

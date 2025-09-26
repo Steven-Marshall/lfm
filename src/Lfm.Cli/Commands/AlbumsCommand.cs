@@ -2,6 +2,7 @@ using Lfm.Core.Configuration;
 using Lfm.Core.Models;
 using Lfm.Core.Services;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 
 namespace Lfm.Cli.Commands;
 
@@ -23,7 +24,7 @@ public class AlbumsCommand : BaseCommand
         _displayService = displayService ?? throw new ArgumentNullException(nameof(displayService));
     }
 
-    public async Task ExecuteAsync(int limit, string? period, string? username, string? range = null, int? delayMs = null, bool verbose = false, bool timing = false, bool forceCache = false, bool forceApi = false, bool noCache = false, bool timer = false, string? from = null, string? to = null, string? year = null)
+    public async Task ExecuteAsync(int limit, string? period, string? username, string? range = null, int? delayMs = null, bool verbose = false, bool timing = false, bool forceCache = false, bool forceApi = false, bool noCache = false, bool timer = false, string? from = null, string? to = null, string? year = null, bool json = false)
     {
         await ExecuteWithErrorHandlingAndTimerAsync("albums command", async () =>
         {
@@ -56,24 +57,57 @@ public class AlbumsCommand : BaseCommand
                     return;
                 }
                 
-                _displayService.DisplayOperationStart("albums", user, displayPeriod, null, startIndex, endIndex, verbose);
+                if (!json)
+                {
+                    _displayService.DisplayOperationStart("albums", user, displayPeriod, null, startIndex, endIndex, verbose);
+                }
 
                 // Use service layer for range query
                 var (rangeAlbums, totalCount) = await _lastFmService.GetUserTopAlbumsRangeAsync(user, resolvedPeriod, startIndex, endIndex);
                 
                 if (!rangeAlbums.Any())
                 {
-                    Console.WriteLine(ErrorMessages.Format(ErrorMessages.NoItemsInRange, "albums"));
+                    if (json)
+                    {
+                        var emptyRangeResult = new
+                        {
+                            albums = new object[0],
+                            range = new { start = startIndex, end = endIndex, count = 0 },
+                            total = totalCount
+                        };
+                        var jsonOutput = JsonSerializer.Serialize(emptyRangeResult, new JsonSerializerOptions { WriteIndented = true });
+                        Console.WriteLine(jsonOutput);
+                    }
+                    else
+                    {
+                        Console.WriteLine(ErrorMessages.Format(ErrorMessages.NoItemsInRange, "albums"));
+                    }
                     return;
                 }
                 
-                _displayService.DisplayAlbums(rangeAlbums, startIndex);
-                _displayService.DisplayRangeInfo("albums", startIndex, endIndex, rangeAlbums.Count, totalCount, verbose);
+                if (json)
+                {
+                    var jsonOutput = JsonSerializer.Serialize(new
+                    {
+                        albums = rangeAlbums,
+                        range = new { start = startIndex, end = endIndex, count = rangeAlbums.Count },
+                        total = totalCount
+                    }, new JsonSerializerOptions { WriteIndented = true });
+                    Console.WriteLine(jsonOutput);
+                }
+                else
+                {
+                    _displayService.DisplayAlbums(rangeAlbums, startIndex);
+                    _displayService.DisplayRangeInfo("albums", startIndex, endIndex, rangeAlbums.Count, totalCount, verbose);
+                }
                 return;
             }
 
             // Use standardized display service for operation start
-            _displayService.DisplayOperationStart("albums", user, displayPeriod, limit, verbose: verbose);
+            if (!json)
+            {
+                _displayService.DisplayOperationStart("albums", user, displayPeriod, limit, verbose: verbose);
+            }
 
             // Use service layer for basic query
             TopAlbums? result;
@@ -88,21 +122,49 @@ public class AlbumsCommand : BaseCommand
 
             if (result?.Albums == null || !result.Albums.Any())
             {
-                if (isDateRange)
+                if (json)
                 {
-                    _displayService.DisplayError("No albums found for the specified date range.");
-                    _displayService.DisplayError("Note: Album data depends on Last.fm's track metadata. Many tracks may not have complete album information.");
-                    _displayService.DisplayError("Try using --period overall or a different time period, or use the 'tracks' command instead.");
+                    var emptyResult = new Dictionary<string, object>
+                    {
+                        ["album"] = new object[0],
+                        ["@attr"] = new Dictionary<string, string>
+                        {
+                            ["user"] = user,
+                            ["totalPages"] = "0",
+                            ["page"] = "1",
+                            ["total"] = "0",
+                            ["perPage"] = limit.ToString()
+                        }
+                    };
+                    var jsonOutput = JsonSerializer.Serialize(emptyResult, new JsonSerializerOptions { WriteIndented = true });
+                    Console.WriteLine(jsonOutput);
                 }
                 else
                 {
-                    _displayService.DisplayError(ErrorMessages.NoAlbumsFound);
+                    if (isDateRange)
+                    {
+                        _displayService.DisplayError("No albums found for the specified date range.");
+                        _displayService.DisplayError("Note: Album data depends on Last.fm's track metadata. Many tracks may not have complete album information.");
+                        _displayService.DisplayError("Try using --period overall or a different time period, or use the 'tracks' command instead.");
+                    }
+                    else
+                    {
+                        _displayService.DisplayError(ErrorMessages.NoAlbumsFound);
+                    }
                 }
                 return;
             }
 
-            _displayService.DisplayAlbums(result.Albums, 1);
-            _displayService.DisplayTotalInfo("albums", result.Attributes.Total, verbose);
+            if (json)
+            {
+                var jsonOutput = JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true });
+                Console.WriteLine(jsonOutput);
+            }
+            else
+            {
+                _displayService.DisplayAlbums(result.Albums, 1);
+                _displayService.DisplayTotalInfo("albums", result.Attributes.Total, verbose);
+            }
 
         }, timer);
     }

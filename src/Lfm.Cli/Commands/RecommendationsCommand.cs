@@ -4,6 +4,7 @@ using Lfm.Core.Models;
 using Lfm.Core.Models.Results;
 using Lfm.Core.Services;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 
 namespace Lfm.Cli.Commands;
 
@@ -50,7 +51,8 @@ public class RecommendationsCommand : BaseCommand
         bool playNow = false,
         string? playlist = null,
         bool shuffle = false,
-        string? device = null)
+        string? device = null,
+        bool json = false)
     {
         await ExecuteWithErrorHandlingAndTimerAsync("recommendations command", async () =>
         {
@@ -112,7 +114,10 @@ public class RecommendationsCommand : BaseCommand
             }
 
             // Use standardized display service for operation start
-            _displayService.DisplayOperationStart("recommendations", user, displayPeriod, analysisLimit, verbose: verbose);
+            if (!json)
+            {
+                _displayService.DisplayOperationStart("recommendations", user, displayPeriod, analysisLimit, verbose: verbose);
+            }
 
             // Use service layer for recommendations - this replaces 200+ lines of complex logic
             List<RecommendationResult> recommendations;
@@ -146,13 +151,56 @@ public class RecommendationsCommand : BaseCommand
             // Display results
             if (!recommendations.Any())
             {
-                _displayService.DisplayError($"\nNo new recommendations found with filter >= {filter} plays.");
-                _displayService.DisplayError("Try lowering the filter value or analyzing a different time period.");
+                if (json)
+                {
+                    var emptyResult = new
+                    {
+                        recommendations = new object[0],
+                        count = 0,
+                        filter = filter,
+                        analysisLimit = analysisLimit,
+                        user = user,
+                        period = displayPeriod
+                    };
+                    var jsonOutput = JsonSerializer.Serialize(emptyResult, new JsonSerializerOptions { WriteIndented = true });
+                    Console.WriteLine(jsonOutput);
+                }
+                else
+                {
+                    _displayService.DisplayError($"\nNo new recommendations found with filter >= {filter} plays.");
+                    _displayService.DisplayError("Try lowering the filter value or analyzing a different time period.");
+                }
                 return;
             }
 
-            // Use centralized recommendations display
-            _displayService.DisplayRecommendations(recommendations, filter, tracksPerArtist, verbose, _symbols);
+            if (json)
+            {
+                var jsonResult = new
+                {
+                    recommendations = recommendations.Select(r => new
+                    {
+                        artistName = r.ArtistName,
+                        score = r.Score,
+                        averageSimilarity = r.AverageSimilarity,
+                        occurrenceCount = r.OccurrenceCount,
+                        userPlayCount = r.UserPlayCount,
+                        sourceArtists = r.SourceArtists.ToArray(),
+                        topTracks = r.TopTracks?.ToArray() ?? new object[0]
+                    }).ToArray(),
+                    count = recommendations.Count,
+                    filter = filter,
+                    analysisLimit = analysisLimit,
+                    user = user,
+                    period = displayPeriod
+                };
+                var jsonOutput = JsonSerializer.Serialize(jsonResult, new JsonSerializerOptions { WriteIndented = true });
+                Console.WriteLine(jsonOutput);
+            }
+            else
+            {
+                // Use centralized recommendations display
+                _displayService.DisplayRecommendations(recommendations, filter, tracksPerArtist, verbose, _symbols);
+            }
 
             // Stream to Spotify if requested
             if ((playNow || !string.IsNullOrEmpty(playlist)) && recommendations.Any())
@@ -163,7 +211,7 @@ public class RecommendationsCommand : BaseCommand
                 else if (isDateRange)
                     playlistTitle += $" (based on {from} to {to})";
 
-                await _spotifyStreamingService.StreamRecommendationsAsync(recommendations, playNow, playlist, playlistTitle, shuffle, device);
+                await _spotifyStreamingService.StreamRecommendationsAsync(recommendations, playNow, playlist, playlistTitle, shuffle, device, verbose);
             }
 
         }, timer);

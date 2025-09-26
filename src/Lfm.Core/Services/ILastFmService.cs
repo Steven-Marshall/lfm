@@ -114,6 +114,20 @@ public interface ILastFmService
     /// </summary>
     Task<Dictionary<string, int>> GetUserArtistPlayCountsAsync(string username, int maxArtists = int.MaxValue);
 
+    /// <summary>
+    /// Generates a mixtape playlist with weighted random sampling from user's listening history
+    /// </summary>
+    Task<List<Track>> GetMixtapeTracksAsync(string username,
+        int targetTracks,
+        string? period = null,
+        DateTime? fromDate = null,
+        DateTime? toDate = null,
+        float bias = 0.3f,
+        int minPlays = 0,
+        int tracksPerArtist = 1,
+        bool applyTagFiltering = true,
+        int? seed = null);
+
     // New Result-based methods for gradual migration
     /// <summary>
     /// Gets user's top artists with proper error handling

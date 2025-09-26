@@ -45,14 +45,16 @@ public class LastFmApiClient : ILastFmApiClient
     private readonly ILogger<LastFmApiClient> _logger;
     private readonly string _apiKey;
     private readonly int _apiThrottleMs;
+    private readonly bool _enableDebugLogging;
     private const string BaseUrl = "https://ws.audioscrobbler.com/2.0/";
 
-    public LastFmApiClient(HttpClient httpClient, ILogger<LastFmApiClient> logger, string apiKey, int apiThrottleMs = 100)
+    public LastFmApiClient(HttpClient httpClient, ILogger<LastFmApiClient> logger, string apiKey, int apiThrottleMs = 100, bool enableDebugLogging = false)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _apiKey = apiKey ?? throw new ArgumentNullException(nameof(apiKey));
         _apiThrottleMs = apiThrottleMs;
+        _enableDebugLogging = enableDebugLogging;
     }
 
     public async Task<TopArtists?> GetTopArtistsAsync(string username, string period = "overall", int limit = 10, int page = 1)
@@ -724,18 +726,79 @@ public class LastFmApiClient : ILastFmApiClient
     {
         var query = string.Join("&", parameters.Select(kvp => $"{kvp.Key}={HttpUtility.UrlEncode(kvp.Value)}"));
         var url = $"{BaseUrl}?{query}";
-        
-        _logger.LogDebug("Making request to: {Url}", url.Replace(_apiKey, "***"));
+        var maskedUrl = url.Replace(_apiKey, "***");
+
+        // Debug logging - detailed request information
+        if (_enableDebugLogging)
+        {
+            _logger.LogInformation("API DEBUG - Request Details:");
+            _logger.LogInformation("  Method: {Method}", parameters.GetValueOrDefault("method", "unknown"));
+            _logger.LogInformation("  Artist: {Artist}", parameters.GetValueOrDefault("artist", "n/a"));
+            _logger.LogInformation("  Username: {Username}", parameters.GetValueOrDefault("user", "n/a"));
+            _logger.LogInformation("  Period: {Period}", parameters.GetValueOrDefault("period", "n/a"));
+            _logger.LogInformation("  Autocorrect: {Autocorrect}", parameters.GetValueOrDefault("autocorrect", "n/a"));
+            _logger.LogInformation("  Full URL: {Url}", maskedUrl);
+        }
+
+        _logger.LogDebug("Making request to: {Url}", maskedUrl);
+
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
         try
         {
             var response = await _httpClient.GetAsync(url);
+            stopwatch.Stop();
+
+            // Debug logging - response information
+            if (_enableDebugLogging)
+            {
+                _logger.LogInformation("API DEBUG - Response Details:");
+                _logger.LogInformation("  Status: {StatusCode} {StatusText}", (int)response.StatusCode, response.StatusCode);
+                _logger.LogInformation("  Response Time: {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
+
+                // Log response headers if debug is enabled
+                foreach (var header in response.Headers)
+                {
+                    _logger.LogDebug("  Header {HeaderName}: {HeaderValue}", header.Key, string.Join(", ", header.Value));
+                }
+                foreach (var header in response.Content.Headers)
+                {
+                    _logger.LogDebug("  Content-Header {HeaderName}: {HeaderValue}", header.Key, string.Join(", ", header.Value));
+                }
+            }
+
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadAsStringAsync();
+            var content = await response.Content.ReadAsStringAsync();
+
+            if (_enableDebugLogging)
+            {
+                _logger.LogInformation("API DEBUG - Content Length: {ContentLength} characters", content?.Length ?? 0);
+
+                // Log first 200 characters of response for debugging (avoid huge logs)
+                if (!string.IsNullOrEmpty(content))
+                {
+                    var preview = content.Length > 200 ? content.Substring(0, 200) + "..." : content;
+                    _logger.LogDebug("API DEBUG - Response Preview: {Preview}", preview);
+                }
+            }
+
+            return content;
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogError(ex, "HTTP error making request to Last.fm API");
+            stopwatch.Stop();
+            _logger.LogError(ex, "HTTP error making request to Last.fm API (took {ElapsedMs}ms)", stopwatch.ElapsedMilliseconds);
+
+            if (_enableDebugLogging)
+            {
+                _logger.LogInformation("API DEBUG - HTTP Error Details:");
+                _logger.LogInformation("  Request: {Method} for {Artist}",
+                    parameters.GetValueOrDefault("method", "unknown"),
+                    parameters.GetValueOrDefault("artist", parameters.GetValueOrDefault("user", "n/a")));
+                _logger.LogInformation("  URL: {Url}", maskedUrl);
+                _logger.LogInformation("  Error: {ErrorMessage}", ex.Message);
+            }
+
             return null;
         }
     }

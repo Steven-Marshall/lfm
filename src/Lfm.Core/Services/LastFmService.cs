@@ -829,6 +829,396 @@ public class LastFmService : ILastFmService
         return filteredResults.Take(targetLimit).ToList();
     }
 
+    /// <summary>
+    /// Generates a mixtape playlist with weighted random sampling from user's listening history
+    /// </summary>
+    public async Task<List<Track>> GetMixtapeTracksAsync(string username,
+        int targetTracks,
+        string? period = null,
+        DateTime? fromDate = null,
+        DateTime? toDate = null,
+        float bias = 0.3f,
+        int minPlays = 0,
+        int tracksPerArtist = 1,
+        bool applyTagFiltering = true,
+        int? seed = null)
+    {
+        _logger.LogInformation("Generating mixtape for user {Username}: {TargetTracks} tracks, bias={Bias}, minPlays={MinPlays}",
+            username, targetTracks, bias, minPlays);
+
+        // Load configuration for limits
+        var config = await _configManager.LoadAsync();
+        var maxSampleSize = config.MaxMixtapeSampleSize;
+
+        // Step 1: Get complete track dataset using existing infrastructure
+        List<Track> allTracks;
+        bool isDateRange = fromDate.HasValue && toDate.HasValue;
+
+        if (isDateRange)
+        {
+            // For mixtape, we want maximum diversity so use the full sample size available
+            var sampleSize = maxSampleSize;
+
+            _logger.LogDebug("Fetching up to {SampleSize} tracks for date range {From} to {To} with minPlays={MinPlays}",
+                sampleSize, fromDate, toDate, minPlays);
+
+            // Get tracks using existing infrastructure
+            var dateRangeResult = await GetUserTopTracksForDateRangeAsync(username, fromDate!.Value, toDate!.Value, sampleSize);
+            allTracks = dateRangeResult?.Tracks ?? new List<Track>();
+
+            // Since date range results come back ordered by play count, filter early
+            if (minPlays > 0 && allTracks.Any())
+            {
+                var cutoffIndex = allTracks.FindIndex(t => !int.TryParse(t.PlayCount, out var pc) || pc < minPlays);
+                if (cutoffIndex > 0)
+                {
+                    allTracks = allTracks.Take(cutoffIndex).ToList();
+                    _logger.LogInformation("Applied min-plays filter early, reduced from full set to {Count} tracks", allTracks.Count);
+                }
+            }
+        }
+        else
+        {
+            // Use existing range function for periods with smart min-plays optimization
+            period ??= "overall";
+
+            // For mixtape, we want maximum diversity so use the full sample size
+            var endIndex = maxSampleSize;
+
+            _logger.LogDebug("Fetching tracks 1-{EndIndex} for period {Period}", endIndex, period);
+
+            // Use existing GetUserTopTracksRangeAsync which handles pagination efficiently
+            var (rangeTracks, totalCount) = await GetUserTopTracksRangeAsync(username, period, 1, endIndex);
+            allTracks = rangeTracks;
+
+            // Apply min-plays cutoff (tracks are already ordered by play count)
+            if (minPlays > 0 && allTracks.Any())
+            {
+                var cutoffIndex = allTracks.FindIndex(t => !int.TryParse(t.PlayCount, out var pc) || pc < minPlays);
+                if (cutoffIndex > 0)
+                {
+                    allTracks = allTracks.Take(cutoffIndex).ToList();
+                    _logger.LogInformation("Applied min-plays filter, reduced from {Original} to {Filtered} tracks", rangeTracks.Count, allTracks.Count);
+                }
+                else if (cutoffIndex == 0)
+                {
+                    // All tracks are below threshold
+                    allTracks = new List<Track>();
+                    _logger.LogWarning("All tracks below min-plays threshold of {MinPlays}", minPlays);
+                }
+            }
+
+            _logger.LogInformation("Retrieved {TotalTracks} tracks from period {Period} (total available: {TotalCount})",
+                allTracks.Count, period, totalCount);
+        }
+
+        if (!allTracks.Any())
+        {
+            _logger.LogWarning("No tracks found for user {Username} with minPlays={MinPlays}", username, minPlays);
+            return new List<Track>();
+        }
+
+        _logger.LogInformation("Working with {TotalTracks} tracks after filtering", allTracks.Count);
+
+        // Step 2: Generate weighted random sample with post-filtering
+        var selectedTracks = new HashSet<Track>(new TrackEqualityComparer());
+        var artistTrackCounts = new Dictionary<string, int>();
+
+        // Initialize random number generator with seed for reproducibility
+        var effectiveSeed = seed ?? Random.Shared.Next();
+        var random = new Random(effectiveSeed);
+
+        _logger.LogInformation("Using random seed: {Seed} (use --seed {Seed} to reproduce this mixtape)", effectiveSeed, effectiveSeed);
+        var maxAttempts = targetTracks * 5; // Safety limit
+        var attempts = 0;
+
+        // Prepare weighted sampling data
+        var weights = allTracks.Select(t => {
+            int.TryParse(t.PlayCount, out var playCount);
+            return Math.Pow(playCount, bias);
+        }).ToList();
+        var totalWeight = weights.Sum();
+
+        _logger.LogDebug("Starting weighted random sampling with bias {Bias}, total weight {TotalWeight}",
+            bias, totalWeight);
+
+        while (selectedTracks.Count < targetTracks && attempts < maxAttempts)
+        {
+            attempts++;
+
+            // Weighted random selection
+            var randomValue = random.NextDouble() * totalWeight;
+            var cumulativeWeight = 0.0;
+            Track? selectedTrack = null;
+
+            for (int i = 0; i < allTracks.Count; i++)
+            {
+                cumulativeWeight += weights[i];
+                if (randomValue <= cumulativeWeight)
+                {
+                    selectedTrack = allTracks[i];
+                    break;
+                }
+            }
+
+            if (selectedTrack == null) continue;
+
+            // Check for duplicates
+            if (selectedTracks.Contains(selectedTrack)) continue;
+
+            // Check artist diversity limit
+            var artistName = selectedTrack.Artist.Name;
+            var currentArtistCount = artistTrackCounts.GetValueOrDefault(artistName, 0);
+
+            if (currentArtistCount >= tracksPerArtist) continue;
+
+            // Add track
+            selectedTracks.Add(selectedTrack);
+            artistTrackCounts[artistName] = currentArtistCount + 1;
+        }
+
+        _logger.LogInformation("Generated {SelectedCount} tracks after {Attempts} sampling attempts",
+            selectedTracks.Count, attempts);
+
+        var mixtapeTracks = selectedTracks.ToList();
+
+        // Step 3: Apply tag filtering if enabled (post-selection)
+        if (applyTagFiltering)
+        {
+            if ((config.EnableTagFiltering || applyTagFiltering) && config.ExcludedTags.Any())
+            {
+                _logger.LogInformation("Applying tag filtering to {TrackCount} selected tracks", mixtapeTracks.Count);
+                mixtapeTracks = await ApplyPostSelectionTagFilteringAsync(mixtapeTracks, config, targetTracks);
+
+                // Step 4: Backfill if we don't have enough tracks after filtering
+                await BackfillMixtapeTracksAsync(mixtapeTracks, selectedTracks, allTracks, weights, totalWeight,
+                    artistTrackCounts, targetTracks, tracksPerArtist, bias, config, random);
+            }
+        }
+
+        // Shuffle final result to remove any remaining bias from selection order
+        for (int i = mixtapeTracks.Count - 1; i > 0; i--)
+        {
+            int j = random.Next(i + 1);
+            (mixtapeTracks[i], mixtapeTracks[j]) = (mixtapeTracks[j], mixtapeTracks[i]);
+        }
+
+        _logger.LogInformation("Mixtape generation complete: {FinalCount} tracks from {ArtistCount} artists",
+            mixtapeTracks.Count, mixtapeTracks.Select(t => t.Artist.Name).Distinct().Count());
+
+        return mixtapeTracks.Take(targetTracks).ToList();
+    }
+
+    /// <summary>
+    /// Applies tag filtering to selected tracks with iterative replacement
+    /// </summary>
+    private async Task<List<Track>> ApplyPostSelectionTagFilteringAsync(List<Track> selectedTracks,
+        LfmConfig config, int targetTracks)
+    {
+        var filteredTracks = new List<Track>();
+        var uniqueArtists = selectedTracks.Select(t => t.Artist.Name).Distinct().ToList();
+
+        // Cache artist tags for efficiency
+        var artistTagCache = new Dictionary<string, bool>(); // artist -> shouldExclude
+        int tagApiCalls = 0;
+
+        foreach (var artistName in uniqueArtists)
+        {
+            if (tagApiCalls >= config.MaxTagLookups)
+            {
+                // If we've hit the API limit, include remaining artists by default
+                artistTagCache[artistName] = false;
+                continue;
+            }
+
+            try
+            {
+                // Apply throttling between API calls
+                if (tagApiCalls > 0)
+                {
+                    await Task.Delay(config.ApiThrottleMs);
+                }
+
+                _logger.LogInformation("MIXTAPE TAG FILTER - Checking tags for artist: {ArtistName}", artistName);
+                var artistTags = await _apiClient.GetArtistTopTagsAsync(artistName, autocorrect: true);
+                tagApiCalls++;
+
+                // Use the same tag filter service as recommendations for consistency
+                var shouldExclude = _tagFilterService.ShouldExcludeArtist(artistTags, config);
+
+                // Only log exclusions and interesting cases
+                if (shouldExclude)
+                {
+                    var matchingTags = artistTags?.Tags?
+                        .Where(tag => tag.Count >= config.TagFilterThreshold &&
+                                     config.ExcludedTags.Any(excludedTag =>
+                                         string.Equals(excludedTag, tag.Name, StringComparison.OrdinalIgnoreCase)))
+                        .Select(tag => $"{tag.Name}:{tag.Count}")
+                        .ToList() ?? new List<string>();
+
+                    _logger.LogInformation("MIXTAPE TAG FILTER - EXCLUDED '{Artist}' due to tags: {MatchingTags}",
+                        artistName, string.Join(", ", matchingTags));
+                }
+                else
+                {
+                    _logger.LogInformation("MIXTAPE TAG FILTER - INCLUDED '{Artist}' (no problematic tags found)", artistName);
+                }
+
+                artistTagCache[artistName] = shouldExclude;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to get tags for artist {Artist}, including by default", artistName);
+                artistTagCache[artistName] = false; // Include by default on error
+            }
+        }
+
+        // Filter tracks based on cached artist decisions
+        foreach (var track in selectedTracks)
+        {
+            var shouldExclude = artistTagCache.GetValueOrDefault(track.Artist.Name, false);
+            if (!shouldExclude)
+            {
+                filteredTracks.Add(track);
+            }
+        }
+
+        var excludedCount = selectedTracks.Count - filteredTracks.Count;
+        if (excludedCount > 0)
+        {
+            _logger.LogInformation("Tag filtering excluded {ExcludedCount} tracks, {RemainingCount} remaining",
+                excludedCount, filteredTracks.Count);
+        }
+
+        return filteredTracks;
+    }
+
+    /// <summary>
+    /// Backfills mixtape tracks if tag filtering reduced the count below the target
+    /// </summary>
+    private async Task BackfillMixtapeTracksAsync(
+        List<Track> mixtapeTracks,
+        HashSet<Track> selectedTracks,
+        List<Track> allTracks,
+        List<double> weights,
+        double totalWeight,
+        Dictionary<string, int> artistTrackCounts,
+        int targetTracks,
+        int tracksPerArtist,
+        float bias,
+        LfmConfig config,
+        Random random)
+    {
+        if (mixtapeTracks.Count >= targetTracks)
+        {
+            _logger.LogDebug("No backfill needed: {Current} >= {Target} tracks", mixtapeTracks.Count, targetTracks);
+            return;
+        }
+
+        var tracksNeeded = targetTracks - mixtapeTracks.Count;
+        _logger.LogInformation("Backfill needed: {Current} tracks, need {More} more to reach {Target}",
+            mixtapeTracks.Count, tracksNeeded, targetTracks);
+
+        var backfillAttempts = 0;
+        var maxBackfillAttempts = tracksNeeded * 10; // Safety limit
+        var newTracks = new List<Track>();
+
+        while (mixtapeTracks.Count < targetTracks && backfillAttempts < maxBackfillAttempts)
+        {
+            backfillAttempts++;
+
+            // Weighted random selection from all tracks
+            var randomValue = random.NextDouble() * totalWeight;
+            var cumulativeWeight = 0.0;
+            Track? candidate = null;
+
+            for (int i = 0; i < allTracks.Count; i++)
+            {
+                cumulativeWeight += weights[i];
+                if (randomValue <= cumulativeWeight)
+                {
+                    candidate = allTracks[i];
+                    break;
+                }
+            }
+
+            if (candidate == null) continue;
+
+            // Skip if already selected
+            if (selectedTracks.Contains(candidate)) continue;
+
+            // Check artist diversity limit
+            var artistName = candidate.Artist.Name;
+            var currentArtistCount = artistTrackCounts.GetValueOrDefault(artistName, 0);
+            if (currentArtistCount >= tracksPerArtist) continue;
+
+            // Add to potential backfill candidates
+            newTracks.Add(candidate);
+            selectedTracks.Add(candidate); // Prevent selecting again
+            artistTrackCounts[artistName] = currentArtistCount + 1;
+
+            // Process candidates in batches for tag filtering efficiency
+            if (newTracks.Count >= 10 || (mixtapeTracks.Count + newTracks.Count >= targetTracks))
+            {
+                _logger.LogDebug("Processing {Count} backfill candidates for tag filtering", newTracks.Count);
+
+                var filteredCandidates = await ApplyPostSelectionTagFilteringAsync(newTracks, config, newTracks.Count);
+
+                // Add the filtered tracks to the mixtape
+                mixtapeTracks.AddRange(filteredCandidates);
+
+                _logger.LogInformation("Backfill batch: {Filtered}/{Total} candidates passed filtering, mixtape now has {Current} tracks",
+                    filteredCandidates.Count, newTracks.Count, mixtapeTracks.Count);
+
+                // Clear for next batch
+                newTracks.Clear();
+
+                // Break early if we've reached the target
+                if (mixtapeTracks.Count >= targetTracks)
+                    break;
+            }
+        }
+
+        // Process any remaining candidates
+        if (newTracks.Any() && mixtapeTracks.Count < targetTracks)
+        {
+            _logger.LogDebug("Processing final {Count} backfill candidates", newTracks.Count);
+            var filteredCandidates = await ApplyPostSelectionTagFilteringAsync(newTracks, config, newTracks.Count);
+            mixtapeTracks.AddRange(filteredCandidates);
+        }
+
+        var finalCount = mixtapeTracks.Count;
+        if (finalCount >= targetTracks)
+        {
+            _logger.LogInformation("Backfill successful: reached {Count} tracks after {Attempts} attempts", finalCount, backfillAttempts);
+        }
+        else
+        {
+            _logger.LogWarning("Backfill incomplete: only {Count}/{Target} tracks after {Attempts} attempts", finalCount, targetTracks, backfillAttempts);
+        }
+    }
+
+    /// <summary>
+    /// Comparer for track equality based on name and artist
+    /// </summary>
+    private class TrackEqualityComparer : IEqualityComparer<Track>
+    {
+        public bool Equals(Track? x, Track? y)
+        {
+            if (x == null || y == null) return x == y;
+            return string.Equals(x.Name, y.Name, StringComparison.OrdinalIgnoreCase) &&
+                   string.Equals(x.Artist.Name, y.Artist.Name, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public int GetHashCode(Track obj)
+        {
+            if (obj == null) return 0;
+            return HashCode.Combine(
+                obj.Name?.ToLowerInvariant(),
+                obj.Artist.Name?.ToLowerInvariant());
+        }
+    }
+
     // Helper class for recommendation processing
     private class RecommendationData
     {

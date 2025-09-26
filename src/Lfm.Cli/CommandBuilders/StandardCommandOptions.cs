@@ -64,4 +64,36 @@ public static class StandardCommandOptions
     {
         return new Option<bool>("--timer", "Show total execution time");
     }
+
+    public static Option<int?> CreateTotalTracksOption(int? defaultValue = null)
+    {
+        var option = defaultValue.HasValue
+            ? new Option<int?>("--totaltracks",
+                () => defaultValue,
+                "Total number of tracks for the playlist (cannot be used with --totalartists)")
+            : new Option<int?>("--totaltracks",
+                "Total number of tracks for the playlist (cannot be used with --totalartists)");
+        option.AddAlias("-tt");
+        return option;
+    }
+
+    public static Option<int?> CreateTotalArtistsOption(int? defaultValue = null)
+    {
+        var option = defaultValue.HasValue
+            ? new Option<int?>("--totalartists",
+                () => defaultValue,
+                "Total number of artists to include (cannot be used with --totaltracks)")
+            : new Option<int?>("--totalartists",
+                "Total number of artists to include (cannot be used with --totaltracks)");
+        option.AddAlias("-ta");
+        return option;
+    }
+
+    public static Option<int> CreateTracksPerArtistOption(int defaultValue = 1)
+    {
+        var option = new Option<int>("--tracks-per-artist", () => defaultValue,
+            "Maximum tracks per artist (default: 1)");
+        option.AddAlias("-tpa");
+        return option;
+    }
 }

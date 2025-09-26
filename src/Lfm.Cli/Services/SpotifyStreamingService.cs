@@ -27,7 +27,7 @@ public class SpotifyStreamingService : ISpotifyStreamingService
         return await _spotifyStreamer.IsAvailableAsync();
     }
 
-    public async Task StreamTracksAsync(List<Track> tracks, bool playNow, string? playlistName, string defaultPlaylistTitle, bool shuffle = false, string? device = null)
+    public async Task StreamTracksAsync(List<Track> tracks, bool playNow, string? playlistName, string defaultPlaylistTitle, bool shuffle = false, string? device = null, bool verbose = false)
     {
         if (!playNow && string.IsNullOrEmpty(playlistName))
         {
@@ -64,6 +64,14 @@ public class SpotifyStreamingService : ISpotifyStreamingService
                     if (result.NotFoundTracks.Any())
                     {
                         Console.WriteLine($"⚠️  Could not find {result.NotFoundTracks.Count} tracks on Spotify");
+                        if (verbose)
+                        {
+                            Console.WriteLine("   Missing tracks:");
+                            foreach (var trackName in result.NotFoundTracks)
+                            {
+                                Console.WriteLine($"   • {trackName}");
+                            }
+                        }
                     }
                 }
                 else
@@ -81,6 +89,14 @@ public class SpotifyStreamingService : ISpotifyStreamingService
                     if (result.NotFoundTracks.Any())
                     {
                         Console.WriteLine($"⚠️  Could not find {result.NotFoundTracks.Count} tracks on Spotify");
+                        if (verbose)
+                        {
+                            Console.WriteLine("   Missing tracks:");
+                            foreach (var trackName in result.NotFoundTracks)
+                            {
+                                Console.WriteLine($"   • {trackName}");
+                            }
+                        }
                     }
                 }
                 else
@@ -96,7 +112,7 @@ public class SpotifyStreamingService : ISpotifyStreamingService
         }
     }
 
-    public async Task StreamRecommendationsAsync(List<RecommendationResult> recommendations, bool playNow, string? playlistName, string defaultPlaylistTitle, bool shuffle = false, string? device = null)
+    public async Task StreamRecommendationsAsync(List<RecommendationResult> recommendations, bool playNow, string? playlistName, string defaultPlaylistTitle, bool shuffle = false, string? device = null, bool verbose = false)
     {
         if (!playNow && string.IsNullOrEmpty(playlistName))
         {

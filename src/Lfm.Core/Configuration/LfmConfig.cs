@@ -32,6 +32,15 @@ public class LfmConfig
     // Display Configuration
     public UnicodeSupport UnicodeSymbols { get; set; } = UnicodeSupport.Auto;
 
+    // Playlist Diversity Configuration
+    public int DateRangeDiversityMultiplier { get; set; } = 10;
+    public int MaxEmptyWindows { get; set; } = 5;
+
+    // Mixtape Configuration
+    public float DefaultMixtapeBias { get; set; } = 0.3f;
+    public int DefaultMinPlays { get; set; } = 0;
+    public int MaxMixtapeSampleSize { get; set; } = 50000;
+
     // Tag Filtering Configuration
     public List<string> ExcludedTags { get; set; } = new()
     {
@@ -47,6 +56,9 @@ public class LfmConfig
     // Spotify Configuration
     public SpotifyConfig Spotify { get; set; } = new();
     public string DefaultPlayer { get; set; } = "text"; // "text", "spotify"
+
+    // Debug settings
+    public bool EnableApiDebugLogging { get; set; } = false;
 }
 
 public class SpotifyConfig
