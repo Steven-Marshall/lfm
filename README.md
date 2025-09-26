@@ -79,10 +79,26 @@ lfm tracks --artist "The Beatles"
 
 # Get personalized artist recommendations
 lfm recommendations
-# Exclude artists you already know (10+ plays)
-lfm recommendations --filter 10 --limit 20
+# Exclude artists you already know (10+ plays) - create 20-artist playlist
+lfm recommendations --filter 10 --totalartists 20
+# Create a 30-track playlist with 3 tracks per artist
+lfm recommendations --filter 10 --totaltracks 30 --tracks-per-artist 3
 # Analyze more artists for better recommendations
 lfm recommendations --artist-limit 50 --period 12month --verbose
+
+# Check Last.fm API status and connectivity
+lfm api-status
+# Detailed status with HTTP response information
+lfm api-status --verbose
+# JSON output for monitoring/automation
+lfm api-status --json
+
+# Create playlists from your top tracks (limit tracks per artist for variety)
+lfm toptracks --totaltracks 20 --tracks-per-artist 1
+# More variety from recent listening - 15 artists, 2 tracks each
+lfm toptracks --period 1month --totalartists 15 --tracks-per-artist 2
+# Diverse playlist from specific year - exactly 25 tracks
+lfm toptracks --year 2023 --totaltracks 25 --tracks-per-artist 1 --verbose
 
 # Filter out specific genres using tags (e.g., classical, christmas)
 lfm recommendations --exclude-tags --verbose
@@ -99,14 +115,18 @@ lfm config show-excluded-tags
 lfm config set-spotify-client-id YOUR_CLIENT_ID
 lfm config set-spotify-client-secret YOUR_CLIENT_SECRET
 
-# Queue your top tracks directly to Spotify
-lfm tracks --period 7day --limit 20 --playnow
-# With specific device
-lfm tracks --period 1month --playnow --device "Web Player (Chrome)"
+# Create playlists from your top tracks with artist diversity
+lfm toptracks --totaltracks 20 --tracks-per-artist 1 --year 2024
+lfm toptracks --period 1month --totalartists 15 --tracks-per-artist 2
 
-# Create Spotify playlists from your Last.fm data
-lfm tracks --year 2024 --limit 50 --playlist "My 2024 Favorites"
-lfm recommendations --limit 30 --tracks-per-artist 2 --playlist "Discover Weekly"
+# Queue top tracks directly to Spotify
+lfm toptracks --period 7day --totaltracks 20 --tracks-per-artist 1 --playnow
+# With specific device - 10 artists, 2 tracks each
+lfm toptracks --period 1month --totalartists 10 --tracks-per-artist 2 --playnow --device "Web Player (Chrome)"
+
+# Create Spotify playlists from your top tracks
+lfm toptracks --year 2024 --totaltracks 50 --tracks-per-artist 2 --playlist "My 2024 Top Favorites"
+lfm recommendations --totalartists 15 --tracks-per-artist 2 --playlist "Discover Weekly"
 
 # Manage Spotify devices
 lfm spotify devices
@@ -210,6 +230,10 @@ lfm config set unicode enabled|disabled|auto
 lfm config set-spotify-client-id YOUR_CLIENT_ID
 lfm config set-spotify-client-secret YOUR_CLIENT_SECRET
 lfm config set-spotify-default-device "Device Name"
+
+# Playlist diversity configuration
+lfm config set-date-range-multiplier 15  # Higher = more diverse but slower
+# Affects toptracks commands with date ranges (--year, --from/--to)
 ```
 
 ## Cache System
@@ -319,15 +343,27 @@ The caching system provides significant performance improvements for repeated qu
    ```bash
    # Check cache status
    lfm cache-status
-   
+
    # Clear if cache is corrupted
    lfm cache-clear --all
-   
+
    # Benchmark performance
    lfm benchmark-cache your-username
    ```
 
-5. **.NET Runtime Missing**
+5. **Last.fm API Issues**
+   ```bash
+   # Check if Last.fm endpoints are responding
+   lfm api-status
+
+   # Get detailed status information
+   lfm api-status --verbose
+
+   # JSON output for monitoring scripts
+   lfm api-status --json
+   ```
+
+6. **.NET Runtime Missing**
    - Download .NET 9 Runtime from https://dotnet.microsoft.com/download/dotnet/9.0
    - Choose "Run desktop apps" runtime for your platform
 
@@ -362,6 +398,6 @@ This project is open source. See the repository for license details.
 
 ---
 
-**Version**: 1.2.0
+**Version**: 1.3.0
 **Author**: Steven Marshall
 **Repository**: https://github.com/Steven-Marshall/lfm
