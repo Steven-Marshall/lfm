@@ -389,3 +389,53 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
 - **Testing**: Manual testing comprehensive, all core functionality verified
 - **Documentation**: Well-documented with comprehensive README and session notes
 - **Configuration**: Flexible with user-configurable settings for all major behaviors
+
+## Debugging Lessons Learned
+
+### 🎯 Critical Thinking Over Quick Fixes
+
+**Lesson from 2010 Cache Bug** (Session: 2025-09-30)
+
+As an AI coding assistant, there's a tendency to "make it work" rather than "understand why it's broken." This can lead to premature workarounds instead of proper diagnosis.
+
+**The Bug Pattern:**
+- `lfm artists --year 2010` returned empty results ❌
+- `lfm tracks --year 2010` worked perfectly ✅
+- Other years (2009, 2011) worked fine ✅
+
+**Initial Mistake:** Suspected Last.fm API limitations and considered implementing automatic chunking workarounds.
+
+**What Should Have Been Obvious:**
+- Both commands use the same underlying `GetRecentTracksAsync` API method
+- If the API worked for tracks, it should work for artists
+- Inconsistent behavior between similar operations strongly suggests **our code**, not the API
+
+**The Real Cause:** Empty responses were being cached due to insufficient validation in `CachedLastFmApiClient.cs`:
+```csharp
+// WRONG: Caches empty objects
+if (apiResult != null) {
+    await CacheAsync(apiResult);
+}
+
+// RIGHT: Validate data exists before caching
+if (apiResult != null && HasData(apiResult)) {
+    await CacheAsync(apiResult);
+}
+```
+
+**Key Principle:**
+
+> **If the bug pattern defies logic for external factors, it's almost certainly our own code. Dig there first.** 🎯
+
+**Debugging Checklist:**
+1. ✅ Do similar operations behave differently? → Suspect our code
+2. ✅ Does forcing fresh data (`--force-api`) work? → Cache/state issue
+3. ✅ Are symptoms logically inconsistent with external API behavior? → Our bug
+4. ✅ Before implementing workarounds, validate the problem is external
+5. ✅ Be skeptical and critical, especially when symptoms don't make sense
+
+**Never:**
+- ❌ Implement "split year into 2" workarounds without understanding root cause
+- ❌ Jump to "API must be broken" conclusions without testing with fresh data
+- ❌ Accept illogical behavior patterns as "just how it is"
+- ❌ Fix to get working without deep dive into why it failed

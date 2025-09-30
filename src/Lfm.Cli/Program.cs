@@ -35,7 +35,10 @@ class Program
             TestCacheCommandBuilder.Build(host.Services),
             BenchmarkCacheCommandBuilder.Build(host.Services),
             SpotifyCommandBuilder.Build(host.Services),
-            ApiStatusCommandBuilder.Build(host.Services)
+            ApiStatusCommandBuilder.Build(host.Services),
+            CheckCommandBuilder.Build(host.Services),
+            CreatePlaylistCommandBuilder.Build(host.Services),
+            SimilarCommandBuilder.Build(host.Services)
         };
 
         return await rootCommand.InvokeAsync(args);
@@ -87,6 +90,7 @@ class Program
                 // Service layer
                 services.AddTransient<ILastFmService, LastFmService>();
                 services.AddTransient<ISpotifyStreamingService, SpotifyStreamingService>();
+                services.AddTransient<IPlaylistInputParser, PlaylistInputParser>();
 
                 // Spotify services
                 services.AddTransient<Lfm.Spotify.IPlaylistStreamer>(serviceProvider =>
@@ -108,6 +112,11 @@ class Program
                 services.AddTransient<CacheStatusCommand>();
                 services.AddTransient<CacheClearCommand>();
                 services.AddTransient<ApiStatusCommand>();
+
+                // Lookup commands
+                services.AddTransient<CheckCommand>();
+                services.AddTransient<CreatePlaylistCommand>();
+                services.AddTransient<SimilarCommand>();
                 // Artist search commands using generic implementation
                 services.AddTransient<ArtistSearchCommand<Track, TopTracks>>(serviceProvider =>
                 {

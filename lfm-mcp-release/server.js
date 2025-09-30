@@ -8,6 +8,10 @@ const {
   CallToolRequestSchema
 } = require('@modelcontextprotocol/sdk/types.js');
 
+// Cross-platform imports
+const fs = require('fs');
+const path = require('path');
+
 // Simple function to execute lfm command
 async function executeLfmCommand(args) {
   return new Promise((resolve, reject) => {
@@ -101,6 +105,106 @@ function parseJsonOutput(output) {
 
     throw new Error(`Failed to parse JSON output: ${error.message}`);
   }
+}
+
+// Cross-platform guidelines loading
+const guidelinesPath = path.join(__dirname, 'lfm-guidelines.md');
+let guidelinesContent = null;
+let guidelinesProvided = false; // Track if guidelines have been shown this session
+
+// Load guidelines on startup with error handling
+try {
+  guidelinesContent = fs.readFileSync(guidelinesPath, 'utf8');
+  // Don't use console.log - it breaks MCP JSON communication
+} catch (error) {
+  // Don't use console.warn - it breaks MCP JSON communication
+  // Guidelines will gracefully fail with appropriate error message
+}
+
+// Extract brief guidelines for auto-provision
+function getBriefGuidelines() {
+  if (!guidelinesContent) return null;
+
+  return `📋 Last.fm Usage Guidelines (auto-loaded on first use):
+
+🗓️ **Temporal Parameters:**
+• Year mentions (2023, 2024, 2025) → use year="2025"
+• Relative time ("recently", "lately") → use period="1month"
+• "this week" → period="7day"
+
+🎵 **Discovery Workflows:**
+• New music: use filter=1 to exclude known artists
+• Check listening history with lfm_bulk_check before creating playlists
+• Use lfm_recommendations → filter → lfm_create_playlist
+
+💡 **Call lfm_guidelines for detailed guidance anytime**`;
+}
+
+// Extract specific section from guidelines
+function extractSection(content, section) {
+  if (!content) {
+    return 'Guidelines not available. Please ensure lfm-guidelines.md exists in the server directory.';
+  }
+
+  if (section === 'all') {
+    return content;
+  }
+
+  // Map simplified enum values to actual section headings
+  const sectionMap = {
+    'temporal': 'Temporal Parameter Selection',
+    'workflows': 'Discovery Workflows',
+    'patterns': 'Common Parameter Patterns',
+    'troubleshooting': 'Troubleshooting',
+    'practices': 'Best Practices'
+  };
+
+  const actualSection = sectionMap[section] || section;
+
+  // Extract specific section by heading
+  const sectionRegex = new RegExp(`## ${actualSection}[\\s\\S]*?(?=## |$)`, 'i');
+  const match = content.match(sectionRegex);
+
+  if (match) {
+    return match[0];
+  }
+
+  // If section not found, return available sections
+  const headings = content.match(/## ([^\n]+)/g) || [];
+  const availableSections = headings.map(h => h.replace('## ', '')).join(', ');
+
+  return `Section "${section}" not found. Available sections: ${availableSections}`;
+}
+
+// Wrap tool response with auto-guidelines on first use
+function wrapWithAutoGuidelines(toolResponse) {
+  if (guidelinesProvided) {
+    return toolResponse; // Guidelines already shown this session
+  }
+
+  const briefGuidelines = getBriefGuidelines();
+  if (!briefGuidelines) {
+    return toolResponse; // No guidelines available
+  }
+
+  guidelinesProvided = true; // Mark as provided
+
+  // Prepend guidelines to the tool response
+  const originalContent = toolResponse.content || [];
+  return {
+    ...toolResponse,
+    content: [
+      {
+        type: 'text',
+        text: briefGuidelines
+      },
+      {
+        type: 'text',
+        text: '---'
+      },
+      ...originalContent
+    ]
+  };
 }
 
 // Create MCP server
@@ -463,6 +567,152 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             }
           }
         }
+      },
+      {
+        name: 'lfm_check',
+        description: 'Check if user has listened to an artist or track',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            artist: {
+              type: 'string',
+              description: 'Artist name to check'
+            },
+            track: {
+              type: 'string',
+              description: 'Track name to check (optional - if not provided, checks artist only)'
+            },
+            user: {
+              type: 'string',
+              description: 'Last.fm username (uses default if not specified)'
+            },
+            verbose: {
+              type: 'boolean',
+              description: 'Show additional information like global plays, tags, etc.',
+              default: false
+            }
+          },
+          required: ['artist']
+        }
+      },
+      {
+        name: 'lfm_bulk_check',
+        description: 'Check multiple artists or tracks at once for efficiency',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            items: {
+              type: 'array',
+              description: 'Array of artists or tracks to check',
+              items: {
+                type: 'object',
+                properties: {
+                  artist: {
+                    type: 'string',
+                    description: 'Artist name'
+                  },
+                  track: {
+                    type: 'string',
+                    description: 'Track name (optional)'
+                  }
+                },
+                required: ['artist']
+              }
+            },
+            user: {
+              type: 'string',
+              description: 'Last.fm username (uses default if not specified)'
+            }
+          },
+          required: ['items']
+        }
+      },
+      {
+        name: 'lfm_create_playlist',
+        description: 'Create a Spotify playlist from a list of artist/track pairs',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            tracks: {
+              type: 'array',
+              description: 'List of track objects with artist and track properties',
+              items: {
+                type: 'object',
+                properties: {
+                  artist: {
+                    type: 'string',
+                    description: 'Artist name'
+                  },
+                  track: {
+                    type: 'string',
+                    description: 'Track name'
+                  }
+                },
+                required: ['artist', 'track']
+              }
+            },
+            playlistName: {
+              type: 'string',
+              description: 'Playlist name (will be prefixed with \'lfm\' if not already)'
+            },
+            playNow: {
+              type: 'boolean',
+              description: 'Queue tracks to Spotify and start playing immediately',
+              default: false
+            },
+            shuffle: {
+              type: 'boolean',
+              description: 'Shuffle the track order when sending to Spotify',
+              default: false
+            },
+            device: {
+              type: 'string',
+              description: 'Specific Spotify device to use (overrides config default)'
+            },
+            verbose: {
+              type: 'boolean',
+              description: 'Show detailed information about track lookups',
+              default: false
+            }
+          },
+          required: ['tracks']
+        }
+      },
+      {
+        name: 'lfm_similar',
+        description: 'Find artists similar to a specified artist using Last.fm\'s similarity algorithm',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            artist: {
+              type: 'string',
+              description: 'Artist name to find similar artists for'
+            },
+            limit: {
+              type: 'number',
+              description: 'Number of similar artists to return (1-100)',
+              default: 20,
+              minimum: 1,
+              maximum: 100
+            }
+          },
+          required: ['artist']
+        }
+      },
+      {
+        name: 'lfm_guidelines',
+        description: 'Get usage guidelines and best practices for Last.fm MCP tools',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            section: {
+              type: 'string',
+              description: 'Specific guideline section to retrieve',
+              enum: ['all', 'temporal', 'workflows', 'patterns', 'troubleshooting', 'practices'],
+              default: 'all'
+            }
+          }
+        }
       }
     ]
   };
@@ -517,7 +767,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const output = await executeLfmCommand(cmdArgs);
       const result = parseJsonOutput(output);
 
-      return {
+      const response = {
         content: [
           {
             type: 'text',
@@ -530,6 +780,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
         ]
       };
+
+      return wrapWithAutoGuidelines(response);
     } catch (error) {
       return {
         content: [
@@ -976,6 +1228,236 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               error: error.message,
               message: 'Failed to check API status. This could indicate a configuration issue or that lfm is not properly installed.'
             }, null, 2)
+          }
+        ],
+        isError: true
+      };
+    }
+  }
+
+  if (name === 'lfm_check') {
+    try {
+      const artist = args.artist;
+      const track = args.track;
+      const user = args.user;
+      const verbose = args.verbose || false;
+
+      if (!artist) {
+        throw new Error('Artist name is required');
+      }
+
+      // Build command arguments
+      const cmdArgs = ['check', artist];
+
+      if (track) {
+        cmdArgs.push(track);
+      }
+
+      if (user) {
+        cmdArgs.push('--user', user);
+      }
+
+      if (verbose) {
+        cmdArgs.push('--verbose');
+      }
+
+      const output = await executeLfmCommand(cmdArgs);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: output.trim()
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Error checking listening history: ${error.message}`
+          }
+        ],
+        isError: true
+      };
+    }
+  }
+
+  if (name === 'lfm_bulk_check') {
+    try {
+      const items = args.items;
+      const user = args.user;
+
+      if (!Array.isArray(items) || items.length === 0) {
+        throw new Error('Items array is required and must not be empty');
+      }
+
+      const results = [];
+
+      for (const item of items) {
+        if (!item.artist) {
+          results.push(`Error: Missing artist name for item`);
+          continue;
+        }
+
+        try {
+          // Build command arguments for each item
+          const cmdArgs = ['check', item.artist];
+
+          if (item.track) {
+            cmdArgs.push(item.track);
+          }
+
+          if (user) {
+            cmdArgs.push('--user', user);
+          }
+
+          const output = await executeLfmCommand(cmdArgs);
+          results.push(output.trim());
+        } catch (itemError) {
+          const itemDesc = item.track ? `${item.artist} - ${item.track}` : item.artist;
+          results.push(`${itemDesc}: Error - ${itemError.message}`);
+        }
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: results.join('\n')
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Error in bulk check: ${error.message}`
+          }
+        ],
+        isError: true
+      };
+    }
+  }
+
+  if (name === 'lfm_create_playlist') {
+    try {
+      const tracks = args.tracks;
+      const playlistName = args.playlistName;
+      const playNow = args.playNow || false;
+      const shuffle = args.shuffle || false;
+      const device = args.device;
+      const verbose = args.verbose || false;
+
+      if (!Array.isArray(tracks) || tracks.length === 0) {
+        throw new Error('Tracks array is required and must not be empty');
+      }
+
+      // Convert tracks array to JSON format for the CLI command
+      const jsonInput = JSON.stringify(tracks);
+
+      // Build command arguments
+      const cmdArgs = ['create-playlist', jsonInput, '--json'];
+
+      if (playlistName) {
+        cmdArgs.push('--playlist', playlistName);
+      }
+      if (playNow) {
+        cmdArgs.push('--playnow');
+      }
+      if (shuffle) {
+        cmdArgs.push('--shuffle');
+      }
+      if (device) {
+        cmdArgs.push('--device', device);
+      }
+      if (verbose) {
+        cmdArgs.push('--verbose');
+      }
+
+      const output = await executeLfmCommand(cmdArgs);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Playlist creation result:\n${output}`
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Error creating playlist: ${error.message}`
+          }
+        ],
+        isError: true
+      };
+    }
+  }
+
+  if (name === 'lfm_similar') {
+    try {
+      const artist = args.artist;
+      const limit = args.limit || 20;
+
+      if (!artist) {
+        throw new Error('Artist name is required');
+      }
+
+      // Build command arguments
+      const cmdArgs = ['similar', artist, '--limit', limit.toString(), '--json'];
+
+      const output = await executeLfmCommand(cmdArgs);
+      const result = parseJsonOutput(output);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2)
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: false,
+              error: error.message
+            }, null, 2)
+          }
+        ],
+        isError: true
+      };
+    }
+  }
+
+  if (name === 'lfm_guidelines') {
+    try {
+      const section = args.section || 'all';
+      const guidelines = extractSection(guidelinesContent, section);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: guidelines
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Error retrieving guidelines: ${error.message}`
           }
         ],
         isError: true

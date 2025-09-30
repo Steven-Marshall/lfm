@@ -187,10 +187,15 @@ public class CachedLastFmApiClient : ILastFmApiClient
                 await ApplyApiThrottlingAsync(config.ApiThrottleMs);
 
                 var forceApiResult = await apiCall();
-                
-                if (forceApiResult != null)
+
+                // Only cache if result is not null AND contains actual data
+                if (forceApiResult != null && HasData(forceApiResult))
                 {
                     await TryCacheResultAsync(cacheKey, forceApiResult, methodName, config.CacheExpiryMinutes);
+                }
+                else if (forceApiResult != null && !HasData(forceApiResult))
+                {
+                    _logger.LogDebug("Not caching empty response for {Method} (force-api mode)", methodName);
                 }
                 
                 if (EnableTiming && stopwatch != null)
@@ -257,10 +262,15 @@ public class CachedLastFmApiClient : ILastFmApiClient
             await ApplyApiThrottlingAsync(config.ApiThrottleMs);
 
             var apiResult = await apiCall();
-            
-            if (apiResult != null)
+
+            // Only cache if result is not null AND contains actual data
+            if (apiResult != null && HasData(apiResult))
             {
                 await TryCacheResultAsync(cacheKey, apiResult, methodName, config.CacheExpiryMinutes);
+            }
+            else if (apiResult != null && !HasData(apiResult))
+            {
+                _logger.LogDebug("Not caching empty response for {Method}", methodName);
             }
 
             if (EnableTiming && stopwatch != null)
@@ -374,7 +384,27 @@ public class CachedLastFmApiClient : ILastFmApiClient
             "GetTopAlbumsForDateRange",
             username, dateRange, limit, 1);
     }
-    
+
+    /// <summary>
+    /// Checks if a response object contains meaningful data that should be cached.
+    /// Empty responses (e.g., empty artist/track/album lists) should not be cached.
+    /// </summary>
+    private bool HasData<T>(T result) where T : class
+    {
+        return result switch
+        {
+            TopArtists artists => artists.Artists?.Any() == true,
+            TopTracks tracks => tracks.Tracks?.Any() == true,
+            TopAlbums albums => albums.Albums?.Any() == true,
+            RecentTracks recentTracks => recentTracks.Tracks?.Any() == true,
+            SimilarArtists similarArtists => similarArtists.Artists?.Any() == true,
+            TopTags tags => tags.Tags?.Any() == true,
+            ArtistLookupInfo artistLookup => !string.IsNullOrEmpty(artistLookup.Artist?.Name),
+            TrackLookupInfo trackLookup => !string.IsNullOrEmpty(trackLookup.Track?.Name),
+            _ => true // For unknown types, cache them (conservative approach)
+        };
+    }
+
     /// <summary>
     /// Attempts to cache the API result, handling errors gracefully
     /// </summary>
@@ -610,6 +640,51 @@ public class CachedLastFmApiClient : ILastFmApiClient
             async () => await _innerClient.GetTopAlbumsForDateRangeWithResultAsync(username, from, to, limit),
             "GetTopAlbumsDateRange",
             username, DateRangeParser.FormatDateRange(from, to), limit, 1);
+    }
+
+    // Lookup methods with caching
+    public async Task<ArtistLookupInfo?> GetArtistInfoAsync(string artist, string username)
+    {
+        var cacheKey = _keyGenerator.ForArtistInfo(artist, username);
+
+        return await GetWithCacheAsync<ArtistLookupInfo>(
+            cacheKey,
+            async () => await _innerClient.GetArtistInfoAsync(artist, username),
+            "GetArtistInfo",
+            artist, username);
+    }
+
+    public async Task<TrackLookupInfo?> GetTrackInfoAsync(string artist, string track, string username)
+    {
+        var cacheKey = _keyGenerator.ForTrackInfo(artist, track, username);
+
+        return await GetWithCacheAsync<TrackLookupInfo>(
+            cacheKey,
+            async () => await _innerClient.GetTrackInfoAsync(artist, track, username),
+            "GetTrackInfo",
+            artist, track, username);
+    }
+
+    public async Task<Result<ArtistLookupInfo>> GetArtistInfoWithResultAsync(string artist, string username)
+    {
+        var cacheKey = _keyGenerator.ForArtistInfo(artist, username);
+
+        return await GetWithCacheResultAsync<ArtistLookupInfo>(
+            cacheKey,
+            async () => await _innerClient.GetArtistInfoWithResultAsync(artist, username),
+            "GetArtistInfo",
+            artist, username);
+    }
+
+    public async Task<Result<TrackLookupInfo>> GetTrackInfoWithResultAsync(string artist, string track, string username)
+    {
+        var cacheKey = _keyGenerator.ForTrackInfo(artist, track, username);
+
+        return await GetWithCacheResultAsync<TrackLookupInfo>(
+            cacheKey,
+            async () => await _innerClient.GetTrackInfoWithResultAsync(artist, track, username),
+            "GetTrackInfo",
+            artist, track, username);
     }
 
     private async Task<Result<T>> GetWithCacheResultAsync<T>(

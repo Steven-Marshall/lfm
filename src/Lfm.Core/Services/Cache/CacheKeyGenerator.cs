@@ -33,16 +33,16 @@ public class CacheKeyGenerator : ICacheKeyGenerator
     {
         if (string.IsNullOrWhiteSpace(method))
             throw new ArgumentException("Method cannot be null or empty", nameof(method));
-        
-        if (string.IsNullOrWhiteSpace(user))
-            throw new ArgumentException("User cannot be null or empty", nameof(user));
+
+        // User can be empty for some API calls (e.g., track.getInfo without user context)
+        var userPart = string.IsNullOrWhiteSpace(user) ? "no-user" : user.ToLowerInvariant();
 
         if (string.IsNullOrWhiteSpace(period))
             throw new ArgumentException("Period cannot be null or empty", nameof(period));
 
         // Create normalized parameter string
-        var parameters = $"{method.ToLowerInvariant()}|{user.ToLowerInvariant()}|{period.ToLowerInvariant()}|{limit}|{page}";
-        
+        var parameters = $"{method.ToLowerInvariant()}|{userPart}|{period.ToLowerInvariant()}|{limit}|{page}";
+
         return GenerateKey(parameters);
     }
 
@@ -132,4 +132,16 @@ public static class CacheKeyExtensions
     /// </summary>
     public static string ForTopAlbumsDateRange(this ICacheKeyGenerator generator, string user, string dateRange, int limit)
         => generator.GenerateKey("daterange.getTopAlbums", user, dateRange, limit, 1);
+
+    /// <summary>
+    /// Creates a cache key for artist.getInfo API calls with user playcount.
+    /// </summary>
+    public static string ForArtistInfo(this ICacheKeyGenerator generator, string artist, string username)
+        => generator.GenerateKey("artist.getInfo", username, artist, 1, 1);
+
+    /// <summary>
+    /// Creates a cache key for track.getInfo API calls with user playcount.
+    /// </summary>
+    public static string ForTrackInfo(this ICacheKeyGenerator generator, string artist, string track, string username)
+        => generator.GenerateKey($"track.getInfo|{track}", username, artist, 1, 1);
 }

@@ -37,6 +37,12 @@ public interface ILastFmApiClient
     Task<Result<TopArtists>> GetTopArtistsForDateRangeWithResultAsync(string username, DateTime from, DateTime to, int limit = 10);
     Task<Result<TopTracks>> GetTopTracksForDateRangeWithResultAsync(string username, DateTime from, DateTime to, int limit = 10);
     Task<Result<TopAlbums>> GetTopAlbumsForDateRangeWithResultAsync(string username, DateTime from, DateTime to, int limit = 10);
+
+    // Lookup methods for checking user's listening history
+    Task<ArtistLookupInfo?> GetArtistInfoAsync(string artist, string username);
+    Task<TrackLookupInfo?> GetTrackInfoAsync(string artist, string track, string username);
+    Task<Result<ArtistLookupInfo>> GetArtistInfoWithResultAsync(string artist, string username);
+    Task<Result<TrackLookupInfo>> GetTrackInfoWithResultAsync(string artist, string track, string username);
 }
 
 public class LastFmApiClient : ILastFmApiClient
@@ -879,6 +885,84 @@ public class LastFmApiClient : ILastFmApiClient
         return await ExecuteWithResultAsync(
             () => GetTopAlbumsForDateRangeAsync(username, from, to, limit),
             $"getting top albums for user {username} date range");
+    }
+
+    // Lookup methods implementation
+    public async Task<ArtistLookupInfo?> GetArtistInfoAsync(string artist, string username)
+    {
+        var parameters = new Dictionary<string, string>
+        {
+            ["method"] = "artist.getInfo",
+            ["artist"] = artist,
+            ["api_key"] = _apiKey,
+            ["format"] = "json",
+            ["autocorrect"] = "1"
+        };
+
+        // Only add username if provided (it's optional for artist.getInfo)
+        if (!string.IsNullOrEmpty(username))
+        {
+            parameters["username"] = username;
+        }
+
+        var response = await MakeRequestAsync(parameters);
+        if (response == null) return null;
+
+        try
+        {
+            return JsonSerializer.Deserialize<ArtistLookupInfo>(response, GetJsonOptions());
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "Failed to deserialize artist info response");
+            return null;
+        }
+    }
+
+    public async Task<TrackLookupInfo?> GetTrackInfoAsync(string artist, string track, string username)
+    {
+        var parameters = new Dictionary<string, string>
+        {
+            ["method"] = "track.getInfo",
+            ["artist"] = artist,
+            ["track"] = track,
+            ["api_key"] = _apiKey,
+            ["format"] = "json",
+            ["autocorrect"] = "1"
+        };
+
+        // Only add username if provided (it's optional for track.getInfo)
+        if (!string.IsNullOrEmpty(username))
+        {
+            parameters["username"] = username;
+        }
+
+        var response = await MakeRequestAsync(parameters);
+        if (response == null) return null;
+
+        try
+        {
+            return JsonSerializer.Deserialize<TrackLookupInfo>(response, GetJsonOptions());
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "Failed to deserialize track info response");
+            return null;
+        }
+    }
+
+    public async Task<Result<ArtistLookupInfo>> GetArtistInfoWithResultAsync(string artist, string username)
+    {
+        return await ExecuteWithResultAsync(
+            () => GetArtistInfoAsync(artist, username),
+            $"getting artist info for {artist}");
+    }
+
+    public async Task<Result<TrackLookupInfo>> GetTrackInfoWithResultAsync(string artist, string track, string username)
+    {
+        return await ExecuteWithResultAsync(
+            () => GetTrackInfoAsync(artist, track, username),
+            $"getting track info for {artist} - {track}");
     }
 
     private async Task<Result<T>> ExecuteWithResultAsync<T>(Func<Task<T?>> operation, string operationDescription) where T : class

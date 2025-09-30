@@ -5,6 +5,7 @@ A powerful command-line interface for retrieving your Last.fm music statistics w
 ## Features
 
 - 🎵 **Comprehensive Statistics** - Top artists, tracks, and albums with play counts
+- 🔍 **Similar Artist Discovery** - Find artists similar to any specific artist using Last.fm's similarity algorithm
 - 🎸 **Music Recommendations** - Discover new artists based on your listening history
 - 🎧 **Spotify Integration** - Queue tracks and create playlists directly from your Last.fm data
 - 🚀 **Smart Caching** - File-based cache system for improved performance
@@ -77,7 +78,12 @@ lfm artist-albums "Pink Floyd"
 lfm tracks --artist "The Beatles"
 # Also works with: "Beatles", "beatles", etc.
 
-# Get personalized artist recommendations
+# Find artists similar to a specific artist
+lfm similar "Holly Humberstone"
+# Get 10 similar artists with match scores
+lfm similar "Taylor Swift" --limit 10
+
+# Get personalized artist recommendations based on your listening
 lfm recommendations
 # Exclude artists you already know (10+ plays) - create 20-artist playlist
 lfm recommendations --filter 10 --totalartists 20
@@ -398,6 +404,6 @@ This project is open source. See the repository for license details.
 
 ---
 
-**Version**: 1.3.0
+**Version**: 1.4.0
 **Author**: Steven Marshall
 **Repository**: https://github.com/Steven-Marshall/lfm

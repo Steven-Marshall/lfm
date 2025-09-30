@@ -90,6 +90,18 @@ public class ApiStatusCommand : BaseCommand, IDisposable
                     Method = "artist.getTopTags",
                     Parameters = new() { ["artist"] = "The Beatles" },
                     Feature = "Tag filtering"
+                },
+                new() {
+                    Name = "artist.getInfo",
+                    Method = "artist.getInfo",
+                    Parameters = new() { ["artist"] = "The Beatles", ["username"] = testUser },
+                    Feature = "Check command (artist lookup)"
+                },
+                new() {
+                    Name = "track.getInfo",
+                    Method = "track.getInfo",
+                    Parameters = new() { ["artist"] = "The Beatles", ["track"] = "Hey Jude", ["username"] = testUser },
+                    Feature = "Check command (track lookup)"
                 }
             };
 
