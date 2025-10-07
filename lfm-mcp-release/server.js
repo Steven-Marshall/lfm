@@ -570,7 +570,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'lfm_check',
-        description: 'Check if user has listened to an artist or track',
+        description: 'Check if user has listened to an artist, track, or album with optional track-level breakdown',
         inputSchema: {
           type: 'object',
           properties: {
@@ -582,13 +582,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: 'string',
               description: 'Track name to check (optional - if not provided, checks artist only)'
             },
+            album: {
+              type: 'string',
+              description: 'Album name to check (optional - provides album play count and track count)'
+            },
             user: {
               type: 'string',
               description: 'Last.fm username (uses default if not specified)'
             },
             verbose: {
               type: 'boolean',
-              description: 'Show additional information like global plays, tags, etc.',
+              description: 'Show additional information. For albums: includes per-track play counts and listening patterns',
               default: false
             }
           },
@@ -1239,6 +1243,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     try {
       const artist = args.artist;
       const track = args.track;
+      const album = args.album;
       const user = args.user;
       const verbose = args.verbose || false;
 
@@ -1249,19 +1254,55 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       // Build command arguments
       const cmdArgs = ['check', artist];
 
-      if (track) {
+      // Album takes precedence over track
+      if (album) {
+        cmdArgs.push('--album', album);
+        if (verbose) {
+          cmdArgs.push('--verbose');
+        }
+        cmdArgs.push('--json');  // Always use JSON for albums
+      } else if (track) {
         cmdArgs.push(track);
+        if (verbose) {
+          cmdArgs.push('--verbose');
+        }
+      } else {
+        // Artist only
+        if (verbose) {
+          cmdArgs.push('--verbose');
+        }
       }
 
       if (user) {
         cmdArgs.push('--user', user);
       }
 
-      if (verbose) {
-        cmdArgs.push('--verbose');
-      }
-
       const output = await executeLfmCommand(cmdArgs);
+
+      // If album check with JSON, parse and return structured data
+      if (album) {
+        try {
+          const result = parseJsonOutput(output);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(result, null, 2)
+              }
+            ]
+          };
+        } catch (parseError) {
+          // Fallback to raw output if JSON parsing fails
+          return {
+            content: [
+              {
+                type: 'text',
+                text: output.trim()
+              }
+            ]
+          };
+        }
+      }
 
       return {
         content: [

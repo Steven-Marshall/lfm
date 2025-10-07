@@ -156,6 +156,11 @@ public class ArtistsCommand : BaseCommand
                 _displayService.DisplayArtists(result.Artists, 1);
                 _displayService.DisplayTotalInfo("artists", result.Attributes.Total, verbose);
             }
+
+            if (timing && !json)
+            {
+                DisplayTimingResults();
+            }
         }, timer);
     }
 }

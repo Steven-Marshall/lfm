@@ -16,7 +16,7 @@ public class LfmConfig
     public string DefaultUsername { get; set; } = string.Empty;
     public string DefaultPeriod { get; set; } = "overall";
     public int DefaultLimit { get; set; } = 10;
-    public int ApiThrottleMs { get; set; } = 100;
+    public int ApiThrottleMs { get; set; } = 200;
     public int NormalSearchDepth { get; set; } = 10000;
     public int DeepSearchTimeoutSeconds { get; set; } = 300;
     

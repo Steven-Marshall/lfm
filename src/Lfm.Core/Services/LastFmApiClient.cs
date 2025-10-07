@@ -41,8 +41,10 @@ public interface ILastFmApiClient
     // Lookup methods for checking user's listening history
     Task<ArtistLookupInfo?> GetArtistInfoAsync(string artist, string username);
     Task<TrackLookupInfo?> GetTrackInfoAsync(string artist, string track, string username);
+    Task<AlbumLookupInfo?> GetAlbumInfoAsync(string artist, string album, string username);
     Task<Result<ArtistLookupInfo>> GetArtistInfoWithResultAsync(string artist, string username);
     Task<Result<TrackLookupInfo>> GetTrackInfoWithResultAsync(string artist, string track, string username);
+    Task<Result<AlbumLookupInfo>> GetAlbumInfoWithResultAsync(string artist, string album, string username);
 }
 
 public class LastFmApiClient : ILastFmApiClient
@@ -53,6 +55,11 @@ public class LastFmApiClient : ILastFmApiClient
     private readonly int _apiThrottleMs;
     private readonly bool _enableDebugLogging;
     private const string BaseUrl = "https://ws.audioscrobbler.com/2.0/";
+
+    // Timing properties for last API call (used by CachedLastFmApiClient for detailed breakdown)
+    public long LastHttpMs { get; private set; }
+    public long LastJsonReadMs { get; private set; }
+    public long LastJsonParseMs { get; private set; }
 
     public LastFmApiClient(HttpClient httpClient, ILogger<LastFmApiClient> logger, string apiKey, int apiThrottleMs = 100, bool enableDebugLogging = false)
     {
@@ -81,11 +88,14 @@ public class LastFmApiClient : ILastFmApiClient
             var response = await MakeRequestAsync(parameters);
             if (response == null) return null;
 
+            var jsonParseStopwatch = System.Diagnostics.Stopwatch.StartNew();
             using var document = JsonDocument.Parse(response);
             var root = document.RootElement;
 
             if (root.TryGetProperty("error", out _))
             {
+                jsonParseStopwatch.Stop();
+                LastJsonParseMs = jsonParseStopwatch.ElapsedMilliseconds;
                 var error = root.GetProperty("error").GetInt32();
                 var message = root.GetProperty("message").GetString();
                 _logger.LogError("Last.fm API error {Error}: {Message}", error, message);
@@ -95,9 +105,13 @@ public class LastFmApiClient : ILastFmApiClient
             if (root.TryGetProperty("topartists", out var topArtistsElement))
             {
                 var topArtists = JsonSerializer.Deserialize<TopArtists>(topArtistsElement.GetRawText(), GetJsonOptions());
+                jsonParseStopwatch.Stop();
+                LastJsonParseMs = jsonParseStopwatch.ElapsedMilliseconds;
                 return topArtists;
             }
 
+            jsonParseStopwatch.Stop();
+            LastJsonParseMs = jsonParseStopwatch.ElapsedMilliseconds;
             return null;
         }
         catch (Exception ex)
@@ -125,11 +139,14 @@ public class LastFmApiClient : ILastFmApiClient
             var response = await MakeRequestAsync(parameters);
             if (response == null) return null;
 
+            var jsonParseStopwatch = System.Diagnostics.Stopwatch.StartNew();
             using var document = JsonDocument.Parse(response);
             var root = document.RootElement;
 
             if (root.TryGetProperty("error", out _))
             {
+                jsonParseStopwatch.Stop();
+                LastJsonParseMs = jsonParseStopwatch.ElapsedMilliseconds;
                 var error = root.GetProperty("error").GetInt32();
                 var message = root.GetProperty("message").GetString();
                 _logger.LogError("Last.fm API error {Error}: {Message}", error, message);
@@ -139,9 +156,13 @@ public class LastFmApiClient : ILastFmApiClient
             if (root.TryGetProperty("toptracks", out var topTracksElement))
             {
                 var topTracks = JsonSerializer.Deserialize<TopTracks>(topTracksElement.GetRawText(), GetJsonOptions());
+                jsonParseStopwatch.Stop();
+                LastJsonParseMs = jsonParseStopwatch.ElapsedMilliseconds;
                 return topTracks;
             }
 
+            jsonParseStopwatch.Stop();
+            LastJsonParseMs = jsonParseStopwatch.ElapsedMilliseconds;
             return null;
         }
         catch (Exception ex)
@@ -169,11 +190,14 @@ public class LastFmApiClient : ILastFmApiClient
             var response = await MakeRequestAsync(parameters);
             if (response == null) return null;
 
+            var jsonParseStopwatch = System.Diagnostics.Stopwatch.StartNew();
             using var document = JsonDocument.Parse(response);
             var root = document.RootElement;
 
             if (root.TryGetProperty("error", out _))
             {
+                jsonParseStopwatch.Stop();
+                LastJsonParseMs = jsonParseStopwatch.ElapsedMilliseconds;
                 var error = root.GetProperty("error").GetInt32();
                 var message = root.GetProperty("message").GetString();
                 _logger.LogError("Last.fm API error {Error}: {Message}", error, message);
@@ -183,9 +207,13 @@ public class LastFmApiClient : ILastFmApiClient
             if (root.TryGetProperty("topalbums", out var topAlbumsElement))
             {
                 var topAlbums = JsonSerializer.Deserialize<TopAlbums>(topAlbumsElement.GetRawText(), GetJsonOptions());
+                jsonParseStopwatch.Stop();
+                LastJsonParseMs = jsonParseStopwatch.ElapsedMilliseconds;
                 return topAlbums;
             }
 
+            jsonParseStopwatch.Stop();
+            LastJsonParseMs = jsonParseStopwatch.ElapsedMilliseconds;
             return null;
         }
         catch (Exception ex)
@@ -748,19 +776,20 @@ public class LastFmApiClient : ILastFmApiClient
 
         _logger.LogDebug("Making request to: {Url}", maskedUrl);
 
-        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var httpStopwatch = System.Diagnostics.Stopwatch.StartNew();
 
         try
         {
             var response = await _httpClient.GetAsync(url);
-            stopwatch.Stop();
+            httpStopwatch.Stop();
+            var httpMs = httpStopwatch.ElapsedMilliseconds;
 
             // Debug logging - response information
             if (_enableDebugLogging)
             {
                 _logger.LogInformation("API DEBUG - Response Details:");
                 _logger.LogInformation("  Status: {StatusCode} {StatusText}", (int)response.StatusCode, response.StatusCode);
-                _logger.LogInformation("  Response Time: {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
+                _logger.LogInformation("  HTTP Time: {ElapsedMs}ms", httpMs);
 
                 // Log response headers if debug is enabled
                 foreach (var header in response.Headers)
@@ -774,11 +803,19 @@ public class LastFmApiClient : ILastFmApiClient
             }
 
             response.EnsureSuccessStatusCode();
+
+            var jsonReadStopwatch = System.Diagnostics.Stopwatch.StartNew();
             var content = await response.Content.ReadAsStringAsync();
+            jsonReadStopwatch.Stop();
+
+            // Store timing for CachedLastFmApiClient to use
+            LastHttpMs = httpMs;
+            LastJsonReadMs = jsonReadStopwatch.ElapsedMilliseconds;
 
             if (_enableDebugLogging)
             {
                 _logger.LogInformation("API DEBUG - Content Length: {ContentLength} characters", content?.Length ?? 0);
+                _logger.LogInformation("  JSON Read Time: {ElapsedMs}ms", jsonReadStopwatch.ElapsedMilliseconds);
 
                 // Log first 200 characters of response for debugging (avoid huge logs)
                 if (!string.IsNullOrEmpty(content))
@@ -792,8 +829,8 @@ public class LastFmApiClient : ILastFmApiClient
         }
         catch (HttpRequestException ex)
         {
-            stopwatch.Stop();
-            _logger.LogError(ex, "HTTP error making request to Last.fm API (took {ElapsedMs}ms)", stopwatch.ElapsedMilliseconds);
+            httpStopwatch.Stop();
+            _logger.LogError(ex, "HTTP error making request to Last.fm API (took {ElapsedMs}ms)", httpStopwatch.ElapsedMilliseconds);
 
             if (_enableDebugLogging)
             {
@@ -951,6 +988,38 @@ public class LastFmApiClient : ILastFmApiClient
         }
     }
 
+    public async Task<AlbumLookupInfo?> GetAlbumInfoAsync(string artist, string album, string username)
+    {
+        var parameters = new Dictionary<string, string>
+        {
+            ["method"] = "album.getInfo",
+            ["artist"] = artist,
+            ["album"] = album,
+            ["api_key"] = _apiKey,
+            ["format"] = "json",
+            ["autocorrect"] = "1"
+        };
+
+        // Only add username if provided (it's optional for album.getInfo)
+        if (!string.IsNullOrEmpty(username))
+        {
+            parameters["username"] = username;
+        }
+
+        var response = await MakeRequestAsync(parameters);
+        if (response == null) return null;
+
+        try
+        {
+            return JsonSerializer.Deserialize<AlbumLookupInfo>(response, GetJsonOptions());
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "Failed to deserialize album info response");
+            return null;
+        }
+    }
+
     public async Task<Result<ArtistLookupInfo>> GetArtistInfoWithResultAsync(string artist, string username)
     {
         return await ExecuteWithResultAsync(
@@ -963,6 +1032,13 @@ public class LastFmApiClient : ILastFmApiClient
         return await ExecuteWithResultAsync(
             () => GetTrackInfoAsync(artist, track, username),
             $"getting track info for {artist} - {track}");
+    }
+
+    public async Task<Result<AlbumLookupInfo>> GetAlbumInfoWithResultAsync(string artist, string album, string username)
+    {
+        return await ExecuteWithResultAsync(
+            () => GetAlbumInfoAsync(artist, album, username),
+            $"getting album info for {artist} - {album}");
     }
 
     private async Task<Result<T>> ExecuteWithResultAsync<T>(Func<Task<T?>> operation, string operationDescription) where T : class

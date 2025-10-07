@@ -144,4 +144,10 @@ public static class CacheKeyExtensions
     /// </summary>
     public static string ForTrackInfo(this ICacheKeyGenerator generator, string artist, string track, string username)
         => generator.GenerateKey($"track.getInfo|{track}", username, artist, 1, 1);
+
+    /// <summary>
+    /// Creates a cache key for album.getInfo API calls with user playcount.
+    /// </summary>
+    public static string ForAlbumInfo(this ICacheKeyGenerator generator, string artist, string album, string username)
+        => generator.GenerateKey($"album.getInfo|{album}", username, artist, 1, 1);
 }

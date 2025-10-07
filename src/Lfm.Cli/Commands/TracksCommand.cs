@@ -218,6 +218,11 @@ public class TracksCommand : BaseCommand
                 _displayService.DisplayTotalInfo("tracks", result.Attributes.Total, verbose);
             }
 
+            if (timing && !json)
+            {
+                DisplayTimingResults();
+            }
+
         }, timer);
     }
 }

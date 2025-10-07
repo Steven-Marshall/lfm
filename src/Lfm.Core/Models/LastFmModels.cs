@@ -335,7 +335,7 @@ public class Tag
     public string Name { get; set; } = string.Empty;
 
     [JsonPropertyName("count")]
-    public int Count { get; set; } = 0;
+    public int? Count { get; set; }
 }
 
 public class TopTags

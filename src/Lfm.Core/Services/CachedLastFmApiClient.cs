@@ -162,7 +162,8 @@ public class CachedLastFmApiClient : ILastFmApiClient
                 await ApplyApiThrottlingAsync(config.ApiThrottleMs);
 
                 var directResult = await apiCall();
-                
+                RecordApiCallComplete();
+
                 if (EnableTiming && stopwatch != null)
                 {
                     stopwatch.Stop();
@@ -183,12 +184,27 @@ public class CachedLastFmApiClient : ILastFmApiClient
             {
                 _logger.LogDebug("Force API mode for {Method}, bypassing cache", methodName);
 
-                // Apply throttling for forced API calls too
+                // Apply throttling for forced API calls
+                var forceThrottleWatch = EnableTiming ? Stopwatch.StartNew() : null;
                 await ApplyApiThrottlingAsync(config.ApiThrottleMs);
+                forceThrottleWatch?.Stop();
+                var forceThrottleMs = forceThrottleWatch?.ElapsedMilliseconds ?? 0;
 
+                // Make the actual API call
                 var forceApiResult = await apiCall();
+                RecordApiCallComplete();
 
-                // Only cache if result is not null AND contains actual data
+                // Get detailed timing from underlying LastFmApiClient if available
+                long forceHttpMs = 0, forceJsonReadMs = 0, forceJsonParseMs = 0;
+                if (_innerClient is LastFmApiClient forceConcreteClient)
+                {
+                    forceHttpMs = forceConcreteClient.LastHttpMs;
+                    forceJsonReadMs = forceConcreteClient.LastJsonReadMs;
+                    forceJsonParseMs = forceConcreteClient.LastJsonParseMs;
+                }
+
+                // Cache the result
+                var forceApiCacheWatch = EnableTiming ? Stopwatch.StartNew() : null;
                 if (forceApiResult != null && HasData(forceApiResult))
                 {
                     await TryCacheResultAsync(cacheKey, forceApiResult, methodName, config.CacheExpiryMinutes);
@@ -197,19 +213,22 @@ public class CachedLastFmApiClient : ILastFmApiClient
                 {
                     _logger.LogDebug("Not caching empty response for {Method} (force-api mode)", methodName);
                 }
-                
+                forceApiCacheWatch?.Stop();
+                var forceApiCacheMs = forceApiCacheWatch?.ElapsedMilliseconds ?? 0;
+
                 if (EnableTiming && stopwatch != null)
                 {
                     stopwatch.Stop();
+                    var breakdown = $"throttle:{forceThrottleMs}ms, http:{forceHttpMs}ms, json-read:{forceJsonReadMs}ms, json-parse:{forceJsonParseMs}ms, cache:{forceApiCacheMs}ms";
                     TimingResults.Add(new TimingInfo
                     {
                         Method = methodName,
                         CacheHit = false,
                         ElapsedMs = stopwatch.ElapsedMilliseconds,
-                        Details = $"force-api mode, params: {string.Join(", ", logParams)}"
+                        Details = $"force-api mode, params: {string.Join(", ", logParams)} [{breakdown}]"
                     });
                 }
-                
+
                 return forceApiResult;
             }
             
@@ -259,11 +278,28 @@ public class CachedLastFmApiClient : ILastFmApiClient
             _logger.LogDebug("Cache miss for {Method} with params {Params}, calling API", methodName, string.Join(", ", logParams));
 
             // Apply throttling only for actual API calls (not cache hits)
+            var throttleWatch = EnableTiming ? Stopwatch.StartNew() : null;
             await ApplyApiThrottlingAsync(config.ApiThrottleMs);
+            throttleWatch?.Stop();
+            var throttleMs = throttleWatch?.ElapsedMilliseconds ?? 0;
 
+            // Make the actual API call (includes HTTP + JSON read + JSON parse)
             var apiResult = await apiCall();
 
-            // Only cache if result is not null AND contains actual data
+            // Record completion time for next throttle calculation
+            RecordApiCallComplete();
+
+            // Get detailed timing from underlying LastFmApiClient if available
+            long httpMs = 0, jsonReadMs = 0, jsonParseMs = 0;
+            if (_innerClient is LastFmApiClient concreteClient)
+            {
+                httpMs = concreteClient.LastHttpMs;
+                jsonReadMs = concreteClient.LastJsonReadMs;
+                jsonParseMs = concreteClient.LastJsonParseMs;
+            }
+
+            // Cache the result
+            var cacheWriteWatch = EnableTiming ? Stopwatch.StartNew() : null;
             if (apiResult != null && HasData(apiResult))
             {
                 await TryCacheResultAsync(cacheKey, apiResult, methodName, config.CacheExpiryMinutes);
@@ -272,16 +308,19 @@ public class CachedLastFmApiClient : ILastFmApiClient
             {
                 _logger.LogDebug("Not caching empty response for {Method}", methodName);
             }
+            cacheWriteWatch?.Stop();
+            var cacheWriteMs = cacheWriteWatch?.ElapsedMilliseconds ?? 0;
 
             if (EnableTiming && stopwatch != null)
             {
                 stopwatch.Stop();
+                var breakdown = $"throttle:{throttleMs}ms, http:{httpMs}ms, json-read:{jsonReadMs}ms, json-parse:{jsonParseMs}ms, cache:{cacheWriteMs}ms";
                 TimingResults.Add(new TimingInfo
                 {
                     Method = methodName,
                     CacheHit = false,
                     ElapsedMs = stopwatch.ElapsedMilliseconds,
-                    Details = $"{effectiveBehavior.ToString().ToLower()}, params: {string.Join(", ", logParams)}"
+                    Details = $"{effectiveBehavior.ToString().ToLower()}, params: {string.Join(", ", logParams)} [{breakdown}]"
                 });
             }
 
@@ -301,7 +340,8 @@ public class CachedLastFmApiClient : ILastFmApiClient
                 await ApplyApiThrottlingAsync(config2.ApiThrottleMs);
 
                 var fallbackResult = await apiCall();
-                
+                RecordApiCallComplete();
+
                 if (EnableTiming && stopwatch != null)
                 {
                     stopwatch.Stop();
@@ -401,6 +441,7 @@ public class CachedLastFmApiClient : ILastFmApiClient
             TopTags tags => tags.Tags?.Any() == true,
             ArtistLookupInfo artistLookup => !string.IsNullOrEmpty(artistLookup.Artist?.Name),
             TrackLookupInfo trackLookup => !string.IsNullOrEmpty(trackLookup.Track?.Name),
+            AlbumLookupInfo albumLookup => !string.IsNullOrEmpty(albumLookup.Album?.Name),
             _ => true // For unknown types, cache them (conservative approach)
         };
     }
@@ -449,6 +490,7 @@ public class CachedLastFmApiClient : ILastFmApiClient
     /// <summary>
     /// Applies throttling only for actual API calls, not cache hits.
     /// This ensures we respect rate limits without slowing down cached responses.
+    /// NOTE: This only enforces the delay. Caller must call RecordApiCallComplete() after the HTTP request.
     /// </summary>
     private async Task ApplyApiThrottlingAsync(int throttleMs)
     {
@@ -469,13 +511,19 @@ public class CachedLastFmApiClient : ILastFmApiClient
                 _logger.LogDebug("Throttling API call for {DelayMs}ms", delayNeeded.TotalMilliseconds);
                 await Task.Delay(delayNeeded);
             }
-
-            _lastApiCallTime = DateTime.UtcNow;
         }
         finally
         {
             _throttleSemaphore.Release();
         }
+    }
+
+    /// <summary>
+    /// Records that an API call has completed. Must be called after HTTP request finishes.
+    /// </summary>
+    private void RecordApiCallComplete()
+    {
+        _lastApiCallTime = DateTime.UtcNow;
     }
 
     /// <summary>
@@ -665,6 +713,17 @@ public class CachedLastFmApiClient : ILastFmApiClient
             artist, track, username);
     }
 
+    public async Task<AlbumLookupInfo?> GetAlbumInfoAsync(string artist, string album, string username)
+    {
+        var cacheKey = _keyGenerator.ForAlbumInfo(artist, album, username);
+
+        return await GetWithCacheAsync<AlbumLookupInfo>(
+            cacheKey,
+            async () => await _innerClient.GetAlbumInfoAsync(artist, album, username),
+            "GetAlbumInfo",
+            artist, album, username);
+    }
+
     public async Task<Result<ArtistLookupInfo>> GetArtistInfoWithResultAsync(string artist, string username)
     {
         var cacheKey = _keyGenerator.ForArtistInfo(artist, username);
@@ -685,6 +744,17 @@ public class CachedLastFmApiClient : ILastFmApiClient
             async () => await _innerClient.GetTrackInfoWithResultAsync(artist, track, username),
             "GetTrackInfo",
             artist, track, username);
+    }
+
+    public async Task<Result<AlbumLookupInfo>> GetAlbumInfoWithResultAsync(string artist, string album, string username)
+    {
+        var cacheKey = _keyGenerator.ForAlbumInfo(artist, album, username);
+
+        return await GetWithCacheResultAsync<AlbumLookupInfo>(
+            cacheKey,
+            async () => await _innerClient.GetAlbumInfoWithResultAsync(artist, album, username),
+            "GetAlbumInfo",
+            artist, album, username);
     }
 
     private async Task<Result<T>> GetWithCacheResultAsync<T>(

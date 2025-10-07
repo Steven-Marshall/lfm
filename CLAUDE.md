@@ -264,6 +264,65 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
 - **Documentation**: Updated README.md with new command examples and configuration options
 - **Build Status**: ✅ Clean build, fully functional, ready for user testing
 
+### Session: 2025-10-06 (Album Track Checking & API Performance Analysis)
+- **Status**: ✅ COMPLETE - Album checking with track-level breakdown and comprehensive API timing diagnostics
+- **Major Features Implemented**:
+  - **Album Check Command**: Check album play counts with detailed per-track breakdown
+  - **Apostrophe Variant Handling**: Automatic retry with Unicode variants (U+0027, U+2018, U+2019) for track/album lookups
+  - **Discrepancy Detection**: Intelligent detection and reporting of unaccounted plays due to name mismatches
+  - **API Performance Diagnostics**: Detailed timing breakdown (throttle, HTTP, JSON-read, JSON-parse, cache)
+  - **Throttle Optimization**: Changed default from 100ms to 200ms for Last.fm's 5 req/sec limit
+- **Key Technical Components**:
+  - `CheckCommand.cs`: Album checking with `--album` parameter and `--verbose` for track breakdown
+  - `GetTrackPlaycountWithApostropheRetry`: Handles Unicode apostrophe variants in track names
+  - Discrepancy calculation: `albumTotal - sumOfTracks` with user-friendly messaging
+  - `LastFmApiClient`: Added `LastHttpMs`, `LastJsonReadMs`, `LastJsonParseMs` timing properties
+  - `CachedLastFmApiClient`: Enhanced timing breakdown for all cache behaviors
+- **Album Check Features**:
+  - Console output: Track-by-track breakdown with play counts, percentages, most-played indicator
+  - JSON output: Full data including `unaccountedPlays`, `hasDiscrepancy` fields
+  - Listening pattern analysis: "Heavy rotation" vs "Balanced listening"
+  - Discrepancy notes: Helpful explanation about featuring artists, remixes, remastered versions
+- **Apostrophe Handling**:
+  - Problem: Album API returns U+0027 (`'`), but scrobbles may have U+2018 (`'`) or U+2019 (`'`)
+  - Solution: Try original name, then left quote variant, then right quote variant
+  - Example: "Wish You Were Here" vs "Wish You Were Here" vs "Wish You Were Here"
+  - Applied to: Track lookups, album lookups, individual track checks
+- **Discrepancy Detection**:
+  - Classic example: "exile" (album API) vs "exile (feat. Bon Iver)" (scrobbles)
+  - Shows: "40 plays unaccounted for" instead of misleading "0 plays"
+  - Pink Floyd example: "Shine On You Crazy Diamond" vs "Shine On You Crazy Diamond (Parts 1-5)"
+  - Provides factual information without expensive fuzzy matching (would require 200+ API calls)
+- **API Performance Investigation**:
+  - **Finding**: HTTP/Last.fm backend is the bottleneck (90-95% of time)
+  - **Timing breakdown** for single API call:
+    - HTTP network transfer: 400-4000ms (highly variable, Last.fm server performance)
+    - JSON parsing: 17-32ms (consistently fast, <2% of total time)
+    - JSON stream reading: 0-1ms (negligible)
+    - Cache writing: 20-50ms (~3% of total time)
+    - Throttle: 0-200ms (depends on spacing between calls)
+  - **Comparison across query types** (limit=10):
+    - Tracks: ~850ms HTTP
+    - Albums: ~400-3900ms HTTP (highly variable!)
+    - Artists: ~390ms HTTP
+  - **Conclusion**: Data volume/JSON processing is NOT the issue - it's Last.fm's server response time
+- **MCP Integration**:
+  - Updated `lfm-guidelines.md` with discrepancy interpretation guidance
+  - Added examples of unaccounted plays and how to interpret them
+  - Guidance for LLMs: Don't assume 0-play tracks are disliked if album has high playcount
+  - Real-world example: Taylor Swift "folklore" with "exile (feat. Bon Iver)" mismatch
+- **Configuration Changes**:
+  - `LfmConfig.cs`: `ApiThrottleMs` default changed from 100ms to 200ms
+  - Safer compliance with Last.fm's documented 5 req/sec rate limit
+- **Example Use Case** (Pink Floyd "Wish You Were Here"):
+  - Album: 56 plays total
+  - Track breakdown: 40 plays accounted (WYWH title track: 23, others: 17)
+  - Unaccounted: 16 plays (likely "Shine On You Crazy Diamond" with different part naming)
+  - **Inference**: ~8 full album listens + ~12 extra title track plays
+  - Demonstrates value of discrepancy approach for understanding listening patterns
+- **Build Status**: ✅ Clean build, 0 errors, comprehensive timing diagnostics available
+- **Ready For**: User testing of album check features and MCP integration
+
 ## Build/Test Commands
 
 ⚠️ **CRITICAL**: Always use `publish/` directory structure per DIRECTORY_STANDARDS.md ⚠️

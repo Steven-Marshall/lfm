@@ -289,6 +289,13 @@ public class FileCacheStorage : ICacheStorage
             {
                 try
                 {
+                    // Skip if file doesn't exist (orphaned reference, incomplete write, etc.)
+                    if (!File.Exists(metaFile))
+                    {
+                        _logger.LogDebug("Skipping missing metadata file {MetaFile}", metaFile);
+                        continue;
+                    }
+
                     var metadataJson = await File.ReadAllTextAsync(metaFile);
                     var metadata = JsonSerializer.Deserialize<CacheMetadata>(metadataJson, GetJsonOptions());
 
@@ -306,9 +313,15 @@ public class FileCacheStorage : ICacheStorage
                             newest = metadata.CreatedAt;
                     }
                 }
+                catch (FileNotFoundException)
+                {
+                    // Race condition - file was deleted between Directory.GetFiles and File.Exists
+                    _logger.LogDebug("Metadata file {MetaFile} was deleted during statistics gathering", metaFile);
+                }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to process metadata file {MetaFile} for statistics", metaFile);
+                    // Other errors (corrupt JSON, permissions, etc.) - log at Debug to avoid noise
+                    _logger.LogDebug(ex, "Failed to process metadata file {MetaFile} for statistics", metaFile);
                 }
             }
 

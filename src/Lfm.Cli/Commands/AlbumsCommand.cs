@@ -166,6 +166,11 @@ public class AlbumsCommand : BaseCommand
                 _displayService.DisplayTotalInfo("albums", result.Attributes.Total, verbose);
             }
 
+            if (timing && !json)
+            {
+                DisplayTimingResults();
+            }
+
         }, timer);
     }
 }

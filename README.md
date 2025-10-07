@@ -7,6 +7,7 @@ A powerful command-line interface for retrieving your Last.fm music statistics w
 - 🎵 **Comprehensive Statistics** - Top artists, tracks, and albums with play counts
 - 🔍 **Similar Artist Discovery** - Find artists similar to any specific artist using Last.fm's similarity algorithm
 - 🎸 **Music Recommendations** - Discover new artists based on your listening history
+- 📊 **Listening History Checks** - Verify if you've listened to specific artists, tracks, or albums with detailed breakdowns
 - 🎧 **Spotify Integration** - Queue tracks and create playlists directly from your Last.fm data
 - 🚀 **Smart Caching** - File-based cache system for improved performance
 - 🌍 **Cross-Platform** - Windows, Linux, and WSL support
@@ -70,13 +71,27 @@ lfm tracks --from 2024-01-01 --to 2024-06-30
 lfm artist-tracks "Radiohead"
 # Also works with: "radiohead", etc.
 
-# Get your top albums by a specific artist (supports name variations)  
+# Get your top albums by a specific artist (supports name variations)
 lfm artist-albums "Pink Floyd"
 # Also works with: "pink floyd", etc.
 
 # Get global top tracks for an artist (supports name variations)
 lfm tracks --artist "The Beatles"
 # Also works with: "Beatles", "beatles", etc.
+
+# Check if you've listened to an artist, track, or album
+lfm check "Taylor Swift"
+# Output: Taylor Swift: 2,453 plays
+
+lfm check "Taylor Swift" "Anti-Hero"
+# Output: Taylor Swift - Anti-Hero: 87 plays ❤️
+
+lfm check "Taylor Swift" --album "1989"
+# Output: Taylor Swift - 1989: 491 plays (13 tracks)
+
+# Get detailed album analysis with track-level breakdown
+lfm check "Taylor Swift" --album "1989" --verbose
+# Shows per-track play counts and listening patterns
 
 # Find artists similar to a specific artist
 lfm similar "Holly Humberstone"
@@ -404,6 +419,6 @@ This project is open source. See the repository for license details.
 
 ---
 
-**Version**: 1.4.0
+**Version**: 1.5.0
 **Author**: Steven Marshall
 **Repository**: https://github.com/Steven-Marshall/lfm
