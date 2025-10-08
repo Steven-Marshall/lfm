@@ -170,3 +170,44 @@ public class SpotifyDevice
     [JsonPropertyName("volume_percent")]
     public int? VolumePercent { get; set; }
 }
+
+// Album Search Response
+public class SpotifyAlbumSearchResponse
+{
+    [JsonPropertyName("albums")]
+    public SpotifyAlbumsResult? Albums { get; set; }
+}
+
+public class SpotifyAlbumsResult
+{
+    [JsonPropertyName("items")]
+    public List<SpotifyAlbumItem> Items { get; set; } = new();
+}
+
+public class SpotifyAlbumItem
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = string.Empty;
+
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("uri")]
+    public string Uri { get; set; } = string.Empty;
+}
+
+// Album Tracks Response
+public class SpotifyAlbumTracksResponse
+{
+    [JsonPropertyName("items")]
+    public List<SpotifyAlbumTrack> Items { get; set; } = new();
+}
+
+public class SpotifyAlbumTrack
+{
+    [JsonPropertyName("uri")]
+    public string Uri { get; set; } = string.Empty;
+
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+}

@@ -38,7 +38,8 @@ class Program
             ApiStatusCommandBuilder.Build(host.Services),
             CheckCommandBuilder.Build(host.Services),
             CreatePlaylistCommandBuilder.Build(host.Services),
-            SimilarCommandBuilder.Build(host.Services)
+            SimilarCommandBuilder.Build(host.Services),
+            PlayCommandBuilder.Build(host.Services)
         };
 
         return await rootCommand.InvokeAsync(args);
@@ -117,6 +118,7 @@ class Program
                 services.AddTransient<CheckCommand>();
                 services.AddTransient<CreatePlaylistCommand>();
                 services.AddTransient<SimilarCommand>();
+                services.AddTransient<PlayCommand>();
                 // Artist search commands using generic implementation
                 services.AddTransient<ArtistSearchCommand<Track, TopTracks>>(serviceProvider =>
                 {

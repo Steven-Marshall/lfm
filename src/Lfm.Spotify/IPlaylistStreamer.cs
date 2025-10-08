@@ -24,6 +24,11 @@ public interface IPlaylistStreamer
     Task<PlaylistStreamResult> QueueTracksAsync(List<Track> tracks, string? device = null);
 
     /// <summary>
+    /// Play tracks immediately, interrupting current playback
+    /// </summary>
+    Task<PlaylistStreamResult> PlayNowAsync(List<Track> tracks, string? device = null);
+
+    /// <summary>
     /// Save tracks as a named playlist
     /// </summary>
     Task<PlaylistStreamResult> SavePlaylistAsync(List<Track> tracks, string playlistName, string? device = null);

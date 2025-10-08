@@ -226,7 +226,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     tools: [
       {
         name: 'lfm_tracks',
-        description: 'Get top tracks from Last.fm',
+        description: 'Get top tracks from Last.fm (information only, use lfm_toptracks for playlists)',
         inputSchema: {
           type: 'object',
           properties: {
@@ -252,24 +252,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             year: {
               type: 'string',
               description: 'Specific year (YYYY) - shortcut for entire year'
-            },
-            playlist: {
-              type: 'string',
-              description: 'Save tracks to a Spotify playlist with this name'
-            },
-            playNow: {
-              type: 'boolean',
-              description: 'Queue tracks to Spotify and start playing immediately',
-              default: false
-            },
-            shuffle: {
-              type: 'boolean',
-              description: 'Shuffle the order when sending to Spotify',
-              default: false
-            },
-            device: {
-              type: 'string',
-              description: 'Specific Spotify device to use (overrides config default)'
             }
           }
         }
@@ -716,6 +698,58 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               default: 'all'
             }
           }
+        }
+      },
+      {
+        name: 'lfm_play_now',
+        description: 'Play a track or album immediately on Spotify',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            artist: {
+              type: 'string',
+              description: 'Artist name'
+            },
+            track: {
+              type: 'string',
+              description: 'Track name (required if album not specified)'
+            },
+            album: {
+              type: 'string',
+              description: 'Album name (required if track not specified)'
+            },
+            device: {
+              type: 'string',
+              description: 'Specific Spotify device to use (overrides config default)'
+            }
+          },
+          required: ['artist']
+        }
+      },
+      {
+        name: 'lfm_queue',
+        description: 'Add a track or album to the end of the Spotify queue',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            artist: {
+              type: 'string',
+              description: 'Artist name'
+            },
+            track: {
+              type: 'string',
+              description: 'Track name (required if album not specified)'
+            },
+            album: {
+              type: 'string',
+              description: 'Album name (required if track not specified)'
+            },
+            device: {
+              type: 'string',
+              description: 'Specific Spotify device to use (overrides config default)'
+            }
+          },
+          required: ['artist']
         }
       }
     ]
@@ -1499,6 +1533,128 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           {
             type: 'text',
             text: `Error retrieving guidelines: ${error.message}`
+          }
+        ],
+        isError: true
+      };
+    }
+  }
+
+  if (name === 'lfm_play_now') {
+    try {
+      const artist = args.artist;
+      const track = args.track;
+      const album = args.album;
+      const device = args.device;
+
+      if (!artist) {
+        throw new Error('Artist name is required');
+      }
+
+      if (!track && !album) {
+        throw new Error('Either track or album must be specified');
+      }
+
+      if (track && album) {
+        throw new Error('Cannot specify both track and album');
+      }
+
+      // Build command arguments
+      const cmdArgs = ['play', artist, '--json'];
+
+      if (track) {
+        cmdArgs.push('--track', track);
+      }
+
+      if (album) {
+        cmdArgs.push('--album', album);
+      }
+
+      if (device) {
+        cmdArgs.push('--device', device);
+      }
+
+      const output = await executeLfmCommand(cmdArgs);
+      const result = parseJsonOutput(output);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2)
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: false,
+              error: error.message
+            }, null, 2)
+          }
+        ],
+        isError: true
+      };
+    }
+  }
+
+  if (name === 'lfm_queue') {
+    try {
+      const artist = args.artist;
+      const track = args.track;
+      const album = args.album;
+      const device = args.device;
+
+      if (!artist) {
+        throw new Error('Artist name is required');
+      }
+
+      if (!track && !album) {
+        throw new Error('Either track or album must be specified');
+      }
+
+      if (track && album) {
+        throw new Error('Cannot specify both track and album');
+      }
+
+      // Build command arguments
+      const cmdArgs = ['play', artist, '--queue', '--json'];
+
+      if (track) {
+        cmdArgs.push('--track', track);
+      }
+
+      if (album) {
+        cmdArgs.push('--album', album);
+      }
+
+      if (device) {
+        cmdArgs.push('--device', device);
+      }
+
+      const output = await executeLfmCommand(cmdArgs);
+      const result = parseJsonOutput(output);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2)
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: false,
+              error: error.message
+            }, null, 2)
           }
         ],
         isError: true

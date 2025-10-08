@@ -136,6 +136,98 @@ public class SpotifyStreamer : IPlaylistStreamer
         }
     }
 
+    public async Task<PlaylistStreamResult> PlayNowAsync(List<Track> tracks, string? device = null)
+    {
+        var result = new PlaylistStreamResult();
+
+        try
+        {
+            await EnsureValidAccessTokenAsync();
+
+            Console.WriteLine($"🎵 Playing {tracks.Count} track(s) on Spotify...");
+
+            if (!tracks.Any())
+            {
+                result.Success = false;
+                result.Message = "No tracks to play";
+                return result;
+            }
+
+            // Search for first track
+            var firstTrack = tracks.First();
+            var firstSpotifyUri = await SearchSpotifyTrackAsync(firstTrack);
+
+            if (firstSpotifyUri == null)
+            {
+                result.NotFoundTracks.Add($"{firstTrack.Artist.Name} - {firstTrack.Name}");
+                result.Success = false;
+                result.Message = $"Track not found on Spotify: {firstTrack.Artist.Name} - {firstTrack.Name}";
+                result.TracksProcessed = 1;
+                return result;
+            }
+
+            // Start playing first track immediately (interrupts current playback)
+            var startSuccess = await StartPlaybackAsync(firstSpotifyUri, device);
+            if (!startSuccess)
+            {
+                result.Success = false;
+                result.Message = "Failed to start playback";
+                result.TracksProcessed = 1;
+                return result;
+            }
+
+            Console.WriteLine($"▶️  Now playing: {firstTrack.Artist.Name} - {firstTrack.Name}");
+            result.TracksFound++;
+            result.TracksProcessed++;
+
+            // Queue remaining tracks if there are any
+            var remainingTracks = tracks.Skip(1).ToList();
+            foreach (var track in remainingTracks)
+            {
+                var spotifyUri = await SearchSpotifyTrackAsync(track);
+                if (spotifyUri != null)
+                {
+                    var queueSuccess = await AddToQueueAsync(spotifyUri);
+                    if (queueSuccess)
+                    {
+                        result.TracksFound++;
+                        Console.WriteLine($"✅ Queued: {track.Artist.Name} - {track.Name}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"❌ Failed to queue: {track.Artist.Name} - {track.Name}");
+                    }
+                }
+                else
+                {
+                    result.NotFoundTracks.Add($"{track.Artist.Name} - {track.Name}");
+                    Console.WriteLine($"🔍 Not found: {track.Artist.Name} - {track.Name}");
+                }
+
+                result.TracksProcessed++;
+
+                // Rate limiting
+                if (_config.RateLimitDelayMs > 0)
+                {
+                    await Task.Delay(_config.RateLimitDelayMs);
+                }
+            }
+
+            result.Success = result.TracksFound > 0;
+            result.Message = result.TracksFound == 1
+                ? $"Now playing: {firstTrack.Artist.Name} - {firstTrack.Name}"
+                : $"Now playing {result.TracksFound} tracks";
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            result.Success = false;
+            result.Message = $"Error playing tracks: {ex.Message}";
+            return result;
+        }
+    }
+
     public async Task<List<PlaylistInfo>> GetUserPlaylistsAsync()
     {
         var playlists = new List<PlaylistInfo>();
@@ -476,6 +568,80 @@ public class SpotifyStreamer : IPlaylistStreamer
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Search for an album on Spotify and return all track URIs
+    /// </summary>
+    public async Task<List<string>> SearchSpotifyAlbumTracksAsync(string artistName, string albumName)
+    {
+        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
+
+        // Search for album on Spotify
+        var query = HttpUtility.UrlEncode($"artist:\"{artistName}\" album:\"{albumName}\"");
+        var searchUrl = $"https://api.spotify.com/v1/search?q={query}&type=album&limit=1";
+
+        try
+        {
+            var response = await _httpClient.GetAsync(searchUrl);
+            var json = await response.Content.ReadAsStringAsync();
+
+            if (response.IsSuccessStatusCode)
+            {
+                var searchResponse = JsonSerializer.Deserialize<SpotifyAlbumSearchResponse>(json);
+                var firstAlbum = searchResponse?.Albums?.Items.FirstOrDefault();
+
+                if (firstAlbum != null)
+                {
+                    // Get album tracks
+                    var tracksUrl = $"https://api.spotify.com/v1/albums/{firstAlbum.Id}/tracks";
+                    var tracksResponse = await _httpClient.GetAsync(tracksUrl);
+                    var tracksJson = await tracksResponse.Content.ReadAsStringAsync();
+
+                    if (tracksResponse.IsSuccessStatusCode)
+                    {
+                        var albumTracks = JsonSerializer.Deserialize<SpotifyAlbumTracksResponse>(tracksJson);
+                        return albumTracks?.Items.Select(t => t.Uri).ToList() ?? new List<string>();
+                    }
+                }
+            }
+
+            // Try loose search if precise search failed and fallback is enabled
+            if (_config.FallbackToLooseSearch)
+            {
+                query = HttpUtility.UrlEncode($"{artistName} {albumName}");
+                searchUrl = $"https://api.spotify.com/v1/search?q={query}&type=album&limit=1";
+
+                response = await _httpClient.GetAsync(searchUrl);
+                json = await response.Content.ReadAsStringAsync();
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var searchResponse = JsonSerializer.Deserialize<SpotifyAlbumSearchResponse>(json);
+                    var firstAlbum = searchResponse?.Albums?.Items.FirstOrDefault();
+
+                    if (firstAlbum != null)
+                    {
+                        // Get album tracks
+                        var tracksUrl = $"https://api.spotify.com/v1/albums/{firstAlbum.Id}/tracks";
+                        var tracksResponse = await _httpClient.GetAsync(tracksUrl);
+                        var tracksJson = await tracksResponse.Content.ReadAsStringAsync();
+
+                        if (tracksResponse.IsSuccessStatusCode)
+                        {
+                            var albumTracks = JsonSerializer.Deserialize<SpotifyAlbumTracksResponse>(tracksJson);
+                            return albumTracks?.Items.Select(t => t.Uri).ToList() ?? new List<string>();
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"⚠️  Error searching for album: {ex.Message}");
+        }
+
+        return new List<string>();
     }
 
     private async Task<bool> AddToQueueAsync(string trackUri)

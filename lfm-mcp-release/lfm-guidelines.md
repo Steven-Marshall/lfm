@@ -204,6 +204,25 @@ After adjusting for discrepancies, track play counts relative to album position 
 - **Naming**: Playlist names auto-prefixed with "lfm-"
 - **Spotify features**: Use `shuffle`, `playNow`, `device` as needed
 
+### Spotify Playback:
+- **Play track now**: Use `lfm_play_now` to start playing a track or album immediately
+  - Example: `lfm_play_now(artist: "The Beatles", track: "Hey Jude")`
+  - For albums: `lfm_play_now(artist: "Pink Floyd", album: "The Dark Side of the Moon")`
+  - **Behavior**: Replaces current track, plays immediately
+
+- **Add to queue**: Use `lfm_queue` to add tracks/albums to the end of queue
+  - Example: `lfm_queue(artist: "Radiohead", track: "Karma Police")`
+  - For albums: `lfm_queue(artist: "Kendrick Lamar", album: "good kid, m.A.A.d city")`
+  - **Behavior**: Adds to end of queue, doesn't interrupt current playback
+
+- **Device selection**: Both tools support optional `device` parameter to target specific device
+  - Priority: CLI device parameter → config default → active device
+
+- **Use cases**:
+  - **Conversation response**: "Want to hear it?" → `lfm_play_now`
+  - **Building queue**: "Add these to my queue" → `lfm_queue`
+  - **Album playback**: Full album with all tracks queued in order
+
 ## Troubleshooting
 
 ### "No results" issues:
