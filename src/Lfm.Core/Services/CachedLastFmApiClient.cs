@@ -26,6 +26,8 @@ public class CachedLastFmApiClient : ILastFmApiClient
     public bool EnableTiming { get; set; } = false;
     public List<TimingInfo> TimingResults { get; } = new();
     public CacheBehavior CacheBehavior { get; set; } = CacheBehavior.Normal;
+    public bool DisableThrottling { get; set; } = false;
+    public DateTime? WallClockStartTime { get; set; } = null;
     
     public class TimingInfo
     {
@@ -491,12 +493,13 @@ public class CachedLastFmApiClient : ILastFmApiClient
     /// Applies throttling only for actual API calls, not cache hits.
     /// This ensures we respect rate limits without slowing down cached responses.
     /// NOTE: This only enforces the delay. Caller must call RecordApiCallComplete() after the HTTP request.
+    /// Can be disabled via DisableThrottling property for parallel batch operations.
     /// </summary>
     private async Task ApplyApiThrottlingAsync(int throttleMs)
     {
-        if (throttleMs <= 0)
+        if (throttleMs <= 0 || DisableThrottling)
         {
-            return; // No throttling configured
+            return; // No throttling configured or disabled for parallel batch mode
         }
 
         await _throttleSemaphore.WaitAsync();

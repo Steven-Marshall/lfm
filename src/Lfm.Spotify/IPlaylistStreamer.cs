@@ -47,6 +47,11 @@ public interface IPlaylistStreamer
     /// Get available Spotify devices
     /// </summary>
     Task<List<SpotifyDevice>> GetDevicesAsync();
+
+    /// <summary>
+    /// Activate/wake up a Spotify device to make it ready for commands
+    /// </summary>
+    Task<bool> ActivateDeviceAsync(string? deviceName = null);
 }
 
 /// <summary>

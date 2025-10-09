@@ -68,7 +68,7 @@ public class PlayCommand : BaseCommand
                 return 1;
             }
 
-            // Validate that either track or album is provided, but not both
+            // Validate that at least one of track or album is provided
             if (string.IsNullOrWhiteSpace(track) && string.IsNullOrWhiteSpace(album))
             {
                 var error = "Either track or album must be specified";
@@ -83,37 +83,116 @@ public class PlayCommand : BaseCommand
                 return 1;
             }
 
-            if (!string.IsNullOrWhiteSpace(track) && !string.IsNullOrWhiteSpace(album))
-            {
-                var error = "Cannot specify both track and album. Choose one.";
-                if (json)
-                {
-                    OutputJson(false, error);
-                }
-                else
-                {
-                    Console.WriteLine($"{_symbols.Error} {error}");
-                }
-                return 1;
-            }
+            // Note: track + album combination is now ALLOWED for version disambiguation
 
-            // Build track list
-            List<Track> tracksToPlay;
+            // Execute based on track or album mode
+            PlaylistStreamResult result;
+            Lfm.Spotify.Models.TrackSearchResult? trackSearchResult = null;
+
             if (!string.IsNullOrWhiteSpace(track))
             {
-                // Single track mode
-                tracksToPlay = new List<Track>
+                // Track mode (with optional album for disambiguation)
+
+                // Check for multiple versions if no album specified
+                if (_spotifyStreamer is SpotifyStreamer streamer && string.IsNullOrWhiteSpace(album))
                 {
-                    new Track
+                    var trackToSearch = new Track
                     {
                         Name = track,
                         Artist = new ArtistInfo { Name = artist }
+                    };
+
+                    trackSearchResult = await streamer.SearchSpotifyTrackWithDetailsAsync(trackToSearch, null);
+
+                    // If multiple versions detected, fail and ask LLM to specify album
+                    if (trackSearchResult.HasMultipleVersions)
+                    {
+                        if (json)
+                        {
+                            OutputJsonError(
+                                "Multiple versions found - album parameter required",
+                                artist,
+                                track,
+                                null,
+                                trackSearchResult
+                            );
+                        }
+                        else
+                        {
+                            Console.WriteLine($"{_symbols.Error} Multiple album versions found for this track:");
+                            foreach (var albumVersion in trackSearchResult.AlbumVersions)
+                            {
+                                Console.WriteLine($"  - {albumVersion}");
+                            }
+                            Console.WriteLine($"\nPlease specify the album with: --album \"Album Name\"");
+                        }
+                        return 1;
                     }
-                };
+                }
+
+                // If album was specified with track, search with album filter first
+                if (_spotifyStreamer is SpotifyStreamer spotifyStreamer && !string.IsNullOrWhiteSpace(album))
+                {
+                    // Use album-aware track search
+                    var trackToSearch = new Track
+                    {
+                        Name = track,
+                        Artist = new ArtistInfo { Name = artist }
+                    };
+
+                    var searchResult = await spotifyStreamer.SearchSpotifyTrackWithDetailsAsync(trackToSearch, album);
+
+                    if (searchResult.SpotifyUri == null)
+                    {
+                        var error = $"Track not found on album: {artist} - {track} ({album})";
+                        if (json)
+                        {
+                            OutputJson(false, error, artist, track, album);
+                        }
+                        else
+                        {
+                            Console.WriteLine($"{_symbols.Error} {error}");
+                        }
+                        return 1;
+                    }
+
+                    // Play the specific track URI we found
+                    var spotifyUris = new List<string> { searchResult.SpotifyUri };
+
+                    if (queue)
+                    {
+                        result = await spotifyStreamer.QueueFromUrisAsync(spotifyUris, device);
+                    }
+                    else
+                    {
+                        result = await spotifyStreamer.PlayNowFromUrisAsync(spotifyUris, device);
+                    }
+                }
+                else
+                {
+                    // No album specified, use normal track search
+                    var tracksToPlay = new List<Track>
+                    {
+                        new Track
+                        {
+                            Name = track,
+                            Artist = new ArtistInfo { Name = artist }
+                        }
+                    };
+
+                    if (queue)
+                    {
+                        result = await _spotifyStreamer.QueueTracksAsync(tracksToPlay, device);
+                    }
+                    else
+                    {
+                        result = await _spotifyStreamer.PlayNowAsync(tracksToPlay, device);
+                    }
+                }
             }
             else
             {
-                // Album mode - use Spotify API to get album tracks
+                // Album mode - use one-shot Spotify album search
                 if (_spotifyStreamer is not SpotifyStreamer spotifyStreamer)
                 {
                     var error = "Spotify streamer not available";
@@ -128,16 +207,12 @@ public class PlayCommand : BaseCommand
                     return 1;
                 }
 
-                // Note: SearchSpotifyAlbumTracksAsync is internal to SpotifyStreamer
-                // For now, we'll need to use a workaround - create Track objects for Last.fm album lookup
-                // and rely on Spotify search to find them
+                // Search for album on Spotify and get all track URIs
+                var spotifyUris = await spotifyStreamer.SearchSpotifyAlbumTracksAsync(artist, album!);
 
-                // Get album info from Last.fm to get track listing
-                var config = await _configManager.LoadAsync();
-                var albumInfo = await _apiClient.GetAlbumInfoAsync(artist, album!, config.DefaultUsername ?? "");
-                if (albumInfo == null || albumInfo.Album.Tracks?.Track == null || !albumInfo.Album.Tracks.Track.Any())
+                if (!spotifyUris.Any())
                 {
-                    var error = $"Album not found or has no tracks: {artist} - {album}";
+                    var error = $"Album not found on Spotify: {artist} - {album}";
                     if (json)
                     {
                         OutputJson(false, error, artist, null, album);
@@ -149,25 +224,15 @@ public class PlayCommand : BaseCommand
                     return 1;
                 }
 
-                // Convert album tracks to Track objects
-                tracksToPlay = albumInfo.Album.Tracks.Track.Select(t => new Track
+                // Play or queue the album tracks
+                if (queue)
                 {
-                    Name = t.Name,
-                    Artist = new ArtistInfo { Name = artist }
-                }).ToList();
-            }
-
-            // Execute based on mode: play now (interrupt current) or queue (add to end)
-            PlaylistStreamResult result;
-            if (queue)
-            {
-                // Queue mode: add to end of current queue
-                result = await _spotifyStreamer.QueueTracksAsync(tracksToPlay, device);
-            }
-            else
-            {
-                // Play now mode: interrupt current playback and start immediately
-                result = await _spotifyStreamer.PlayNowAsync(tracksToPlay, device);
+                    result = await spotifyStreamer.QueueFromUrisAsync(spotifyUris, device);
+                }
+                else
+                {
+                    result = await spotifyStreamer.PlayNowFromUrisAsync(spotifyUris, device);
+                }
             }
 
             if (result.Success)
@@ -180,7 +245,8 @@ public class PlayCommand : BaseCommand
                         artist,
                         track,
                         album,
-                        result.TracksFound
+                        result.TracksFound,
+                        trackSearchResult
                     );
                 }
                 else
@@ -221,7 +287,7 @@ public class PlayCommand : BaseCommand
         }
     }
 
-    private void OutputJson(bool success, string message, string? artist = null, string? track = null, string? album = null, int? trackCount = null)
+    private void OutputJson(bool success, string message, string? artist = null, string? track = null, string? album = null, int? trackCount = null, Lfm.Spotify.Models.TrackSearchResult? searchResult = null)
     {
         var output = new
         {
@@ -230,7 +296,42 @@ public class PlayCommand : BaseCommand
             artist = artist,
             track = track,
             album = album,
-            trackCount = trackCount
+            trackCount = trackCount,
+            multipleVersionsDetected = searchResult?.HasMultipleVersions ?? false,
+            albumVersions = searchResult?.AlbumVersions ?? new List<string>(),
+            warning = searchResult?.HasMultipleVersions == true
+                ? "Multiple versions found across different albums. Consider specifying the 'album' parameter for precise matching. Note: Users typically don't want live or greatest hits versions unless explicitly requested."
+                : null
+        };
+
+        Console.WriteLine(JsonSerializer.Serialize(output, new JsonSerializerOptions { WriteIndented = true, DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull }));
+    }
+
+    private void OutputJsonError(string errorMessage, string? artist = null, string? track = null, string? album = null, Lfm.Spotify.Models.TrackSearchResult? searchResult = null)
+    {
+        // Identify which album is likely the studio/standard version
+        string? suggestedAlbum = null;
+        if (searchResult?.AlbumVersions != null && searchResult.AlbumVersions.Any())
+        {
+            // Heuristic: prefer albums without "Live", "Greatest", "Deluxe", "Remaster" in the name
+            suggestedAlbum = searchResult.AlbumVersions.FirstOrDefault(a =>
+                !a.Contains("Live", StringComparison.OrdinalIgnoreCase) &&
+                !a.Contains("Greatest", StringComparison.OrdinalIgnoreCase) &&
+                !a.Contains("Deluxe", StringComparison.OrdinalIgnoreCase) &&
+                !a.Contains("Remaster", StringComparison.OrdinalIgnoreCase)
+            ) ?? searchResult.AlbumVersions.First();
+        }
+
+        var output = new
+        {
+            success = false,
+            error = errorMessage,
+            artist = artist,
+            track = track,
+            album = album,
+            multipleVersionsDetected = true,
+            albumVersions = searchResult?.AlbumVersions ?? new List<string>(),
+            suggestion = $"Users typically prefer studio albums over live/greatest hits versions unless explicitly requested. The studio album appears to be '{suggestedAlbum}'. Please retry with the 'album' parameter set to your preferred version."
         };
 
         Console.WriteLine(JsonSerializer.Serialize(output, new JsonSerializerOptions { WriteIndented = true }));

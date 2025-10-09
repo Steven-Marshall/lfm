@@ -17,6 +17,7 @@ public class LfmConfig
     public string DefaultPeriod { get; set; } = "overall";
     public int DefaultLimit { get; set; } = 10;
     public int ApiThrottleMs { get; set; } = 200;
+    public int ParallelApiCalls { get; set; } = 5;
     public int NormalSearchDepth { get; set; } = 10000;
     public int DeepSearchTimeoutSeconds { get; set; } = 300;
     

@@ -27,6 +27,12 @@ public static class SpotifyCommandBuilder
         // List devices command
         var devicesCommand = new Command("devices", "List available Spotify devices");
 
+        // Activate device command
+        var activateCommand = new Command("activate-device", "Wake up / activate a Spotify device to make it ready for commands");
+        var deviceNameOption = new Option<string?>("--device", "Device name to activate (uses config default if not specified)");
+        deviceNameOption.AddAlias("-d");
+        activateCommand.AddOption(deviceNameOption);
+
         // Set up handlers
         listCommand.SetHandler(async (string? pattern) =>
         {
@@ -46,10 +52,17 @@ public static class SpotifyCommandBuilder
             await spotifyCommand.ListDevicesAsync();
         });
 
+        activateCommand.SetHandler(async (string? deviceName) =>
+        {
+            var spotifyCommand = services.GetRequiredService<SpotifyCommand>();
+            await spotifyCommand.ActivateDeviceAsync(deviceName);
+        }, deviceNameOption);
+
         // Add subcommands
         command.AddCommand(listCommand);
         command.AddCommand(deleteCommand);
         command.AddCommand(devicesCommand);
+        command.AddCommand(activateCommand);
 
         return command;
     }

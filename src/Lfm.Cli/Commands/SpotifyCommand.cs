@@ -224,4 +224,30 @@ public class SpotifyCommand
             Console.WriteLine($"{_symbols.Error} Error: {ex.Message}");
         }
     }
+
+    public async Task ActivateDeviceAsync(string? deviceName = null)
+    {
+        try
+        {
+            if (!await _spotifyStreamer.IsAvailableAsync())
+            {
+                Console.WriteLine($"{_symbols.Error} Spotify not available. Make sure you have configured Client ID and Client Secret.");
+                return;
+            }
+
+            Console.WriteLine($"{_symbols.Music} Activating Spotify device...");
+
+            var success = await _spotifyStreamer.ActivateDeviceAsync(deviceName);
+
+            if (success)
+            {
+                Console.WriteLine($"{_symbols.Success} Device is now ready to receive commands!");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error activating device");
+            Console.WriteLine($"{_symbols.Error} Error: {ex.Message}");
+        }
+    }
 }

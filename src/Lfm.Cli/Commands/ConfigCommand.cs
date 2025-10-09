@@ -69,6 +69,40 @@ public class ConfigCommand
         }
     }
 
+    public async Task SetParallelCallsAsync(int parallelCalls)
+    {
+        try
+        {
+            if (parallelCalls < 1 || parallelCalls > 10)
+            {
+                Console.WriteLine("❌ Error: Parallel calls must be between 1 and 10");
+                Console.WriteLine("   Use 1 for sequential (safe), 5 for default, 10 for maximum parallelization");
+                return;
+            }
+
+            var config = await _configManager.LoadAsync();
+            config.ParallelApiCalls = parallelCalls;
+            await _configManager.SaveAsync(config);
+
+            Console.WriteLine($"✅ Parallel API calls set to: {parallelCalls}");
+            if (parallelCalls == 1)
+            {
+                Console.WriteLine("   ℹ️  Sequential mode (no parallelization)");
+            }
+            else
+            {
+                var targetBatchTime = 1000 * (config.ApiThrottleMs / 200.0);
+                Console.WriteLine($"   ℹ️  Batches of {parallelCalls} requests, ~{targetBatchTime:F0}ms between batches");
+            }
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.ConfigSavedTo, _configManager.GetConfigPath()));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error setting parallel calls");
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.GenericError, ex.Message));
+        }
+    }
+
     public async Task ShowConfigAsync()
     {
         try
@@ -84,6 +118,7 @@ public class ConfigCommand
             Console.WriteLine($"Default Period: {config.DefaultPeriod}");
             Console.WriteLine($"Default Limit: {config.DefaultLimit}");
             Console.WriteLine($"API Throttle: {config.ApiThrottleMs}ms delay between requests");
+            Console.WriteLine($"Parallel API Calls: {config.ParallelApiCalls} ({(config.ParallelApiCalls == 1 ? "sequential" : $"batches of {config.ParallelApiCalls}")})");
             Console.WriteLine($"Normal Search Depth: {config.NormalSearchDepth:N0} items");
             Console.WriteLine($"Deep Search Timeout: {config.DeepSearchTimeoutSeconds} seconds");
             Console.WriteLine();

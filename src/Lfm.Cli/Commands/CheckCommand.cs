@@ -445,6 +445,39 @@ public class CheckCommand : BaseCommand
         var trackPlaycountSum = trackBreakdown?.Sum(t => t.UserPlaycount) ?? 0;
         var unaccountedPlays = userPlaycount - trackPlaycountSum;
 
+        // Generate interpretation guidance when there's a discrepancy
+        string? interpretationGuidance = null;
+        bool guidelinesSuggested = false;
+
+        if (trackBreakdown != null && unaccountedPlays > 0)
+        {
+            var zeroPlayTracks = trackBreakdown.Where(t => t.UserPlaycount == 0).ToList();
+            var lowPlayTracks = trackBreakdown.Where(t => t.UserPlaycount > 0 && t.UserPlaycount < 5).ToList();
+
+            if (zeroPlayTracks.Any() || lowPlayTracks.Any())
+            {
+                guidelinesSuggested = true;
+                interpretationGuidance = $"{unaccountedPlays} unaccounted plays indicate metadata mismatch. " +
+                    $"Tracks with 0 or very low play counts (like '{(zeroPlayTracks.Any() ? zeroPlayTracks.First().Name : lowPlayTracks.First().Name)}') " +
+                    $"were scrobbled under different names (featuring artists, remasters, name variants). " +
+                    $"This is NOT track skipping - users don't play albums {userPlaycount} times while avoiding specific tracks.";
+            }
+            else
+            {
+                guidelinesSuggested = true;
+                interpretationGuidance = $"{unaccountedPlays} unaccounted plays suggest metadata variations in track names.";
+            }
+        }
+        else if (trackBreakdown != null)
+        {
+            var zeroPlayTracks = trackBreakdown.Where(t => t.UserPlaycount == 0).ToList();
+            if (zeroPlayTracks.Any() && unaccountedPlays == 0)
+            {
+                guidelinesSuggested = true;
+                interpretationGuidance = $"Zero-play tracks with NO unaccounted plays means user doesn't own those tracks (deluxe edition bonus tracks, different release versions).";
+            }
+        }
+
         var output = new
         {
             success = true,
@@ -456,6 +489,8 @@ public class CheckCommand : BaseCommand
             trackPlaycountSum = trackBreakdown != null ? trackPlaycountSum : (int?)null,
             unaccountedPlays = trackBreakdown != null && unaccountedPlays > 0 ? unaccountedPlays : (int?)null,
             hasDiscrepancy = trackBreakdown != null && unaccountedPlays > 0,
+            guidelinesSuggested = guidelinesSuggested,
+            interpretationGuidance = interpretationGuidance,
             tracks = trackBreakdown?.Select(t => new
             {
                 name = t.Name,

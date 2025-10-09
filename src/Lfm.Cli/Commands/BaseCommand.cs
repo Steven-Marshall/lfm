@@ -39,8 +39,9 @@ public abstract class BaseCommand
             {
                 cachedClient.EnableTiming = true;
                 cachedClient.TimingResults.Clear();
+                cachedClient.WallClockStartTime = DateTime.UtcNow;
             }
-            
+
             // Set cache behavior based on flags
             if (noCache) cachedClient.CacheBehavior = Lfm.Core.Configuration.CacheBehavior.NoCache;
             else if (forceApi) cachedClient.CacheBehavior = Lfm.Core.Configuration.CacheBehavior.ForceApi;
@@ -371,15 +372,15 @@ public abstract class BaseCommand
         {
             Console.WriteLine($"Getting {itemTypeName} {startIndex}-{endIndex} for {user} ({period})...\n");
         }
-        
+
         var allItems = new List<T>();
         int rangeSize = endIndex - startIndex + 1;
         string totalCount = "0";
-        
+
         // Calculate which pages we need
         int startPage = ((startIndex - 1) / Lfm.Core.Configuration.SearchConstants.Api.MaxItemsPerPage) + 1;
         int endPage = ((endIndex - 1) / Lfm.Core.Configuration.SearchConstants.Api.MaxItemsPerPage) + 1;
-        
+
         for (int page = startPage; page <= endPage && allItems.Count < rangeSize; page++)
         {
             // Apply throttling before API call (except for first page)
@@ -387,40 +388,40 @@ public abstract class BaseCommand
             {
                 await ApplyApiThrottleAsync(overrideDelayMs);
             }
-            
+
             var pageResult = await apiCall(user, period, Lfm.Core.Configuration.SearchConstants.Api.MaxItemsPerPage, page);
-            
+
             if (pageResult == null)
             {
                 break;
             }
-            
+
             var pageItems = extractItems(pageResult);
             if (pageItems == null || !pageItems.Any())
             {
                 break;
             }
-            
+
             totalCount = extractTotal(pageResult);
-            
+
             // Calculate which items from this page we need
             int pageStartPosition = (page - 1) * Lfm.Core.Configuration.SearchConstants.Api.MaxItemsPerPage + 1;
-            
+
             int takeStartIndex = Math.Max(0, startIndex - pageStartPosition);
             int takeEndIndex = Math.Min(Lfm.Core.Configuration.SearchConstants.Api.MaxItemsPerPage - 1, endIndex - pageStartPosition);
             int takeCount = takeEndIndex - takeStartIndex + 1;
-            
+
             if (takeCount > 0)
             {
                 var pageSelection = pageItems
                     .Skip(takeStartIndex)
                     .Take(takeCount)
                     .ToList();
-                
+
                 allItems.AddRange(pageSelection);
             }
         }
-        
+
         var rangeItems = allItems.Take(rangeSize).ToList();
         return (rangeItems, totalCount);
     }
@@ -438,11 +439,11 @@ public abstract class BaseCommand
                 Console.WriteLine($"\n{_symbols.Timer} API Timing Results:");
                 Console.WriteLine("Method              | Cache | Time (ms) | Details");
                 Console.WriteLine("--------------------+-------+-----------+----------");
-                
+
                 var totalTime = 0L;
                 var cacheHits = 0;
                 var totalCalls = timingResults.Count;
-                
+
                 foreach (var timing in timingResults)
                 {
                     var status = timing.CacheHit ? " HIT " : "MISS";
@@ -450,12 +451,26 @@ public abstract class BaseCommand
                     totalTime += timing.ElapsedMs;
                     if (timing.CacheHit) cacheHits++;
                 }
-                
+
                 Console.WriteLine("--------------------+-------+-----------+----------");
-                Console.WriteLine($"Total: {totalCalls} calls, {cacheHits} cache hits ({(double)cacheHits/totalCalls*100:F1}%), {totalTime}ms");
-                
+
+                // Calculate wall-clock time if available
+                if (cachedClient.WallClockStartTime.HasValue)
+                {
+                    var wallClockMs = (long)(DateTime.UtcNow - cachedClient.WallClockStartTime.Value).TotalMilliseconds;
+                    var speedupRatio = totalTime > 0 ? (double)totalTime / wallClockMs : 1.0;
+                    Console.WriteLine($"Total: {totalCalls} calls, {cacheHits} cache hits ({(double)cacheHits/totalCalls*100:F1}%)");
+                    Console.WriteLine($"Wall-clock time: {wallClockMs}ms ({wallClockMs/1000.0:F2}s)");
+                    Console.WriteLine($"Sum of API times: {totalTime}ms ({speedupRatio:F2}x parallelization)");
+                }
+                else
+                {
+                    Console.WriteLine($"Total: {totalCalls} calls, {cacheHits} cache hits ({(double)cacheHits/totalCalls*100:F1}%), {totalTime}ms");
+                }
+
                 // Clear results for next command
                 timingResults.Clear();
+                cachedClient.WallClockStartTime = null;
             }
         }
     }

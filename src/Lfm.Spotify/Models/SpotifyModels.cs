@@ -61,6 +61,16 @@ public class SpotifyAlbum
     public string Name { get; set; } = string.Empty;
 }
 
+/// <summary>
+/// Result of track search with album version detection
+/// </summary>
+public class TrackSearchResult
+{
+    public string? SpotifyUri { get; set; }
+    public bool HasMultipleVersions { get; set; }
+    public List<string> AlbumVersions { get; set; } = new();
+}
+
 // Playlist Creation
 public class CreatePlaylistRequest
 {

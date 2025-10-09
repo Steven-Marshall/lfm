@@ -31,7 +31,11 @@ public static class ConfigCommandBuilder
         var setTimeoutCommand = new Command("set-deep-timeout", "Set deep search timeout in seconds");
         var timeoutArg = new Argument<int>("seconds", "Timeout for deep searches in seconds (0 = no timeout)");
         setTimeoutCommand.AddArgument(timeoutArg);
-        
+
+        var setParallelCallsCommand = new Command("set-parallel-calls", "Set number of parallel API calls for batch requests");
+        var parallelCallsArg = new Argument<int>("calls", "Number of parallel calls (1-10, default: 5)");
+        setParallelCallsCommand.AddArgument(parallelCallsArg);
+
         var setCacheExpiryCommand = new Command("set-cache-expiry", "Set cache expiry time in minutes");
         var cacheExpiryArg = new Argument<int>("minutes", "Cache expiry time in minutes (default: 10)");
         setCacheExpiryCommand.AddArgument(cacheExpiryArg);
@@ -127,7 +131,13 @@ public static class ConfigCommandBuilder
             var configCommand = services.GetRequiredService<ConfigCommand>();
             await configCommand.SetDeepTimeoutAsync(timeout);
         }, timeoutArg);
-        
+
+        setParallelCallsCommand.SetHandler(async (int parallelCalls) =>
+        {
+            var configCommand = services.GetRequiredService<ConfigCommand>();
+            await configCommand.SetParallelCallsAsync(parallelCalls);
+        }, parallelCallsArg);
+
         setCacheExpiryCommand.SetHandler(async (int expiryMinutes) =>
         {
             var configCommand = services.GetRequiredService<ConfigCommand>();
@@ -248,6 +258,7 @@ public static class ConfigCommandBuilder
         command.AddCommand(setThrottleCommand);
         command.AddCommand(setDepthCommand);
         command.AddCommand(setTimeoutCommand);
+        command.AddCommand(setParallelCallsCommand);
         command.AddCommand(setCacheExpiryCommand);
         command.AddCommand(setUnicodeCommand);
         command.AddCommand(showExcludedTagsCommand);

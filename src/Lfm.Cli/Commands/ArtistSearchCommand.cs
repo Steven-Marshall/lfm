@@ -3,6 +3,7 @@ using Lfm.Core.Models;
 using Lfm.Core.Services;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
+using System.Text.Json;
 using static Lfm.Core.Configuration.SearchConstants;
 
 namespace Lfm.Cli.Commands;
@@ -44,25 +45,12 @@ public class ArtistSearchCommand<T, TResponse> : BaseCommand
         _displayMethod = displayMethod ?? throw new ArgumentNullException(nameof(displayMethod));
     }
 
-    public async Task ExecuteAsync(string artist, int limit, bool deep = false, int? delayMs = null, int? depth = null, int? timeoutSeconds = null, bool verbose = false, bool timing = false, bool forceCache = false, bool forceApi = false, bool noCache = false, bool timer = false)
+    public async Task ExecuteAsync(string artist, int limit, bool deep = false, int? delayMs = null, int? depth = null, int? timeoutSeconds = null, bool verbose = false, bool timing = false, bool forceCache = false, bool forceApi = false, bool noCache = false, bool timer = false, bool json = false)
     {
         await ExecuteWithErrorHandlingAndTimerAsync($"artist-{_itemTypeName} command", async () =>
         {
             // Configure cache behavior and timing
-            if (_apiClient is CachedLastFmApiClient cachedClient)
-            {
-                if (timing)
-                {
-                    cachedClient.EnableTiming = true;
-                    cachedClient.TimingResults.Clear();
-                }
-                
-                // Set cache behavior based on flags
-                if (noCache) cachedClient.CacheBehavior = Lfm.Core.Configuration.CacheBehavior.NoCache;
-                else if (forceApi) cachedClient.CacheBehavior = Lfm.Core.Configuration.CacheBehavior.ForceApi;
-                else if (forceCache) cachedClient.CacheBehavior = Lfm.Core.Configuration.CacheBehavior.ForceCache;
-                else cachedClient.CacheBehavior = Lfm.Core.Configuration.CacheBehavior.Normal;
-            }
+            ConfigureCaching(timing, forceCache, forceApi, noCache);
 
             if (!await ValidateApiKeyAsync())
                 return;
@@ -143,64 +131,116 @@ public class ArtistSearchCommand<T, TResponse> : BaseCommand
             
             try
             {
-                await AnsiConsole.Status()
-                    .Spinner(Spinner.Known.Dots)
-                    .StartAsync($"Searching {_itemTypeName}...", async ctx =>
+                var batchSize = config.ParallelApiCalls;
+                var targetBatchTime = 1000.0; // Fixed 1 second between batches to respect 5 calls/sec limit
+
+                // Disable individual throttling for parallel execution
+                var wasThrottlingDisabled = false;
+                if (_apiClient is CachedLastFmApiClient cachedClientParallel)
                 {
-                    for (int page = 1; page <= maxPages && itemsSearched < maxItems; page++)
+                    wasThrottlingDisabled = cachedClientParallel.DisableThrottling;
+                    cachedClientParallel.DisableThrottling = true;
+                }
+
+                try
+                {
+                    await AnsiConsole.Status()
+                        .Spinner(Spinner.Known.Dots)
+                        .StartAsync($"Searching {_itemTypeName}...", async ctx =>
                     {
-                        // Check for cancellation (timeout or user)
-                        combinedCts.Token.ThrowIfCancellationRequested();
-                        
-                        // Apply throttling before API call (except for first page)
-                        if (page > 1)
+                        for (int batchStart = 1; batchStart <= maxPages && itemsSearched < maxItems; batchStart += batchSize)
                         {
-                            await ApplyApiThrottleAsync(delayMs);
+                            // Check for cancellation (timeout or user)
+                            combinedCts.Token.ThrowIfCancellationRequested();
+
+                            var batchStartTime = DateTime.UtcNow;
+                            var batchEnd = Math.Min(batchStart + batchSize - 1, maxPages);
+
+                            // Build batch of API calls
+                            var tasks = new List<Task<TResponse?>>();
+                            for (int page = batchStart; page <= batchEnd && itemsSearched < maxItems; page++)
+                            {
+                                tasks.Add(_apiCall(user, Defaults.TimePeriod, Api.RecommendedPageSize, page));
+                            }
+
+                            // Execute batch in parallel
+                            var results = await Task.WhenAll(tasks);
+
+                            // Process results in order
+                            for (int i = 0; i < results.Length; i++)
+                            {
+                                var result = results[i];
+
+                                if (result == null)
+                                {
+                                    continue;
+                                }
+
+                                var pageItems = _extractItems(result);
+                                if (pageItems == null || !pageItems.Any())
+                                {
+                                    continue;
+                                }
+
+                                // Respect depth limit
+                                int itemsToProcess = Math.Min(pageItems.Count, maxItems - itemsSearched);
+                                var limitedPageItems = pageItems.Take(itemsToProcess).ToList();
+
+                                itemsSearched += limitedPageItems.Count;
+
+                                // Filter items by artist for this page and add matches
+                                var pageMatches = limitedPageItems
+                                    .Where(item => _getArtistName(item).Equals(artist, StringComparison.OrdinalIgnoreCase))
+                                    .ToList();
+
+                                artistItems.AddRange(pageMatches);
+
+                                // Update status
+                                var depthInfo = maxItems == int.MaxValue ? "" : $" (depth: {itemsSearched:N0}/{maxItems:N0})";
+                                ctx.Status($"Searched {itemsSearched:N0} {_itemTypeName}, found {artistItems.Count} matches{depthInfo}...");
+
+                                // Stop if no more pages (detected by fewer items than expected)
+                                if (pageItems.Count < Api.MaxItemsPerPage)
+                                {
+                                    goto exitSearch; // Exit both inner and outer loops
+                                }
+                            }
+
+                            // Stop early if we have way more matches than needed (but not for unlimited searches)
+                            if (maxItems != int.MaxValue && artistItems.Count >= limit * ArtistSearch.EarlyTerminationMultiplier)
+                            {
+                                break;
+                            }
+
+                            // Apply smart delay for next batch (skip if this is the last batch OR if batch was cached)
+                            if (batchEnd < maxPages && itemsSearched < maxItems)
+                            {
+                                var batchTime = (DateTime.UtcNow - batchStartTime).TotalMilliseconds;
+
+                                // Skip delay if batch completed very quickly (likely all cache hits)
+                                // Threshold: 50ms (cache hits are 1-5ms, API calls are 700-1400ms)
+                                if (batchTime > 50)
+                                {
+                                    var delayNeeded = targetBatchTime - batchTime;
+
+                                    if (delayNeeded > 0)
+                                    {
+                                        await Task.Delay((int)delayNeeded, combinedCts.Token);
+                                    }
+                                }
+                            }
                         }
-                        
-                        var result = await _apiCall(user, Defaults.TimePeriod, Api.RecommendedPageSize, page);
-                        
-                        if (result == null)
-                        {
-                            break;
-                        }
-                        
-                        var pageItems = _extractItems(result);
-                        if (pageItems == null || !pageItems.Any())
-                        {
-                            break;
-                        }
-                        
-                        // Respect depth limit
-                        int itemsToProcess = Math.Min(pageItems.Count, maxItems - itemsSearched);
-                        var limitedPageItems = pageItems.Take(itemsToProcess).ToList();
-                        
-                        itemsSearched += limitedPageItems.Count;
-                        
-                        // Filter items by artist for this page and add matches
-                        var pageMatches = limitedPageItems
-                            .Where(item => _getArtistName(item).Equals(artist, StringComparison.OrdinalIgnoreCase))
-                            .ToList();
-                        
-                        artistItems.AddRange(pageMatches);
-                        
-                        // Update status
-                        var depthInfo = maxItems == int.MaxValue ? "" : $" (depth: {itemsSearched:N0}/{maxItems:N0})";
-                        ctx.Status($"Searched {itemsSearched:N0} {_itemTypeName}, found {artistItems.Count} matches{depthInfo}...");
-                        
-                        // Stop if we have enough matches or no more pages
-                        if (pageItems.Count < Api.MaxItemsPerPage)
-                        {
-                            break;
-                        }
-                        
-                        // Stop early if we have way more matches than needed (but not for unlimited searches)
-                        if (maxItems != int.MaxValue && artistItems.Count >= limit * ArtistSearch.EarlyTerminationMultiplier)
-                        {
-                            break;
-                        }
+                        exitSearch:;
+                    });
+                }
+                finally
+                {
+                    // Restore original throttling state
+                    if (_apiClient is CachedLastFmApiClient cachedClientRestore)
+                    {
+                        cachedClientRestore.DisableThrottling = wasThrottlingDisabled;
                     }
-                });
+                }
             
                 // Take only the requested limit, preserving the original order (highest play counts first)
                 artistItems = artistItems.Take(limit).ToList();
@@ -212,15 +252,30 @@ public class ArtistSearchCommand<T, TResponse> : BaseCommand
                 
                 if (!artistItems.Any())
                 {
-                    Console.WriteLine(ErrorMessages.Format(ErrorMessages.NoArtistItemsFound, _itemTypeName, artist));
-                    Console.WriteLine(ErrorMessages.ArtistSearchSuggestion);
+                    if (json)
+                    {
+                        Console.WriteLine("[]");
+                    }
+                    else
+                    {
+                        Console.WriteLine(ErrorMessages.Format(ErrorMessages.NoArtistItemsFound, _itemTypeName, artist));
+                        Console.WriteLine(ErrorMessages.ArtistSearchSuggestion);
+                    }
                     return;
                 }
 
-                _displayMethod(artistItems, 1);
-                if (verbose)
+                if (json)
                 {
-                    Console.WriteLine($"\nShowing your top {artistItems.Count} {_itemTypeName} by: {artist}");
+                    var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
+                    Console.WriteLine(JsonSerializer.Serialize(artistItems, jsonOptions));
+                }
+                else
+                {
+                    _displayMethod(artistItems, 1);
+                    if (verbose)
+                    {
+                        Console.WriteLine($"\nShowing your top {artistItems.Count} {_itemTypeName} by: {artist}");
+                    }
                 }
             }
             catch (OperationCanceledException)

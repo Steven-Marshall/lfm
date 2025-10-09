@@ -36,7 +36,11 @@ public static class ArtistTracksCommandBuilder
         noCacheOption.AddAlias("-nc");
 
         var timerOption = StandardCommandOptions.CreateTimerOption();
-        
+
+        var jsonOption = new Option<bool>(
+            aliases: new[] { "--json", "-j" },
+            description: "Output in JSON format (for MCP integration)");
+
         var artistArg = new Argument<string>("artist", "Artist name");
 
         var command = new Command("artist-tracks", "Get your most played tracks by a specific artist from your listening history")
@@ -52,7 +56,8 @@ public static class ArtistTracksCommandBuilder
             forceCacheOption,
             forceApiOption,
             noCacheOption,
-            timerOption
+            timerOption,
+            jsonOption
         };
 
         command.SetHandler(async (context) =>
@@ -69,9 +74,10 @@ public static class ArtistTracksCommandBuilder
             var forceApi = context.ParseResult.GetValueForOption(forceApiOption);
             var noCache = context.ParseResult.GetValueForOption(noCacheOption);
             var timer = context.ParseResult.GetValueForOption(timerOption);
-            
+            var json = context.ParseResult.GetValueForOption(jsonOption);
+
             var artistTracksCommand = services.GetRequiredService<ArtistSearchCommand<Track, TopTracks>>();
-            await artistTracksCommand.ExecuteAsync(artist, limit, deep, delay, depth, timeout, verbose, timing, forceCache, forceApi, noCache, timer);
+            await artistTracksCommand.ExecuteAsync(artist, limit, deep, delay, depth, timeout, verbose, timing, forceCache, forceApi, noCache, timer, json);
         });
 
         return command;

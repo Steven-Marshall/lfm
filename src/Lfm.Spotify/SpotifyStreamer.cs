@@ -228,6 +228,134 @@ public class SpotifyStreamer : IPlaylistStreamer
         }
     }
 
+    /// <summary>
+    /// Play Spotify URIs immediately (for album playback)
+    /// </summary>
+    public async Task<PlaylistStreamResult> PlayNowFromUrisAsync(List<string> spotifyUris, string? device = null)
+    {
+        var result = new PlaylistStreamResult();
+
+        try
+        {
+            await EnsureValidAccessTokenAsync();
+
+            Console.WriteLine($"🎵 Playing {spotifyUris.Count} track(s) on Spotify...");
+
+            if (!spotifyUris.Any())
+            {
+                result.Success = false;
+                result.Message = "No tracks to play";
+                return result;
+            }
+
+            // Start playing first track immediately
+            var startSuccess = await StartPlaybackAsync(spotifyUris.First(), device);
+            if (!startSuccess)
+            {
+                result.Success = false;
+                result.Message = "Failed to start playback";
+                return result;
+            }
+
+            Console.WriteLine($"▶️  Now playing album");
+            result.TracksFound++;
+            result.TracksProcessed++;
+
+            // Queue remaining tracks
+            foreach (var uri in spotifyUris.Skip(1))
+            {
+                var queueSuccess = await AddToQueueAsync(uri);
+                if (queueSuccess)
+                {
+                    result.TracksFound++;
+                    Console.WriteLine($"✅ Queued track");
+                }
+                else
+                {
+                    Console.WriteLine($"❌ Failed to queue track");
+                }
+
+                result.TracksProcessed++;
+
+                // Rate limiting
+                if (_config.RateLimitDelayMs > 0)
+                {
+                    await Task.Delay(_config.RateLimitDelayMs);
+                }
+            }
+
+            result.Success = result.TracksFound > 0;
+            result.Message = $"Now playing {result.TracksFound} tracks from album";
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            result.Success = false;
+            result.Message = $"Error playing album: {ex.Message}";
+            return result;
+        }
+    }
+
+    /// <summary>
+    /// Queue Spotify URIs (for album playback)
+    /// </summary>
+    public async Task<PlaylistStreamResult> QueueFromUrisAsync(List<string> spotifyUris, string? device = null)
+    {
+        var result = new PlaylistStreamResult();
+
+        try
+        {
+            await EnsureValidAccessTokenAsync();
+
+            Console.WriteLine($"📋 Queueing {spotifyUris.Count} track(s) on Spotify...");
+
+            if (!spotifyUris.Any())
+            {
+                result.Success = false;
+                result.Message = "No tracks to queue";
+                return result;
+            }
+
+            // Ensure device is active
+            await EnsurePlaybackActiveAsync(device);
+
+            // Queue all tracks
+            foreach (var uri in spotifyUris)
+            {
+                var queueSuccess = await AddToQueueAsync(uri);
+                if (queueSuccess)
+                {
+                    result.TracksFound++;
+                    Console.WriteLine($"✅ Queued track");
+                }
+                else
+                {
+                    Console.WriteLine($"❌ Failed to queue track");
+                }
+
+                result.TracksProcessed++;
+
+                // Rate limiting
+                if (_config.RateLimitDelayMs > 0)
+                {
+                    await Task.Delay(_config.RateLimitDelayMs);
+                }
+            }
+
+            result.Success = result.TracksFound > 0;
+            result.Message = $"Queued {result.TracksFound} tracks from album";
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            result.Success = false;
+            result.Message = $"Error queueing album: {ex.Message}";
+            return result;
+        }
+    }
+
     public async Task<List<PlaylistInfo>> GetUserPlaylistsAsync()
     {
         var playlists = new List<PlaylistInfo>();
@@ -529,13 +657,31 @@ public class SpotifyStreamer : IPlaylistStreamer
         }
     }
 
-    private async Task<string?> SearchSpotifyTrackAsync(Track track)
+    private async Task<string?> SearchSpotifyTrackAsync(Track track, string? albumName = null)
     {
+        var result = await SearchSpotifyTrackWithDetailsAsync(track, albumName);
+        return result.SpotifyUri;
+    }
+
+    /// <summary>
+    /// Search for track with multiple version detection
+    /// </summary>
+    public async Task<TrackSearchResult> SearchSpotifyTrackWithDetailsAsync(Track track, string? albumName = null)
+    {
+        var result = new TrackSearchResult();
         _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
 
-        // Try precise search first
-        var query = HttpUtility.UrlEncode($"artist:\"{track.Artist.Name}\" track:\"{track.Name}\"");
-        var searchUrl = $"https://api.spotify.com/v1/search?q={query}&type=track&limit=1";
+        // Try precise search first, with album context if provided
+        var queryBuilder = $"artist:\"{track.Artist.Name}\" track:\"{track.Name}\"";
+        if (!string.IsNullOrWhiteSpace(albumName))
+        {
+            queryBuilder += $" album:\"{albumName}\"";
+        }
+        var query = HttpUtility.UrlEncode(queryBuilder);
+
+        // Get multiple results to detect versions (limit=5 instead of limit=1)
+        var limit = string.IsNullOrWhiteSpace(albumName) ? 5 : 1;
+        var searchUrl = $"https://api.spotify.com/v1/search?q={query}&type=track&limit={limit}";
 
         var response = await _httpClient.GetAsync(searchUrl);
         var json = await response.Content.ReadAsStringAsync();
@@ -543,11 +689,30 @@ public class SpotifyStreamer : IPlaylistStreamer
         if (response.IsSuccessStatusCode)
         {
             var searchResponse = JsonSerializer.Deserialize<SpotifySearchResponse>(json);
-            var firstTrack = searchResponse?.Tracks?.Items.FirstOrDefault();
+            var tracks = searchResponse?.Tracks?.Items;
 
-            if (firstTrack != null)
+            if (tracks != null && tracks.Any())
             {
-                return firstTrack.Uri;
+                // Return first track URI
+                result.SpotifyUri = tracks.First().Uri;
+
+                // Check for multiple album versions (only if no album was specified)
+                if (string.IsNullOrWhiteSpace(albumName) && tracks.Count > 1)
+                {
+                    var uniqueAlbums = tracks
+                        .Where(t => t.Album != null)
+                        .Select(t => t.Album!.Name)
+                        .Distinct()
+                        .ToList();
+
+                    if (uniqueAlbums.Count > 1)
+                    {
+                        result.HasMultipleVersions = true;
+                        result.AlbumVersions = uniqueAlbums;
+                    }
+                }
+
+                return result;
             }
         }
 
@@ -555,7 +720,7 @@ public class SpotifyStreamer : IPlaylistStreamer
         if (_config.FallbackToLooseSearch)
         {
             query = HttpUtility.UrlEncode($"{track.Artist.Name} {track.Name}");
-            searchUrl = $"https://api.spotify.com/v1/search?q={query}&type=track&limit=1";
+            searchUrl = $"https://api.spotify.com/v1/search?q={query}&type=track&limit={limit}";
 
             response = await _httpClient.GetAsync(searchUrl);
             json = await response.Content.ReadAsStringAsync();
@@ -563,11 +728,32 @@ public class SpotifyStreamer : IPlaylistStreamer
             if (response.IsSuccessStatusCode)
             {
                 var searchResponse = JsonSerializer.Deserialize<SpotifySearchResponse>(json);
-                return searchResponse?.Tracks?.Items.FirstOrDefault()?.Uri;
+                var tracks = searchResponse?.Tracks?.Items;
+
+                if (tracks != null && tracks.Any())
+                {
+                    result.SpotifyUri = tracks.First().Uri;
+
+                    // Check for multiple album versions
+                    if (string.IsNullOrWhiteSpace(albumName) && tracks.Count > 1)
+                    {
+                        var uniqueAlbums = tracks
+                            .Where(t => t.Album != null)
+                            .Select(t => t.Album!.Name)
+                            .Distinct()
+                            .ToList();
+
+                        if (uniqueAlbums.Count > 1)
+                        {
+                            result.HasMultipleVersions = true;
+                            result.AlbumVersions = uniqueAlbums;
+                        }
+                    }
+                }
             }
         }
 
-        return null;
+        return result;
     }
 
     /// <summary>
@@ -904,6 +1090,106 @@ public class SpotifyStreamer : IPlaylistStreamer
         catch (Exception ex)
         {
             Console.WriteLine($"⚠️  Error starting playback: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Activates/wakes up a Spotify device by transferring playback to it.
+    /// This makes the device ready to receive commands without starting music.
+    /// </summary>
+    public async Task<bool> ActivateDeviceAsync(string? deviceName = null)
+    {
+        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
+
+        try
+        {
+            // Get available devices
+            var devices = await GetDevicesAsync();
+            if (!devices.Any())
+            {
+                Console.WriteLine("⚠️  No Spotify devices found. Please open Spotify on a device first.");
+                return false;
+            }
+
+            // Device selection priority: CLI parameter > config default > active device > smart prioritization
+            SpotifyDevice? targetDevice = null;
+
+            // 1. Check if specific device was requested
+            if (!string.IsNullOrEmpty(deviceName))
+            {
+                targetDevice = devices.FirstOrDefault(d =>
+                    d.Name.Equals(deviceName, StringComparison.OrdinalIgnoreCase));
+
+                if (targetDevice == null)
+                {
+                    Console.WriteLine($"⚠️  Device '{deviceName}' not found.");
+                    Console.WriteLine($"Available devices: {string.Join(", ", devices.Select(d => d.Name))}");
+                    return false;
+                }
+            }
+
+            // 2. Check config default device
+            if (targetDevice == null && !string.IsNullOrEmpty(_config.DefaultDevice))
+            {
+                targetDevice = devices.FirstOrDefault(d =>
+                    d.Name.Equals(_config.DefaultDevice, StringComparison.OrdinalIgnoreCase));
+
+                if (targetDevice != null)
+                {
+                    Console.WriteLine($"📱 Using config default device: {targetDevice.Name}");
+                }
+            }
+
+            // 3. Check for currently active device
+            if (targetDevice == null)
+            {
+                targetDevice = devices.FirstOrDefault(d => d.IsActive);
+            }
+
+            // 4. Smart prioritization: Computer > Smartphone > Speaker > other
+            if (targetDevice == null)
+            {
+                targetDevice = devices.FirstOrDefault(d => d.Type.Equals("Computer", StringComparison.OrdinalIgnoreCase))
+                            ?? devices.FirstOrDefault(d => d.Type.Equals("Smartphone", StringComparison.OrdinalIgnoreCase))
+                            ?? devices.FirstOrDefault(d => d.Type.Equals("Speaker", StringComparison.OrdinalIgnoreCase))
+                            ?? devices.First();
+            }
+
+            // If device is already active, no need to transfer
+            if (targetDevice.IsActive)
+            {
+                Console.WriteLine($"✅ Device '{targetDevice.Name}' is already active");
+                return true;
+            }
+
+            // Transfer playback to the device (activates it without playing)
+            var transferRequest = new
+            {
+                device_ids = new[] { targetDevice.Id },
+                play = false  // Don't start playing, just activate
+            };
+
+            var json = JsonSerializer.Serialize(transferRequest);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var response = await _httpClient.PutAsync("https://api.spotify.com/v1/me/player", content);
+
+            if (response.IsSuccessStatusCode || response.StatusCode == System.Net.HttpStatusCode.NoContent)
+            {
+                Console.WriteLine($"✅ Activated device '{targetDevice.Name}'");
+                return true;
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"⚠️  Failed to activate device: {response.StatusCode} - {errorContent}");
+                return false;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"⚠️  Error activating device: {ex.Message}");
             return false;
         }
     }

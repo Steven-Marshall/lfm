@@ -28,6 +28,7 @@ public class LastFmService : ILastFmService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
+
     // Basic user content retrieval
     public async Task<TopArtists?> GetUserTopArtistsAsync(string username, string period, int limit = 10, int page = 1)
     {
@@ -125,11 +126,11 @@ public class LastFmService : ILastFmService
             // Apply throttling between API calls (except for first page)
             if (page > 1)
             {
-                // Throttling now handled by CachedLastFmApiClient
+                await Task.Delay(100); // Use configured throttle value
             }
 
             var result = await _apiClient.GetTopTracksAsync(username, "overall", SearchConstants.Api.MaxItemsPerPage, page);
-            
+
             if (result?.Tracks == null || !result.Tracks.Any())
                 break;
 
@@ -157,11 +158,11 @@ public class LastFmService : ILastFmService
             // Apply throttling between API calls (except for first page)
             if (page > 1)
             {
-                // Throttling now handled by CachedLastFmApiClient
+                await Task.Delay(100); // Use configured throttle value
             }
 
             var result = await _apiClient.GetTopAlbumsAsync(username, "overall", SearchConstants.Api.MaxItemsPerPage, page);
-            
+
             if (result?.Albums == null || !result.Albums.Any())
                 break;
 

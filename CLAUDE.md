@@ -323,6 +323,49 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
 - **Build Status**: ✅ Clean build, 0 errors, comprehensive timing diagnostics available
 - **Ready For**: User testing of album check features and MCP integration
 
+### Session: 2025-10-09 (Spotify Album Disambiguation & Parallel API Calls)
+- **Status**: ✅ COMPLETE - Album version disambiguation and parallel API processing for deep searches
+- **Major Features Implemented**:
+  - **Album Version Disambiguation**: Detect and handle tracks that exist on multiple albums
+  - **Parallel API Processing**: Batch parallel API calls for artist-tracks/artist-albums with intelligent throttling
+  - **MCP Guidelines Refactoring**: Simplified from quiz-based to trust-based initialization system
+  - **Album Check JSON Enhancements**: Added `guidelinesSuggested` and `interpretationGuidance` fields
+- **Key Technical Components**:
+  - `PlayCommand.cs`: Allow track + album parameter combination for version disambiguation
+  - `SpotifyStreamer.cs`:
+    - `SearchSpotifyTrackWithDetailsAsync`: Returns `TrackSearchResult` with version detection
+    - `PlayNowFromUrisAsync`: Direct URI playback for albums
+    - `QueueFromUrisAsync`: Direct URI queueing for albums
+    - `SearchSpotifyAlbumTracksAsync`: One-shot album search returning all track URIs
+  - `SpotifyModels.cs`: New `TrackSearchResult` model with `HasMultipleVersions` and `AlbumVersions` list
+  - `ArtistSearchCommand.cs`: Parallel batch processing using `Task.WhenAll` with rate limiting
+  - `CachedLastFmApiClient.cs`: `DisableThrottling` property for parallel batch mode
+  - `LfmConfig.cs`: New `ParallelApiCalls` setting (default: 5 concurrent calls)
+  - `CheckCommand.cs`: Enhanced JSON output with interpretation guidance
+- **Album Version Disambiguation**:
+  - **Problem**: Tracks like "Live and Let Die" exist on studio albums, greatest hits, live albums
+  - **Solution**: Detect multiple versions, return error listing all album options
+  - **User preference**: Studio albums preferred over live/greatest hits unless explicitly requested
+  - **MCP integration**: LLM can specify album parameter when multiple versions detected
+  - **Example**: "Hey Jude" appears on "Hey Jude", "1967-1970", "Past Masters" - user chooses which
+- **Parallel API Calls**:
+  - **Use case**: Deep searches (artist-tracks, artist-albums) that page through 1000+ pages
+  - **Implementation**: Batch of 5 API calls executed concurrently using `Task.WhenAll`
+  - **Rate limiting**: 1 second between batches to respect Last.fm's 5 req/sec limit
+  - **Throttling**: Individual call throttling disabled during parallel execution
+  - **Batch timing**: Dynamic delay calculation ensures compliance with rate limits
+  - **Performance**: Significant speedup for deep searches without violating API limits
+- **MCP Guidelines Refactoring** (see separate commit):
+  - Replaced quiz/password system with trust-based `lfm_init`
+  - Guidelines reduced from 308 to 176 lines
+  - Added user preferences section and response style guidance
+  - Proven effective through Claudette testing (Pink Floyd, Taylor Swift examples)
+- **Configuration**:
+  - `ParallelApiCalls`: Number of concurrent API calls in batch mode (default: 5)
+  - Compatible with existing cache and throttle settings
+- **Build Status**: ✅ Clean build, all features tested and working
+- **Ready For**: Production use with MCP integration
+
 ## Build/Test Commands
 
 ⚠️ **CRITICAL**: Always use `publish/` directory structure per DIRECTORY_STANDARDS.md ⚠️
