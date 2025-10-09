@@ -207,6 +207,11 @@ function wrapWithAutoGuidelines(toolResponse) {
   };
 }
 
+// Session state tracking (persists for duration of server process)
+const sessionState = {
+  initialized: false
+};
+
 // Create MCP server
 const server = new Server(
   {
@@ -226,7 +231,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     tools: [
       {
         name: 'lfm_tracks',
-        description: 'Get top tracks from Last.fm (information only, use lfm_toptracks for playlists)',
+        description: `Get top tracks from Last.fm (information only, use lfm_toptracks for playlists).
+
+TEMPORAL PARAMETER SELECTION:
+- User mentions YEAR (2023, 2024, 2025) → USE year:"2025" NOT period
+- User says "recently"/"lately" → period:"1month"
+- User says "this week" → period:"7day"
+- User says "overall"/"all time" → period:"overall"
+- User says "since June" → from:"2025-06-01"
+- User says "January to March" → from:"2025-01-01", to:"2025-03-31"`,
         inputSchema: {
           type: 'object',
           properties: {
@@ -258,7 +271,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'lfm_artists',
-        description: 'Get top artists from Last.fm',
+        description: `Get top artists from Last.fm.
+
+TEMPORAL PARAMETER SELECTION:
+- User mentions YEAR (2023, 2024, 2025) → USE year:"2025" NOT period
+- User says "recently"/"lately" → period:"1month"
+- User says "this week" → period:"7day"
+- User says "overall"/"all time" → period:"overall"
+- User says "since June" → from:"2025-06-01"
+- User says "January to March" → from:"2025-01-01", to:"2025-03-31"`,
         inputSchema: {
           type: 'object',
           properties: {
@@ -290,7 +311,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'lfm_albums',
-        description: 'Get top albums from Last.fm',
+        description: `Get top albums from Last.fm.
+
+TEMPORAL PARAMETER SELECTION:
+- User mentions YEAR (2023, 2024, 2025) → USE year:"2025" NOT period
+- User says "recently"/"lately" → period:"1month"
+- User says "this week" → period:"7day"
+- User says "overall"/"all time" → period:"overall"
+- User says "since June" → from:"2025-06-01"
+- User says "January to March" → from:"2025-01-01", to:"2025-03-31"`,
         inputSchema: {
           type: 'object',
           properties: {
@@ -552,7 +581,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'lfm_check',
-        description: 'Check if user has listened to an artist, track, or album with optional track-level breakdown',
+        description: `Check if user has listened to an artist, track, or album with optional track-level breakdown.
+
+When using verbose mode with albums, the response includes:
+- "guidelinesSuggested": Indicates whether reading guidelines would improve interpretation
+- "interpretationGuidance": Brief explanation of what the data means
+- "hasDiscrepancy": Boolean flag indicating metadata issues
+- "unaccountedPlays": Number of plays that don't match track lookups
+
+Quick reference:
+- unaccountedPlays > 0 → metadata mismatch (track scrobbled under different name)
+- unaccountedPlays = 0 + zero play tracks → user doesn't own those tracks (deluxe editions, bonus tracks)`,
         inputSchema: {
           type: 'object',
           properties: {
@@ -574,7 +613,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             verbose: {
               type: 'boolean',
-              description: 'Show additional information. For albums: includes per-track play counts and listening patterns',
+              description: 'Show additional information. For albums: includes per-track play counts and listening patterns.',
               default: false
             }
           },
@@ -686,23 +725,86 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         }
       },
       {
-        name: 'lfm_guidelines',
-        description: 'Get usage guidelines and best practices for Last.fm MCP tools',
+        name: 'lfm_artist_tracks',
+        description: 'Search through your listening history to find all tracks by a specific artist with play counts (deep search)',
         inputSchema: {
           type: 'object',
           properties: {
-            section: {
+            artist: {
               type: 'string',
-              description: 'Specific guideline section to retrieve',
-              enum: ['all', 'temporal', 'workflows', 'patterns', 'troubleshooting', 'practices'],
-              default: 'all'
+              description: 'Artist name to search for'
+            },
+            limit: {
+              type: 'number',
+              description: 'Number of tracks to return (1-100)',
+              default: 10,
+              minimum: 1,
+              maximum: 100
+            },
+            deep: {
+              type: 'boolean',
+              description: 'Search through entire listening history (unlimited depth)',
+              default: false
+            },
+            depth: {
+              type: 'number',
+              description: 'Maximum number of items to search through (0 for unlimited)'
             }
-          }
+          },
+          required: ['artist']
+        }
+      },
+      {
+        name: 'lfm_artist_albums',
+        description: 'Search through your listening history to find all albums by a specific artist with play counts (deep search)',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            artist: {
+              type: 'string',
+              description: 'Artist name to search for'
+            },
+            limit: {
+              type: 'number',
+              description: 'Number of albums to return (1-100)',
+              default: 10,
+              minimum: 1,
+              maximum: 100
+            },
+            deep: {
+              type: 'boolean',
+              description: 'Search through entire listening history (unlimited depth)',
+              default: false
+            },
+            depth: {
+              type: 'number',
+              description: 'Maximum number of items to search through (0 for unlimited)'
+            }
+          },
+          required: ['artist']
+        }
+      },
+      {
+        name: 'lfm_init',
+        description: `Initialize your Last.fm session by reading guidelines and user preferences.
+
+⚠️ CALL THIS FIRST at the start of each session before using other Last.fm tools.
+
+This loads essential information including:
+- User music preferences (artists to avoid, listening style, genre preferences)
+- Response style guidance (be a DJ buddy, not a data analyst)
+- Technical guidelines (metadata interpretation, temporal parameters, tool selection)
+- Best practices for music discovery and recommendations
+
+Reading these guidelines will help you provide accurate interpretations, avoid bad recommendations, and deliver a better music discovery experience.`,
+        inputSchema: {
+          type: 'object',
+          properties: {}
         }
       },
       {
         name: 'lfm_play_now',
-        description: 'Play a track or album immediately on Spotify',
+        description: 'Play a track or album immediately on Spotify. IMPORTANT: If multiple album versions exist for a track (e.g., studio, live, greatest hits), you MUST specify the album parameter. Users typically prefer studio albums over live/greatest hits versions unless explicitly requested.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -716,7 +818,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             album: {
               type: 'string',
-              description: 'Album name (required if track not specified)'
+              description: 'Album name (required if track not specified, or when multiple versions exist)'
             },
             device: {
               type: 'string',
@@ -728,7 +830,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'lfm_queue',
-        description: 'Add a track or album to the end of the Spotify queue',
+        description: 'Add a track or album to the end of the Spotify queue. IMPORTANT: If multiple album versions exist for a track (e.g., studio, live, greatest hits), you MUST specify the album parameter. Users typically prefer studio albums over live/greatest hits versions unless explicitly requested.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -742,7 +844,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             album: {
               type: 'string',
-              description: 'Album name (required if track not specified)'
+              description: 'Album name (required if track not specified, or when multiple versions exist)'
             },
             device: {
               type: 'string',
@@ -750,6 +852,19 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             }
           },
           required: ['artist']
+        }
+      },
+      {
+        name: 'lfm_activate_device',
+        description: 'Wake up / activate a Spotify device to make it ready to receive commands (solves "no active device" issues)',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            device: {
+              type: 'string',
+              description: 'Device name to activate (uses config default if not specified)'
+            }
+          }
         }
       }
     ]
@@ -1514,16 +1629,33 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   }
 
-  if (name === 'lfm_guidelines') {
+  if (name === 'lfm_artist_tracks') {
     try {
-      const section = args.section || 'all';
-      const guidelines = extractSection(guidelinesContent, section);
+      const artist = args.artist;
+      const limit = args.limit || 10;
+      const deep = args.deep || false;
+      const depth = args.depth;
+
+      if (!artist) {
+        throw new Error('Artist name is required');
+      }
+
+      // Build command arguments
+      const cmdArgs = ['artist-tracks', artist, '--limit', limit.toString(), '--json'];
+
+      if (deep) {
+        cmdArgs.push('--deep');
+      } else if (depth !== undefined) {
+        cmdArgs.push('--depth', depth.toString());
+      }
+
+      const output = await executeLfmCommand(cmdArgs);
 
       return {
         content: [
           {
             type: 'text',
-            text: guidelines
+            text: output
           }
         ]
       };
@@ -1532,7 +1664,97 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         content: [
           {
             type: 'text',
-            text: `Error retrieving guidelines: ${error.message}`
+            text: JSON.stringify({
+              success: false,
+              error: error.message
+            }, null, 2)
+          }
+        ],
+        isError: true
+      };
+    }
+  }
+
+  if (name === 'lfm_artist_albums') {
+    try {
+      const artist = args.artist;
+      const limit = args.limit || 10;
+      const deep = args.deep || false;
+      const depth = args.depth;
+
+      if (!artist) {
+        throw new Error('Artist name is required');
+      }
+
+      // Build command arguments
+      const cmdArgs = ['artist-albums', artist, '--limit', limit.toString(), '--json'];
+
+      if (deep) {
+        cmdArgs.push('--deep');
+      } else if (depth !== undefined) {
+        cmdArgs.push('--depth', depth.toString());
+      }
+
+      const output = await executeLfmCommand(cmdArgs);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: output
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: false,
+              error: error.message
+            }, null, 2)
+          }
+        ],
+        isError: true
+      };
+    }
+  }
+
+  if (name === 'lfm_init') {
+    try {
+      // Mark session as initialized
+      sessionState.initialized = true;
+
+      // Return friendly success message + guidelines
+      const successMessage = `✅ Last.fm MCP service initialized successfully!
+
+I've loaded the guidelines and I'm ready to help you with:
+
+- Music discovery - Find new artists and tracks based on your listening history
+- Listening stats - Check your top tracks, artists, and albums
+- Playlist creation - Generate playlists from your top tracks or recommendations
+- Spotify playback - Queue or play music directly
+- History lookup - Check if you've listened to specific artists/tracks/albums
+
+---
+
+${guidelinesContent}`;
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: successMessage
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Error initializing session: ${error.message}`
           }
         ],
         isError: true
@@ -1555,9 +1777,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         throw new Error('Either track or album must be specified');
       }
 
-      if (track && album) {
-        throw new Error('Cannot specify both track and album');
-      }
+      // Note: track + album combination is now ALLOWED for version disambiguation
 
       // Build command arguments
       const cmdArgs = ['play', artist, '--json'];
@@ -1616,9 +1836,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         throw new Error('Either track or album must be specified');
       }
 
-      if (track && album) {
-        throw new Error('Cannot specify both track and album');
-      }
+      // Note: track + album combination is now ALLOWED for version disambiguation
 
       // Build command arguments
       const cmdArgs = ['play', artist, '--queue', '--json'];
@@ -1643,6 +1861,43 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           {
             type: 'text',
             text: JSON.stringify(result, null, 2)
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: false,
+              error: error.message
+            }, null, 2)
+          }
+        ],
+        isError: true
+      };
+    }
+  }
+
+  if (name === 'lfm_activate_device') {
+    try {
+      const device = args.device;
+
+      // Build command arguments
+      const cmdArgs = ['spotify', 'activate-device'];
+
+      if (device) {
+        cmdArgs.push('--device', device);
+      }
+
+      const output = await executeLfmCommand(cmdArgs);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: output || 'Device activated successfully'
           }
         ]
       };
