@@ -221,3 +221,34 @@ public class SpotifyAlbumTrack
     [JsonPropertyName("name")]
     public string Name { get; set; } = string.Empty;
 }
+
+// Playback State Response
+public class SpotifyPlaybackState
+{
+    [JsonPropertyName("device")]
+    public SpotifyDevice? Device { get; set; }
+
+    [JsonPropertyName("progress_ms")]
+    public int ProgressMs { get; set; }
+
+    [JsonPropertyName("is_playing")]
+    public bool IsPlaying { get; set; }
+
+    [JsonPropertyName("item")]
+    public SpotifyPlaybackTrack? Item { get; set; }
+}
+
+public class SpotifyPlaybackTrack
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("artists")]
+    public List<SpotifyArtist>? Artists { get; set; }
+
+    [JsonPropertyName("album")]
+    public SpotifyAlbum? Album { get; set; }
+
+    [JsonPropertyName("duration_ms")]
+    public int DurationMs { get; set; }
+}

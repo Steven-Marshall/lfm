@@ -1,5 +1,6 @@
 using System.CommandLine;
 using Lfm.Cli.Commands;
+using Lfm.Spotify;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Lfm.Cli.CommandBuilders;
@@ -33,6 +34,24 @@ public static class SpotifyCommandBuilder
         deviceNameOption.AddAlias("-d");
         activateCommand.AddOption(deviceNameOption);
 
+        // Current track command
+        var currentCommand = new Command("current", "Get currently playing track");
+        var jsonOption = new Option<bool>("--json", "Output as JSON");
+        jsonOption.AddAlias("-j");
+        currentCommand.AddOption(jsonOption);
+
+        // Pause command
+        var pauseCommand = new Command("pause", "Pause current playback");
+
+        // Resume command
+        var resumeCommand = new Command("resume", "Resume paused playback");
+
+        // Skip command
+        var skipCommand = new Command("skip", "Skip to next or previous track");
+        var previousOption = new Option<bool>("--previous", "Skip to previous track instead of next");
+        previousOption.AddAlias("-p");
+        skipCommand.AddOption(previousOption);
+
         // Set up handlers
         listCommand.SetHandler(async (string? pattern) =>
         {
@@ -58,11 +77,40 @@ public static class SpotifyCommandBuilder
             await spotifyCommand.ActivateDeviceAsync(deviceName);
         }, deviceNameOption);
 
+        currentCommand.SetHandler(async (bool json) =>
+        {
+            var spotifyCommand = services.GetRequiredService<SpotifyCommand>();
+            await spotifyCommand.GetCurrentTrackAsync(json);
+        }, jsonOption);
+
+        pauseCommand.SetHandler(async () =>
+        {
+            var spotifyCommand = services.GetRequiredService<SpotifyCommand>();
+            await spotifyCommand.PauseAsync();
+        });
+
+        resumeCommand.SetHandler(async () =>
+        {
+            var spotifyCommand = services.GetRequiredService<SpotifyCommand>();
+            await spotifyCommand.ResumeAsync();
+        });
+
+        skipCommand.SetHandler(async (bool previous) =>
+        {
+            var spotifyCommand = services.GetRequiredService<SpotifyCommand>();
+            var direction = previous ? SkipDirection.Previous : SkipDirection.Next;
+            await spotifyCommand.SkipAsync(direction);
+        }, previousOption);
+
         // Add subcommands
         command.AddCommand(listCommand);
         command.AddCommand(deleteCommand);
         command.AddCommand(devicesCommand);
         command.AddCommand(activateCommand);
+        command.AddCommand(currentCommand);
+        command.AddCommand(pauseCommand);
+        command.AddCommand(resumeCommand);
+        command.AddCommand(skipCommand);
 
         return command;
     }

@@ -250,4 +250,154 @@ public class SpotifyCommand
             Console.WriteLine($"{_symbols.Error} Error: {ex.Message}");
         }
     }
+
+    public async Task GetCurrentTrackAsync(bool json = false)
+    {
+        try
+        {
+            if (!await _spotifyStreamer.IsAvailableAsync())
+            {
+                Console.WriteLine($"{_symbols.Error} Spotify not available. Make sure you have configured Client ID and Client Secret.");
+                return;
+            }
+
+            var currentTrack = await _spotifyStreamer.GetCurrentlyPlayingAsync();
+
+            if (currentTrack == null)
+            {
+                if (json)
+                {
+                    Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new { success = false, message = "No track currently playing" }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+                }
+                else
+                {
+                    Console.WriteLine($"{_symbols.Music} No track currently playing");
+                }
+                return;
+            }
+
+            if (json)
+            {
+                var result = new
+                {
+                    success = true,
+                    track = currentTrack.TrackName,
+                    artist = currentTrack.ArtistName,
+                    album = currentTrack.AlbumName,
+                    progressMs = currentTrack.ProgressMs,
+                    durationMs = currentTrack.DurationMs,
+                    isPlaying = currentTrack.IsPlaying,
+                    device = currentTrack.DeviceName,
+                    deviceType = currentTrack.DeviceType
+                };
+                Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(result, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+            }
+            else
+            {
+                var playingStatus = currentTrack.IsPlaying ? "▶️  Playing" : "⏸️  Paused";
+                Console.WriteLine($"\n{playingStatus}:");
+                Console.WriteLine($"  Track: {currentTrack.TrackName}");
+                Console.WriteLine($"  Artist: {currentTrack.ArtistName}");
+                Console.WriteLine($"  Album: {currentTrack.AlbumName}");
+                Console.WriteLine($"  Progress: {FormatTime(currentTrack.ProgressMs)} / {FormatTime(currentTrack.DurationMs)}");
+                Console.WriteLine($"  Device: {currentTrack.DeviceName} ({currentTrack.DeviceType})");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting current track");
+            Console.WriteLine($"{_symbols.Error} Error: {ex.Message}");
+        }
+    }
+
+    public async Task PauseAsync()
+    {
+        try
+        {
+            if (!await _spotifyStreamer.IsAvailableAsync())
+            {
+                Console.WriteLine($"{_symbols.Error} Spotify not available. Make sure you have configured Client ID and Client Secret.");
+                return;
+            }
+
+            var success = await _spotifyStreamer.PauseAsync();
+
+            if (success)
+            {
+                Console.WriteLine($"⏸️  Paused");
+            }
+            else
+            {
+                Console.WriteLine($"{_symbols.Error} Failed to pause playback");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error pausing playback");
+            Console.WriteLine($"{_symbols.Error} Error: {ex.Message}");
+        }
+    }
+
+    public async Task ResumeAsync()
+    {
+        try
+        {
+            if (!await _spotifyStreamer.IsAvailableAsync())
+            {
+                Console.WriteLine($"{_symbols.Error} Spotify not available. Make sure you have configured Client ID and Client Secret.");
+                return;
+            }
+
+            var success = await _spotifyStreamer.ResumeAsync();
+
+            if (success)
+            {
+                Console.WriteLine($"▶️  Resumed");
+            }
+            else
+            {
+                Console.WriteLine($"{_symbols.Error} Failed to resume playback");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error resuming playback");
+            Console.WriteLine($"{_symbols.Error} Error: {ex.Message}");
+        }
+    }
+
+    public async Task SkipAsync(SkipDirection direction = SkipDirection.Next)
+    {
+        try
+        {
+            if (!await _spotifyStreamer.IsAvailableAsync())
+            {
+                Console.WriteLine($"{_symbols.Error} Spotify not available. Make sure you have configured Client ID and Client Secret.");
+                return;
+            }
+
+            var success = await _spotifyStreamer.SkipAsync(direction);
+
+            if (success)
+            {
+                var directionText = direction == SkipDirection.Next ? "next track" : "previous track";
+                Console.WriteLine($"⏭️  Skipped to {directionText}");
+            }
+            else
+            {
+                Console.WriteLine($"{_symbols.Error} Failed to skip track");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error skipping track");
+            Console.WriteLine($"{_symbols.Error} Error: {ex.Message}");
+        }
+    }
+
+    private static string FormatTime(int milliseconds)
+    {
+        var span = TimeSpan.FromMilliseconds(milliseconds);
+        return $"{(int)span.TotalMinutes}:{span.Seconds:D2}";
+    }
 }

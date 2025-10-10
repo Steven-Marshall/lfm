@@ -866,6 +866,45 @@ Reading these guidelines will help you provide accurate interpretations, avoid b
             }
           }
         }
+      },
+      {
+        name: 'lfm_current_track',
+        description: 'Get currently playing track information from Spotify. Use this to see what the user is listening to for contextual engagement.',
+        inputSchema: {
+          type: 'object',
+          properties: {}
+        }
+      },
+      {
+        name: 'lfm_pause',
+        description: 'Pause current playback on Spotify',
+        inputSchema: {
+          type: 'object',
+          properties: {}
+        }
+      },
+      {
+        name: 'lfm_resume',
+        description: 'Resume paused playback on Spotify',
+        inputSchema: {
+          type: 'object',
+          properties: {}
+        }
+      },
+      {
+        name: 'lfm_skip',
+        description: 'Skip to next or previous track on Spotify',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            direction: {
+              type: 'string',
+              description: 'Direction to skip ("next" or "previous")',
+              enum: ['next', 'previous'],
+              default: 'next'
+            }
+          }
+        }
       }
     ]
   };
@@ -1898,6 +1937,137 @@ ${guidelinesContent}`;
           {
             type: 'text',
             text: output || 'Device activated successfully'
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: false,
+              error: error.message
+            }, null, 2)
+          }
+        ],
+        isError: true
+      };
+    }
+  }
+
+  if (name === 'lfm_current_track') {
+    try {
+      // Build command arguments
+      const cmdArgs = ['spotify', 'current', '--json'];
+
+      const output = await executeLfmCommand(cmdArgs);
+      const result = parseJsonOutput(output);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2)
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: false,
+              error: error.message
+            }, null, 2)
+          }
+        ],
+        isError: true
+      };
+    }
+  }
+
+  if (name === 'lfm_pause') {
+    try {
+      // Build command arguments
+      const cmdArgs = ['spotify', 'pause'];
+
+      const output = await executeLfmCommand(cmdArgs);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: output || 'Playback paused'
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: false,
+              error: error.message
+            }, null, 2)
+          }
+        ],
+        isError: true
+      };
+    }
+  }
+
+  if (name === 'lfm_resume') {
+    try {
+      // Build command arguments
+      const cmdArgs = ['spotify', 'resume'];
+
+      const output = await executeLfmCommand(cmdArgs);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: output || 'Playback resumed'
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: false,
+              error: error.message
+            }, null, 2)
+          }
+        ],
+        isError: true
+      };
+    }
+  }
+
+  if (name === 'lfm_skip') {
+    try {
+      const direction = args.direction || 'next';
+
+      // Build command arguments
+      const cmdArgs = ['spotify', 'skip'];
+
+      if (direction === 'previous') {
+        cmdArgs.push('--previous');
+      }
+
+      const output = await executeLfmCommand(cmdArgs);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: output || `Skipped to ${direction} track`
           }
         ]
       };

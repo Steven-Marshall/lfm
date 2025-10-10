@@ -1194,6 +1194,117 @@ public class SpotifyStreamer : IPlaylistStreamer
         }
     }
 
+    /// <summary>
+    /// Get currently playing track information
+    /// </summary>
+    public async Task<CurrentTrackInfo?> GetCurrentlyPlayingAsync()
+    {
+        try
+        {
+            await EnsureValidAccessTokenAsync();
+            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
+
+            var response = await _httpClient.GetAsync("https://api.spotify.com/v1/me/player");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync();
+
+                if (string.IsNullOrEmpty(json))
+                {
+                    // No playback currently active
+                    return null;
+                }
+
+                var playbackState = JsonSerializer.Deserialize<SpotifyPlaybackState>(json);
+
+                if (playbackState?.Item == null)
+                {
+                    return null;
+                }
+
+                return new CurrentTrackInfo
+                {
+                    TrackName = playbackState.Item.Name,
+                    ArtistName = playbackState.Item.Artists?.FirstOrDefault()?.Name ?? "Unknown Artist",
+                    AlbumName = playbackState.Item.Album?.Name ?? "Unknown Album",
+                    ProgressMs = playbackState.ProgressMs,
+                    DurationMs = playbackState.Item.DurationMs,
+                    IsPlaying = playbackState.IsPlaying,
+                    DeviceName = playbackState.Device?.Name ?? "Unknown Device",
+                    DeviceType = playbackState.Device?.Type ?? "Unknown"
+                };
+            }
+
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Pause current playback
+    /// </summary>
+    public async Task<bool> PauseAsync()
+    {
+        try
+        {
+            await EnsureValidAccessTokenAsync();
+            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
+
+            var response = await _httpClient.PutAsync("https://api.spotify.com/v1/me/player/pause", null);
+            return response.IsSuccessStatusCode || response.StatusCode == System.Net.HttpStatusCode.NoContent;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Resume paused playback
+    /// </summary>
+    public async Task<bool> ResumeAsync()
+    {
+        try
+        {
+            await EnsureValidAccessTokenAsync();
+            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
+
+            var response = await _httpClient.PutAsync("https://api.spotify.com/v1/me/player/play", null);
+            return response.IsSuccessStatusCode || response.StatusCode == System.Net.HttpStatusCode.NoContent;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Skip to next or previous track
+    /// </summary>
+    public async Task<bool> SkipAsync(SkipDirection direction = SkipDirection.Next)
+    {
+        try
+        {
+            await EnsureValidAccessTokenAsync();
+            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
+
+            var endpoint = direction == SkipDirection.Next
+                ? "https://api.spotify.com/v1/me/player/next"
+                : "https://api.spotify.com/v1/me/player/previous";
+
+            var response = await _httpClient.PostAsync(endpoint, null);
+            return response.IsSuccessStatusCode || response.StatusCode == System.Net.HttpStatusCode.NoContent;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     public void Dispose()
     {
         _httpClient?.Dispose();
