@@ -89,8 +89,9 @@ public class RecentCommand
                 {
                     var nowPlayingIndicator = track.Attributes?.NowPlaying != null ? $"{_symbols.Music} " : "";
                     var timeInfo = GetFormattedTime(track.Date);
+                    var albumInfo = !string.IsNullOrEmpty(track.Album.Name) ? $" ({track.Album.Name})" : "";
 
-                    Console.WriteLine($"  {nowPlayingIndicator}{track.Artist.Name} - {track.Name} [{timeInfo}]");
+                    Console.WriteLine($"  {nowPlayingIndicator}{track.Artist.Name} - {track.Name}{albumInfo} [{timeInfo}]");
                 }
 
                 Console.WriteLine();
