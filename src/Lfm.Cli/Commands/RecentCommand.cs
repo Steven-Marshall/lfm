@@ -87,21 +87,13 @@ public class RecentCommand
 
                 foreach (var track in result.Tracks)
                 {
-                    var nowPlayingIndicator = track.Attributes?.NowPlaying != null ? $" {_symbols.Music} NOW PLAYING" : "";
-                    var timeAgo = GetTimeAgo(track.Date);
+                    var nowPlayingIndicator = track.Attributes?.NowPlaying != null ? $"{_symbols.Music} " : "";
+                    var timeInfo = GetFormattedTime(track.Date);
 
-                    Console.WriteLine($"  {track.Artist.Name} - {track.Name}{nowPlayingIndicator}");
-                    if (!string.IsNullOrEmpty(track.Album.Name))
-                    {
-                        Console.WriteLine($"    Album: {track.Album.Name}");
-                    }
-                    if (!string.IsNullOrEmpty(timeAgo))
-                    {
-                        Console.WriteLine($"    {timeAgo}");
-                    }
-                    Console.WriteLine();
+                    Console.WriteLine($"  {nowPlayingIndicator}{track.Artist.Name} - {track.Name} [{timeInfo}]");
                 }
 
+                Console.WriteLine();
                 Console.WriteLine($"Total: {result.Tracks.Count} tracks");
             }
         }
@@ -112,24 +104,29 @@ public class RecentCommand
         }
     }
 
-    private string GetTimeAgo(Lfm.Core.Models.DateInfo? date)
+    private string GetFormattedTime(Lfm.Core.Models.DateInfo? date)
     {
         if (date == null || !long.TryParse(date.UnixTimestamp, out var unixTimestamp))
-            return string.Empty;
+            return "unknown time";
 
-        var trackTime = DateTimeOffset.FromUnixTimeSeconds(unixTimestamp).UtcDateTime;
+        var trackTime = DateTimeOffset.FromUnixTimeSeconds(unixTimestamp);
+        var localTime = trackTime.ToLocalTime();
         var now = DateTime.UtcNow;
-        var timeSpan = now - trackTime;
+        var timeSpan = now - trackTime.UtcDateTime;
 
+        string timeAgo;
         if (timeSpan.TotalMinutes < 1)
-            return "just now";
-        if (timeSpan.TotalMinutes < 60)
-            return $"{(int)timeSpan.TotalMinutes} minutes ago";
-        if (timeSpan.TotalHours < 24)
-            return $"{(int)timeSpan.TotalHours} hours ago";
-        if (timeSpan.TotalDays < 7)
-            return $"{(int)timeSpan.TotalDays} days ago";
+            timeAgo = "just now";
+        else if (timeSpan.TotalMinutes < 60)
+            timeAgo = $"{(int)timeSpan.TotalMinutes}m ago";
+        else if (timeSpan.TotalHours < 24)
+            timeAgo = $"{(int)timeSpan.TotalHours}h ago";
+        else if (timeSpan.TotalDays < 7)
+            timeAgo = $"{(int)timeSpan.TotalDays}d ago";
+        else
+            timeAgo = localTime.ToString("MMM dd");
 
-        return date.Text;
+        var timestamp = localTime.ToString("HH:mm");
+        return $"{timestamp}, {timeAgo}";
     }
 }
