@@ -26,6 +26,7 @@ class Program
             TopTracksCommandBuilder.Build(host.Services),
             MixtapeCommandBuilder.Build(host.Services),
             AlbumsCommandBuilder.Build(host.Services),
+            RecentCommandBuilder.Build(host.Services),
             ArtistTracksCommandBuilder.Build(host.Services),
             ArtistAlbumsCommandBuilder.Build(host.Services),
             RecommendationsCommandBuilder.Build(host.Services),
@@ -106,6 +107,7 @@ class Program
                 services.AddTransient<TopTracksCommand>();
                 services.AddTransient<MixtapeCommand>();
                 services.AddTransient<AlbumsCommand>();
+                services.AddTransient<RecentCommand>();
                 services.AddTransient<RecommendationsCommand>();
                 services.AddTransient<SpotifyCommand>();
                 

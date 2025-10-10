@@ -350,6 +350,27 @@ TEMPORAL PARAMETER SELECTION:
         }
       },
       {
+        name: 'lfm_recent_tracks',
+        description: 'Get recently played tracks in chronological order (most recent first). Perfect for detecting listening patterns and checking what the user has been playing.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            limit: {
+              type: 'number',
+              description: 'Number of recent tracks to return (1-200)',
+              default: 20,
+              minimum: 1,
+              maximum: 200
+            },
+            hours: {
+              type: 'number',
+              description: 'Number of hours to look back (default: 7 days = 168 hours)',
+              minimum: 1
+            }
+          }
+        }
+      },
+      {
         name: 'lfm_recommendations',
         description: 'Get music recommendations based on listening history',
         inputSchema: {
@@ -2068,6 +2089,50 @@ ${guidelinesContent}`;
           {
             type: 'text',
             text: output || `Skipped to ${direction} track`
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: false,
+              error: error.message
+            }, null, 2)
+          }
+        ],
+        isError: true
+      };
+    }
+  }
+
+  if (name === 'lfm_recent_tracks') {
+    try {
+      const limit = args.limit || 20;
+      const hours = args.hours;
+
+      // Build command arguments
+      const cmdArgs = ['recent', '--limit', limit.toString(), '--json'];
+
+      if (hours !== undefined) {
+        cmdArgs.push('--hours', hours.toString());
+      }
+
+      const output = await executeLfmCommand(cmdArgs);
+      const result = parseJsonOutput(output);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: result.success !== false,
+              tracks: result.tracks || [],
+              count: result.count || 0,
+              message: result.message
+            }, null, 2)
           }
         ]
       };

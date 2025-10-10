@@ -24,7 +24,12 @@ public interface ILastFmService
     /// Gets user's top albums for a specified period
     /// </summary>
     Task<TopAlbums?> GetUserTopAlbumsAsync(string username, string period, int limit = 10, int page = 1);
-    
+
+    /// <summary>
+    /// Gets user's recent tracks in chronological order (most recent first)
+    /// </summary>
+    Task<RecentTracks?> GetUserRecentTracksAsync(string username, int limit = 20, int? hoursBack = null);
+
     // Date range variants
     /// <summary>
     /// Gets user's top artists for a specific date range

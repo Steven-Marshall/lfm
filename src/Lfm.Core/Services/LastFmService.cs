@@ -45,6 +45,24 @@ public class LastFmService : ILastFmService
         return await _apiClient.GetTopAlbumsAsync(username, period, limit, page);
     }
 
+    public async Task<RecentTracks?> GetUserRecentTracksAsync(string username, int limit = 20, int? hoursBack = null)
+    {
+        DateTime to = DateTime.UtcNow;
+        DateTime from;
+
+        if (hoursBack.HasValue)
+        {
+            from = to.AddHours(-hoursBack.Value);
+        }
+        else
+        {
+            // Default: last 7 days
+            from = to.AddDays(-7);
+        }
+
+        return await _apiClient.GetRecentTracksAsync(username, from, to, limit, page: 1);
+    }
+
     // Date range variants
     public async Task<TopArtists?> GetUserTopArtistsForDateRangeAsync(string username, DateTime from, DateTime to, int limit = 10)
     {
