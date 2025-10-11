@@ -112,7 +112,13 @@
       "Bash(./publish/win-x64/lfm.exe artist-tracks:*)",
       "Bash(git show:*)",
       "Bash(/dev/null)",
-      "Bash(./publish/win-x64/lfm.exe recent:*)"
+      "Bash(./publish/win-x64/lfm.exe recent:*)",
+      "WebFetch(domain:community.spotify.com)",
+      "Bash(lfm:*)",
+      "Read(//c/Users/steve/scoop/**)",
+      "WebFetch(domain:docs.sonos.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(git log:*)"
     ],
     "deny": []
   }
