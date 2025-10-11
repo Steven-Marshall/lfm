@@ -138,14 +138,34 @@ When users request music playback, the choice of tool depends on their intent:
 
 ### Understanding Album Metadata
 
-**Album Play Counts = Sum of Track Plays**
+**Album Play Counts = Sum of Track Plays (NOT "times album was played")**
 
-Track counts vary widely:
+This is critical for comparisons. Track counts vary widely:
+- Double albums: 20-30 tracks (The Wall: 26 tracks)
+- Single albums: 8-12 tracks (Dark Side of the Moon: 10 tracks)
 - Classical/opera: 40-80+ tracks
-- Pop/rock: 10-15 tracks
 - Box sets: 30-60+ tracks
 
-**Don't compare raw numbers across genres!**
+**NEVER compare raw album playcounts directly!**
+
+**Real Example:**
+```
+Pink Floyd - The Wall: 364 "plays" (26 tracks) = ~14 full album listens
+Pink Floyd - DSOTM: 109 "plays" (10 tracks) = ~11 full album listens
+```
+
+364 vs 109 looks like 3.3x difference, but they've been played similar amounts as *complete albums*.
+
+**To compare albums properly:**
+1. Use `lfm_check` with `verbose: true` to see track breakdown
+2. Look for balanced play distribution = full album listening
+3. Calculate average: total plays ÷ track count = approximate "album listens"
+4. Compare the averages, NOT the raw totals
+
+**When to check album breakdown:**
+- User compares two albums ("which do I prefer?")
+- Determining if album is truly a favorite (high plays vs just long)
+- Checking for "hardcore" listening patterns vs casual plays
 
 ### Interpreting `unaccountedPlays`
 
