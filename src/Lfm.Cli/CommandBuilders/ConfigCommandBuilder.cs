@@ -96,6 +96,21 @@ public static class ConfigCommandBuilder
         var maxWindowsArg = new Argument<int>("windows", "Max empty windows to search through (default: 5, higher = more thorough but slower)");
         setMaxEmptyWindowsCommand.AddArgument(maxWindowsArg);
 
+        // Sonos configuration commands
+        var setSonosApiUrlCommand = new Command("set-sonos-api-url", "Set Sonos HTTP API bridge URL");
+        var sonosApiUrlArg = new Argument<string>("url", "Bridge URL (e.g., http://192.168.1.24:5005)");
+        setSonosApiUrlCommand.AddArgument(sonosApiUrlArg);
+
+        var setSonosDefaultRoomCommand = new Command("set-sonos-default-room", "Set default Sonos room for playback");
+        var sonosRoomArg = new Argument<string>("room-name", "Name of the Sonos room (use 'lfm sonos rooms' to list)");
+        setSonosDefaultRoomCommand.AddArgument(sonosRoomArg);
+
+        var clearSonosDefaultRoomCommand = new Command("clear-sonos-default-room", "Clear default Sonos room");
+
+        var setDefaultPlayerCommand = new Command("set-default-player", "Set default music player (Spotify or Sonos)");
+        var playerTypeArg = new Argument<string>("player", "Player type: Spotify or Sonos");
+        setDefaultPlayerCommand.AddArgument(playerTypeArg);
+
         setApiKeyCommand.SetHandler(async (string apiKey) =>
         {
             var configCommand = services.GetRequiredService<ConfigCommand>();
@@ -252,6 +267,30 @@ public static class ConfigCommandBuilder
             await configCommand.SetMaxEmptyWindowsAsync(windows);
         }, maxWindowsArg);
 
+        setSonosApiUrlCommand.SetHandler(async (string url) =>
+        {
+            var configCommand = services.GetRequiredService<ConfigCommand>();
+            await configCommand.SetSonosApiUrlAsync(url);
+        }, sonosApiUrlArg);
+
+        setSonosDefaultRoomCommand.SetHandler(async (string roomName) =>
+        {
+            var configCommand = services.GetRequiredService<ConfigCommand>();
+            await configCommand.SetSonosDefaultRoomAsync(roomName);
+        }, sonosRoomArg);
+
+        clearSonosDefaultRoomCommand.SetHandler(async () =>
+        {
+            var configCommand = services.GetRequiredService<ConfigCommand>();
+            await configCommand.ClearSonosDefaultRoomAsync();
+        });
+
+        setDefaultPlayerCommand.SetHandler(async (string playerType) =>
+        {
+            var configCommand = services.GetRequiredService<ConfigCommand>();
+            await configCommand.SetDefaultPlayerAsync(playerType);
+        }, playerTypeArg);
+
         command.AddCommand(setApiKeyCommand);
         command.AddCommand(setUserCommand);
         command.AddCommand(showCommand);
@@ -278,6 +317,10 @@ public static class ConfigCommandBuilder
         command.AddCommand(clearSpotifyDefaultDeviceCommand);
         command.AddCommand(setDateRangeMultiplierCommand);
         command.AddCommand(setMaxEmptyWindowsCommand);
+        command.AddCommand(setSonosApiUrlCommand);
+        command.AddCommand(setSonosDefaultRoomCommand);
+        command.AddCommand(clearSonosDefaultRoomCommand);
+        command.AddCommand(setDefaultPlayerCommand);
 
         return command;
     }

@@ -80,14 +80,61 @@ Use this section to remember the user's taste and avoid bad recommendations:
 - `lfm_check` - Single artist/track/album
 - `lfm_bulk_check` - Multiple items (more efficient)
 
-**Spotify Playback:**
+**Music Playback (Spotify & Sonos):**
 - `lfm_current_track` - See what user is listening to (for contextual engagement)
-- `lfm_play_now` - Start playing immediately (replaces current track)
-- `lfm_queue` - Add to end of queue (doesn't interrupt)
-- `lfm_pause` - Pause current playback
-- `lfm_resume` - Resume paused playback
-- `lfm_skip` - Skip to next or previous track
+- `lfm_play_now` - Immediate playback (replaces current track)
+  - Use for "play", "play now", "start playing"
+- `lfm_queue` - Add to current session queue (doesn't interrupt)
+  - Use for "queue", "queue up", "add to queue"
+  - Call once per track for multiple tracks
+- `lfm_create_playlist` - Save tracks as named playlist
+  - Use for "create playlist", "save these", "make a playlist"
+  - **NOT for "queue" requests** (even with `playNow: true`)
+- `lfm_pause`, `lfm_resume`, `lfm_skip` - Playback controls
 - `lfm_activate_device` - Wake Spotify device if needed
+
+**Note**: All playback commands support both Spotify and Sonos. The user's config determines the default player, but you can specify `player: "Spotify"` or `player: "Sonos"` if needed. For Sonos, you can also specify `room: "Room Name"`.
+
+### Understanding User Intent for Playback
+
+**Key distinction: Current session vs Saved collection**
+
+When users request music playback, the choice of tool depends on their intent:
+
+**Immediate playback (replaces current track):**
+- User says: "Play X" / "Play this now" / "Start playing X"
+- Tool: `lfm_play_now`
+- Effect: Stops current playback and starts the requested track/album immediately
+
+**Add to current queue (non-interruptive):**
+- User says: "Queue X" / "Queue up X" / "Add X to queue" / "Add X next"
+- Tool: `lfm_queue`
+- Effect: Adds tracks to end of current playback session (temporary)
+- **Important**: Call once per track when queueing multiple tracks
+- ⚠️ **NEVER use `lfm_create_playlist` for this!**
+
+**Save for later (create collection):**
+- User says: "Make a playlist" / "Create a playlist" / "Save these tracks"
+- Tool: `lfm_create_playlist`
+- Effect: Creates a permanent saved playlist
+- Note: Can optionally play immediately with `playNow: true`, but this still creates a saved playlist
+
+**Critical distinction:**
+- `lfm_queue` = **temporary** addition to current playback session
+- `lfm_create_playlist` = **permanent** saved collection (even with `playNow: true`)
+- **When user says "queue", they want tracks in their current session, NOT a saved playlist**
+
+**Examples:**
+```
+❌ User: "Queue up some Beach Boys tracks"
+   Wrong: lfm_create_playlist with playNow: true
+
+✅ User: "Queue up some Beach Boys tracks"
+   Right: lfm_queue (call multiple times for each track)
+
+✅ User: "Make me a Beach Boys playlist"
+   Right: lfm_create_playlist
+```
 
 ### Understanding Album Metadata
 
@@ -133,9 +180,11 @@ If album has high playcount with some 0-play tracks + `hasDiscrepancy: true`, as
 2. Filter for new artists with `filter: 1` or `lfm_bulk_check`
 3. Create playlist with `lfm_create_playlist`
 
-**Spotify Device Management:**
-- If "No active device" error → call `lfm_activate_device` first
-- Device priority: CLI param > config default > active device > smart priority
+**Music Playback Management:**
+- **Spotify**: If "No active device" error → call `lfm_activate_device` first
+- **Sonos**: Specify room with `room` parameter or use config default
+- **Player selection**: Use `player` parameter to override config default (Spotify/Sonos)
+- **Priority**: CLI param > config default > active device > smart priority
 
 ### Common Parameters
 
@@ -147,10 +196,12 @@ If album has high playcount with some 0-play tracks + `hasDiscrepancy: true`, as
 - Format: `[{"artist": "Name", "track": "Title"}, ...]`
 - Names auto-prefixed with "lfm-"
 
-**Spotify:**
-- `playNow: true` - Start playing immediately
+**Music Playback:**
+- `playNow: true` - Start playing immediately (for playlists)
 - `shuffle: true` - Randomize order
-- `device: "Device Name"` - Target specific device
+- `player: "Spotify"` or `"Sonos"` - Override config default player
+- `device: "Device Name"` - Target specific Spotify device
+- `room: "Room Name"` - Target specific Sonos room
 
 ---
 
@@ -197,7 +248,8 @@ If album has high playcount with some 0-play tracks + `hasDiscrepancy: true`, as
 - Use `lfm_bulk_check` to verify novelty
 - Expand recommendation count
 
-**Spotify issues:**
-- "No active device" → call `lfm_activate_device`
+**Playback issues:**
+- **Spotify**: "No active device" → call `lfm_activate_device`
+- **Sonos**: "Room not found" → verify room name with user, check config
 - Track not found → may need album disambiguation
-- Device not responding → check Spotify is open and logged in
+- Device not responding → check player is open and logged in

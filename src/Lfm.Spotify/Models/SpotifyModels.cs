@@ -252,3 +252,79 @@ public class SpotifyPlaybackTrack
     [JsonPropertyName("duration_ms")]
     public int DurationMs { get; set; }
 }
+
+// New Releases Response
+public class SpotifyNewReleasesResponse
+{
+    [JsonPropertyName("albums")]
+    public SpotifyNewReleasesAlbumsWrapper? Albums { get; set; }
+}
+
+public class SpotifyNewReleasesAlbumsWrapper
+{
+    [JsonPropertyName("items")]
+    public List<SpotifyNewReleaseAlbum> Items { get; set; } = new();
+
+    [JsonPropertyName("total")]
+    public int Total { get; set; }
+
+    [JsonPropertyName("limit")]
+    public int Limit { get; set; }
+
+    [JsonPropertyName("offset")]
+    public int Offset { get; set; }
+
+    [JsonPropertyName("next")]
+    public string? Next { get; set; }
+
+    [JsonPropertyName("previous")]
+    public string? Previous { get; set; }
+}
+
+public class SpotifyNewReleaseAlbum
+{
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = string.Empty;
+
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("album_type")]
+    public string AlbumType { get; set; } = string.Empty;
+
+    [JsonPropertyName("artists")]
+    public List<SpotifyArtist> Artists { get; set; } = new();
+
+    [JsonPropertyName("release_date")]
+    public string ReleaseDate { get; set; } = string.Empty;
+
+    [JsonPropertyName("release_date_precision")]
+    public string ReleaseDatePrecision { get; set; } = string.Empty;
+
+    [JsonPropertyName("total_tracks")]
+    public int TotalTracks { get; set; }
+
+    [JsonPropertyName("images")]
+    public List<SpotifyImage> Images { get; set; } = new();
+
+    [JsonPropertyName("external_urls")]
+    public SpotifyExternalUrls? ExternalUrls { get; set; }
+}
+
+public class SpotifyImage
+{
+    [JsonPropertyName("url")]
+    public string Url { get; set; } = string.Empty;
+
+    [JsonPropertyName("height")]
+    public int? Height { get; set; }
+
+    [JsonPropertyName("width")]
+    public int? Width { get; set; }
+}
+
+public class SpotifyExternalUrls
+{
+    [JsonPropertyName("spotify")]
+    public string Spotify { get; set; } = string.Empty;
+}

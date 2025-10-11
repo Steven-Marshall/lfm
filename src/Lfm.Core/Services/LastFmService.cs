@@ -15,17 +15,20 @@ public class LastFmService : ILastFmService
     private readonly IConfigurationManager _configManager;
     private readonly ITagFilterService _tagFilterService;
     private readonly ILogger<LastFmService> _logger;
+    private readonly object? _spotifyStreamer;
 
     public LastFmService(
         ILastFmApiClient apiClient,
         IConfigurationManager configManager,
         ITagFilterService tagFilterService,
-        ILogger<LastFmService> logger)
+        ILogger<LastFmService> logger,
+        object? spotifyStreamer = null)
     {
         _apiClient = apiClient ?? throw new ArgumentNullException(nameof(apiClient));
         _configManager = configManager ?? throw new ArgumentNullException(nameof(configManager));
         _tagFilterService = tagFilterService ?? throw new ArgumentNullException(nameof(tagFilterService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _spotifyStreamer = spotifyStreamer; // Optional dependency - IPlaylistStreamer from Lfm.Spotify
     }
 
 
@@ -1214,6 +1217,84 @@ public class LastFmService : ILastFmService
         else
         {
             _logger.LogWarning("Backfill incomplete: only {Count}/{Target} tracks after {Attempts} attempts", finalCount, targetTracks, backfillAttempts);
+        }
+    }
+
+    /// <summary>
+    /// Gets new album releases from Spotify
+    /// </summary>
+    public async Task<NewReleasesResult> GetNewReleasesAsync(int limit = 50)
+    {
+        try
+        {
+            // Check if Spotify is available (using dynamic to avoid assembly reference)
+            if (_spotifyStreamer == null)
+            {
+                return new NewReleasesResult
+                {
+                    Success = false,
+                    Message = "Spotify is not configured. Please set up your Spotify Client ID and Client Secret using 'lfm config set-spotify' command.",
+                    Albums = new List<NewAlbumRelease>(),
+                    Total = 0
+                };
+            }
+
+            dynamic spotifyStreamer = _spotifyStreamer;
+
+            // Check if available
+            bool isAvailable = await spotifyStreamer.IsAvailableAsync();
+            if (!isAvailable)
+            {
+                return new NewReleasesResult
+                {
+                    Success = false,
+                    Message = "Spotify is not configured. Please set up your Spotify Client ID and Client Secret using 'lfm config set-spotify' command.",
+                    Albums = new List<NewAlbumRelease>(),
+                    Total = 0
+                };
+            }
+
+            // Get new releases from Spotify (returns List<SpotifyNewReleaseAlbum>)
+            dynamic spotifyAlbums = await spotifyStreamer.GetNewReleasesAsync(limit);
+
+            // Convert to our model
+            var albums = new List<NewAlbumRelease>();
+            foreach (dynamic album in spotifyAlbums)
+            {
+                var newAlbum = new NewAlbumRelease
+                {
+                    Name = album.Name,
+                    Artist = album.Artists.Count > 0 ? album.Artists[0].Name : "Unknown Artist",
+                    ReleaseDate = album.ReleaseDate,
+                    ReleaseDatePrecision = album.ReleaseDatePrecision,
+                    TotalTracks = album.TotalTracks,
+                    AlbumType = album.AlbumType,
+                    SpotifyId = album.Id,
+                    SpotifyUrl = album.ExternalUrls?.Spotify ?? string.Empty,
+                    ImageUrl = album.Images.Count > 0 ? album.Images[0].Url : null
+                };
+                albums.Add(newAlbum);
+            }
+
+            return new NewReleasesResult
+            {
+                Success = true,
+                Message = $"Retrieved {albums.Count} new album releases from Spotify",
+                Albums = albums,
+                Total = albums.Count,
+                Source = "spotify"
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving new releases from Spotify");
+            return new NewReleasesResult
+            {
+                Success = false,
+                Message = $"Error retrieving new releases: {ex.Message}",
+                Albums = new List<NewAlbumRelease>(),
+                Total = 0
+            };
         }
     }
 

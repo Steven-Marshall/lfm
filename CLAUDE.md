@@ -366,6 +366,69 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
 - **Build Status**: ✅ Clean build, all features tested and working
 - **Ready For**: Production use with MCP integration
 
+### Session: 2025-10-11 (Sonos Integration & Unified Playback)
+- **Status**: ✅ COMPLETE - Full Sonos playback integration with unified play command
+- **Major Features Implemented**:
+  - **Unified Play Command**: Single command supporting both Spotify and Sonos players
+  - **Config-Driven Defaults**: DefaultPlayer and DefaultRoom configuration eliminates need for MCP to ask
+  - **Player Routing**: Intelligent routing based on configuration with parameter overrides
+  - **Sonos HTTP Bridge**: Integration with node-sonos-http-api for Sonos control
+  - **Shared Search Logic**: Unified track search for both players with multiple version detection
+- **Implementation Details**:
+  - **node-sonos-http-api**: Node.js HTTP bridge running as systemd service on Raspberry Pi
+  - **Room Management**: Auto-discovery, validation, and config storage of Sonos rooms
+  - **Album Playback Strategy**: Album URIs for Sonos (plays as unit), track URIs for Spotify
+  - **Queue Support**: Both immediate playback and queue modes for both players
+- **New Configuration Options**:
+  - `DefaultPlayer`: "Spotify" or "Sonos" (determines playback target)
+  - `Sonos.HttpApiBaseUrl`: Bridge URL (e.g., "http://192.168.1.24:5005")
+  - `Sonos.DefaultRoom`: Default Sonos room for playback
+  - `Sonos.TimeoutMs`: HTTP timeout for Sonos API calls (default: 5000)
+  - `Sonos.RoomCacheDurationMinutes`: Cache duration for room discovery (default: 5)
+- **CLI Parameters Added**:
+  - `--player` / `-p`: Override default player (Spotify/Sonos)
+  - `--room` / `-r`: Override default Sonos room
+  - Works with existing: `--track`, `--album`, `--queue`, `--device` (Spotify only)
+- **Key Technical Components**:
+  - `PlayCommand.cs`: Unified player routing with shared track search at top level
+  - `PlayCommandBuilder.cs`: Enhanced CLI interface with player and room options
+  - `SonosStreamer.cs`: HTTP client for node-sonos-http-api communication
+  - `ISonosStreamer`: Interface defining Sonos operations (PlayNowAsync, QueueAsync, etc.)
+  - `SpotifyStreamer.SearchSpotifyAlbumUriAsync`: New method for album URI lookup
+  - `SonosConfig`: Configuration model for Sonos settings
+- **Critical Bug Fixes**:
+  - **URI Encoding Issue**: Sonos API requires raw Spotify URIs, not URL-encoded (colons must be preserved)
+  - **Album Queue Behavior**: Using album URIs instead of track URIs for proper album playback on Sonos
+  - **Multiple Version Detection**: Extended from Spotify-only to both players via unified search
+  - **Access Token Initialization**: Added missing `EnsureValidAccessTokenAsync()` in `SearchSpotifyTrackWithDetailsAsync`
+- **Sonos Commands Implemented**:
+  - `lfm sonos rooms` - List all available Sonos rooms with grouping info
+  - `lfm sonos status <room>` - Get current playback state for room
+  - `lfm sonos pause <room>` - Pause playback
+  - `lfm sonos resume <room>` - Resume playback
+  - `lfm sonos skip <room> [next|previous]` - Skip tracks
+  - `lfm config set-sonos-api-url <url>` - Configure bridge URL
+  - `lfm config set-sonos-default-room "Room Name"` - Set default room
+- **Usage Examples**:
+  - `lfm play "Pink Floyd" --track "Money" --album "Dark Side of the Moon"` - Uses config default player
+  - `lfm play "Pink Floyd" --track "Money" --player Sonos --room "Kitchen"` - Explicit player/room
+  - `lfm play "Pink Floyd" --album "Dark Side of the Moon" --queue` - Queue entire album
+- **Architecture Highlights**:
+  - **Unified Search**: Single `SearchSpotifyTrackWithDetailsAsync` call before player routing
+  - **Shared Logic**: Multiple version detection, album disambiguation work for both players
+  - **Minimal Code Duplication**: Spotify search logic reused for both playback targets
+  - **Config Flexibility**: Per-environment configuration (office uses Spotify, home uses Sonos)
+- **Testing Results**:
+  - ✅ Track playback to Sonos with multiple version detection
+  - ✅ Album playback to Sonos as complete unit
+  - ✅ Queue mode working for both tracks and albums
+  - ✅ Player routing working with config defaults and parameter overrides
+  - ✅ Room validation and error handling working correctly
+  - ✅ Fuzzy album matching working ("darks side" matches "The Dark Side of the Moon")
+- **Performance**: Leverages existing Spotify search API, no additional Last.fm API calls required
+- **Build Status**: ✅ Clean build, all Sonos functionality tested and working
+- **Ready For**: Production use and MCP integration
+
 ## Build/Test Commands
 
 ⚠️ **CRITICAL**: Always use `publish/` directory structure per DIRECTORY_STANDARDS.md ⚠️

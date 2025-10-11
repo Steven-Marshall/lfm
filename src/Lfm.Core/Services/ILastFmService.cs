@@ -154,4 +154,9 @@ public interface ILastFmService
     /// Validates user configuration (API key, username, etc.)
     /// </summary>
     Task<Result> ValidateUserConfigurationAsync(string? username = null);
+
+    /// <summary>
+    /// Gets new album releases from Spotify
+    /// </summary>
+    Task<NewReleasesResult> GetNewReleasesAsync(int limit = 50);
 }

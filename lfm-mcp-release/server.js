@@ -370,6 +370,27 @@ TEMPORAL PARAMETER SELECTION:
           }
         }
       },
+      // DISABLED: Spotify's /browse/new-releases API is broken (returns months-old albums)
+      // See: https://community.spotify.com/t5/Spotify-for-Developers/Web-API-Get-New-Releases-API-Returning-Old-Items/m-p/6069709
+      // Keeping code structure for future alternative implementation (AOTY, Discogs, etc.)
+      /*
+      {
+        name: 'lfm_new_releases',
+        description: 'Get new album releases from Spotify (requires Spotify configuration)',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            limit: {
+              type: 'number',
+              description: 'Number of new releases to return (1-50)',
+              default: 50,
+              minimum: 1,
+              maximum: 50
+            }
+          }
+        }
+      },
+      */
       {
         name: 'lfm_recommendations',
         description: 'Get music recommendations based on listening history',
@@ -825,7 +846,7 @@ Reading these guidelines will help you provide accurate interpretations, avoid b
       },
       {
         name: 'lfm_play_now',
-        description: 'Play a track or album immediately on Spotify. IMPORTANT: If multiple album versions exist for a track (e.g., studio, live, greatest hits), you MUST specify the album parameter. Users typically prefer studio albums over live/greatest hits versions unless explicitly requested.',
+        description: 'Play a track or album immediately on Spotify or Sonos. IMPORTANT: If multiple album versions exist for a track (e.g., studio, live, greatest hits), you MUST specify the album parameter. Users typically prefer studio albums over live/greatest hits versions unless explicitly requested.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -841,9 +862,18 @@ Reading these guidelines will help you provide accurate interpretations, avoid b
               type: 'string',
               description: 'Album name (required if track not specified, or when multiple versions exist)'
             },
+            player: {
+              type: 'string',
+              description: 'Music player: Spotify or Sonos (overrides config default)',
+              enum: ['Spotify', 'Sonos']
+            },
             device: {
               type: 'string',
-              description: 'Specific Spotify device to use (overrides config default)'
+              description: 'Specific Spotify device to use (overrides config default, Spotify only)'
+            },
+            room: {
+              type: 'string',
+              description: 'Sonos room name (overrides config default, Sonos only)'
             }
           },
           required: ['artist']
@@ -851,7 +881,7 @@ Reading these guidelines will help you provide accurate interpretations, avoid b
       },
       {
         name: 'lfm_queue',
-        description: 'Add a track or album to the end of the Spotify queue. IMPORTANT: If multiple album versions exist for a track (e.g., studio, live, greatest hits), you MUST specify the album parameter. Users typically prefer studio albums over live/greatest hits versions unless explicitly requested.',
+        description: 'Add a track or album to the end of the Spotify or Sonos queue. IMPORTANT: If multiple album versions exist for a track (e.g., studio, live, greatest hits), you MUST specify the album parameter. Users typically prefer studio albums over live/greatest hits versions unless explicitly requested.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -867,9 +897,18 @@ Reading these guidelines will help you provide accurate interpretations, avoid b
               type: 'string',
               description: 'Album name (required if track not specified, or when multiple versions exist)'
             },
+            player: {
+              type: 'string',
+              description: 'Music player: Spotify or Sonos (overrides config default)',
+              enum: ['Spotify', 'Sonos']
+            },
             device: {
               type: 'string',
-              description: 'Specific Spotify device to use (overrides config default)'
+              description: 'Specific Spotify device to use (overrides config default, Spotify only)'
+            },
+            room: {
+              type: 'string',
+              description: 'Sonos room name (overrides config default, Sonos only)'
             }
           },
           required: ['artist']
@@ -890,31 +929,61 @@ Reading these guidelines will help you provide accurate interpretations, avoid b
       },
       {
         name: 'lfm_current_track',
-        description: 'Get currently playing track information from Spotify. Use this to see what the user is listening to for contextual engagement.',
+        description: 'Get currently playing track information from Spotify or Sonos. Use this to see what the user is listening to for contextual engagement.',
         inputSchema: {
           type: 'object',
-          properties: {}
+          properties: {
+            player: {
+              type: 'string',
+              description: 'Music player: Spotify or Sonos (overrides config default)',
+              enum: ['Spotify', 'Sonos']
+            },
+            room: {
+              type: 'string',
+              description: 'Sonos room name (overrides config default, Sonos only)'
+            }
+          }
         }
       },
       {
         name: 'lfm_pause',
-        description: 'Pause current playback on Spotify',
+        description: 'Pause current playback on Spotify or Sonos',
         inputSchema: {
           type: 'object',
-          properties: {}
+          properties: {
+            player: {
+              type: 'string',
+              description: 'Music player: Spotify or Sonos (overrides config default)',
+              enum: ['Spotify', 'Sonos']
+            },
+            room: {
+              type: 'string',
+              description: 'Sonos room name (overrides config default, Sonos only)'
+            }
+          }
         }
       },
       {
         name: 'lfm_resume',
-        description: 'Resume paused playback on Spotify',
+        description: 'Resume paused playback on Spotify or Sonos',
         inputSchema: {
           type: 'object',
-          properties: {}
+          properties: {
+            player: {
+              type: 'string',
+              description: 'Music player: Spotify or Sonos (overrides config default)',
+              enum: ['Spotify', 'Sonos']
+            },
+            room: {
+              type: 'string',
+              description: 'Sonos room name (overrides config default, Sonos only)'
+            }
+          }
         }
       },
       {
         name: 'lfm_skip',
-        description: 'Skip to next or previous track on Spotify',
+        description: 'Skip to next or previous track on Spotify or Sonos',
         inputSchema: {
           type: 'object',
           properties: {
@@ -923,6 +992,15 @@ Reading these guidelines will help you provide accurate interpretations, avoid b
               description: 'Direction to skip ("next" or "previous")',
               enum: ['next', 'previous'],
               default: 'next'
+            },
+            player: {
+              type: 'string',
+              description: 'Music player: Spotify or Sonos (overrides config default)',
+              enum: ['Spotify', 'Sonos']
+            },
+            room: {
+              type: 'string',
+              description: 'Sonos room name (overrides config default, Sonos only)'
             }
           }
         }
@@ -1827,7 +1905,9 @@ ${guidelinesContent}`;
       const artist = args.artist;
       const track = args.track;
       const album = args.album;
+      const player = args.player;
       const device = args.device;
+      const room = args.room;
 
       if (!artist) {
         throw new Error('Artist name is required');
@@ -1850,8 +1930,16 @@ ${guidelinesContent}`;
         cmdArgs.push('--album', album);
       }
 
+      if (player) {
+        cmdArgs.push('--player', player);
+      }
+
       if (device) {
         cmdArgs.push('--device', device);
+      }
+
+      if (room) {
+        cmdArgs.push('--room', room);
       }
 
       const output = await executeLfmCommand(cmdArgs);
@@ -1886,7 +1974,9 @@ ${guidelinesContent}`;
       const artist = args.artist;
       const track = args.track;
       const album = args.album;
+      const player = args.player;
       const device = args.device;
+      const room = args.room;
 
       if (!artist) {
         throw new Error('Artist name is required');
@@ -1909,8 +1999,16 @@ ${guidelinesContent}`;
         cmdArgs.push('--album', album);
       }
 
+      if (player) {
+        cmdArgs.push('--player', player);
+      }
+
       if (device) {
         cmdArgs.push('--device', device);
+      }
+
+      if (room) {
+        cmdArgs.push('--room', room);
       }
 
       const output = await executeLfmCommand(cmdArgs);
@@ -1979,8 +2077,19 @@ ${guidelinesContent}`;
 
   if (name === 'lfm_current_track') {
     try {
+      const player = args.player;
+      const room = args.room;
+
       // Build command arguments
-      const cmdArgs = ['spotify', 'current', '--json'];
+      const cmdArgs = ['current', '--json'];
+
+      if (player) {
+        cmdArgs.push('--player', player);
+      }
+
+      if (room) {
+        cmdArgs.push('--room', room);
+      }
 
       const output = await executeLfmCommand(cmdArgs);
       const result = parseJsonOutput(output);
@@ -2011,8 +2120,19 @@ ${guidelinesContent}`;
 
   if (name === 'lfm_pause') {
     try {
+      const player = args.player;
+      const room = args.room;
+
       // Build command arguments
-      const cmdArgs = ['spotify', 'pause'];
+      const cmdArgs = ['pause'];
+
+      if (player) {
+        cmdArgs.push('--player', player);
+      }
+
+      if (room) {
+        cmdArgs.push('--room', room);
+      }
 
       const output = await executeLfmCommand(cmdArgs);
 
@@ -2042,8 +2162,19 @@ ${guidelinesContent}`;
 
   if (name === 'lfm_resume') {
     try {
+      const player = args.player;
+      const room = args.room;
+
       // Build command arguments
-      const cmdArgs = ['spotify', 'resume'];
+      const cmdArgs = ['resume'];
+
+      if (player) {
+        cmdArgs.push('--player', player);
+      }
+
+      if (room) {
+        cmdArgs.push('--room', room);
+      }
 
       const output = await executeLfmCommand(cmdArgs);
 
@@ -2074,12 +2205,22 @@ ${guidelinesContent}`;
   if (name === 'lfm_skip') {
     try {
       const direction = args.direction || 'next';
+      const player = args.player;
+      const room = args.room;
 
       // Build command arguments
-      const cmdArgs = ['spotify', 'skip'];
+      const cmdArgs = ['skip'];
 
       if (direction === 'previous') {
         cmdArgs.push('--previous');
+      }
+
+      if (player) {
+        cmdArgs.push('--player', player);
+      }
+
+      if (room) {
+        cmdArgs.push('--room', room);
       }
 
       const output = await executeLfmCommand(cmdArgs);
@@ -2151,6 +2292,49 @@ ${guidelinesContent}`;
       };
     }
   }
+
+  // DISABLED: Spotify's /browse/new-releases API is broken (returns months-old albums)
+  // Keeping handler code for future alternative implementation
+  /*
+  if (name === 'lfm_new_releases') {
+    try {
+      const limit = args.limit || 50;
+
+      // Build command arguments
+      const cmdArgs = ['new-releases', '--limit', limit.toString(), '--json'];
+
+      const output = await executeLfmCommand(cmdArgs);
+      const result = parseJsonOutput(output);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: result.success !== false,
+              albums: result.albums || [],
+              total: result.total || 0,
+              source: result.source || 'spotify'
+            }, null, 2)
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: false,
+              error: error.message
+            }, null, 2)
+          }
+        ],
+        isError: true
+      };
+    }
+  }
+  */
 
   throw new Error(`Unknown tool: ${name}`);
 });

@@ -2,6 +2,7 @@ using Lfm.Core.Configuration;
 using Lfm.Core.Models;
 using Lfm.Core.Services;
 using Lfm.Spotify;
+using Lfm.Sonos;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
@@ -13,16 +14,19 @@ namespace Lfm.Cli.Commands;
 public class PlayCommand : BaseCommand
 {
     private readonly IPlaylistStreamer _spotifyStreamer;
+    private readonly ISonosStreamer _sonosStreamer;
 
     public PlayCommand(
         ILastFmApiClient apiClient,
         IConfigurationManager configManager,
         ILogger<PlayCommand> logger,
         ISymbolProvider symbolProvider,
-        IPlaylistStreamer spotifyStreamer)
+        IPlaylistStreamer spotifyStreamer,
+        ISonosStreamer sonosStreamer)
         : base(apiClient, configManager, logger, symbolProvider)
     {
         _spotifyStreamer = spotifyStreamer ?? throw new ArgumentNullException(nameof(spotifyStreamer));
+        _sonosStreamer = sonosStreamer ?? throw new ArgumentNullException(nameof(sonosStreamer));
     }
 
     /// <summary>
@@ -33,24 +37,112 @@ public class PlayCommand : BaseCommand
         string? track = null,
         string? album = null,
         string? device = null,
+        string? player = null,
+        string? room = null,
         bool queue = false,
         bool json = false)
     {
         try
         {
-            // Validate Spotify availability
-            if (!await _spotifyStreamer.IsAvailableAsync())
+            // Load config to determine player
+            var config = await _configManager.LoadAsync();
+
+            // Determine which player to use: parameter > config default
+            PlayerType targetPlayer;
+            if (!string.IsNullOrWhiteSpace(player))
             {
-                var error = "Spotify is not configured or authenticated. Please run 'lfm spotify auth' first.";
-                if (json)
+                if (!Enum.TryParse<PlayerType>(player, true, out targetPlayer))
                 {
-                    OutputJson(false, error);
+                    var error = $"Invalid player '{player}'. Valid options: Spotify, Sonos";
+                    if (json)
+                    {
+                        OutputJson(false, error);
+                    }
+                    else
+                    {
+                        Console.WriteLine($"{_symbols.Error} {error}");
+                    }
+                    return 1;
                 }
-                else
+            }
+            else
+            {
+                targetPlayer = config.DefaultPlayer;
+            }
+
+            // Store target room for Sonos (if applicable)
+            string? targetRoom = null;
+
+            // Validate availability based on target player
+            if (targetPlayer == PlayerType.Spotify)
+            {
+                if (!await _spotifyStreamer.IsAvailableAsync())
                 {
-                    Console.WriteLine($"{_symbols.Error} {error}");
+                    var error = "Spotify is not configured or authenticated. Please run 'lfm spotify auth' first.";
+                    if (json)
+                    {
+                        OutputJson(false, error);
+                    }
+                    else
+                    {
+                        Console.WriteLine($"{_symbols.Error} {error}");
+                    }
+                    return 1;
                 }
-                return 1;
+            }
+            else // Sonos
+            {
+                if (!await _sonosStreamer.IsAvailableAsync())
+                {
+                    var error = $"Sonos bridge not available at {config.Sonos.HttpApiBaseUrl}. Check your configuration.";
+                    if (json)
+                    {
+                        OutputJson(false, error);
+                    }
+                    else
+                    {
+                        Console.WriteLine($"{_symbols.Error} {error}");
+                        Console.WriteLine($"{_symbols.Tip} Set bridge URL with: lfm config set-sonos-api-url <url>");
+                    }
+                    return 1;
+                }
+
+                // Determine which Sonos room to use
+                targetRoom = room ?? config.Sonos.DefaultRoom;
+                if (string.IsNullOrWhiteSpace(targetRoom))
+                {
+                    var error = "No Sonos room specified and no default room configured.";
+                    if (json)
+                    {
+                        OutputJson(false, error);
+                    }
+                    else
+                    {
+                        Console.WriteLine($"{_symbols.Error} {error}");
+                        Console.WriteLine($"{_symbols.Tip} Use --room parameter or set default with: lfm config set-sonos-default-room \"Room Name\"");
+                    }
+                    return 1;
+                }
+
+                // Validate room exists
+                try
+                {
+                    await _sonosStreamer.ValidateRoomAsync(targetRoom);
+                }
+                catch (Exception ex)
+                {
+                    var error = ex.Message;
+                    if (json)
+                    {
+                        OutputJson(false, error);
+                    }
+                    else
+                    {
+                        Console.WriteLine($"{_symbols.Error} {error}");
+                        Console.WriteLine($"{_symbols.Tip} List available rooms with: lfm sonos rooms");
+                    }
+                    return 1;
+                }
             }
 
             // Validate artist name
@@ -93,72 +185,82 @@ public class PlayCommand : BaseCommand
             {
                 // Track mode (with optional album for disambiguation)
 
-                // Check for multiple versions if no album specified
-                if (_spotifyStreamer is SpotifyStreamer streamer && string.IsNullOrWhiteSpace(album))
+                // Ensure we have SpotifyStreamer for track searches
+                if (_spotifyStreamer is not SpotifyStreamer spotifyStreamer)
                 {
-                    var trackToSearch = new Track
+                    var error = "Spotify streamer not available";
+                    if (json)
                     {
-                        Name = track,
-                        Artist = new ArtistInfo { Name = artist }
-                    };
-
-                    trackSearchResult = await streamer.SearchSpotifyTrackWithDetailsAsync(trackToSearch, null);
-
-                    // If multiple versions detected, fail and ask LLM to specify album
-                    if (trackSearchResult.HasMultipleVersions)
-                    {
-                        if (json)
-                        {
-                            OutputJsonError(
-                                "Multiple versions found - album parameter required",
-                                artist,
-                                track,
-                                null,
-                                trackSearchResult
-                            );
-                        }
-                        else
-                        {
-                            Console.WriteLine($"{_symbols.Error} Multiple album versions found for this track:");
-                            foreach (var albumVersion in trackSearchResult.AlbumVersions)
-                            {
-                                Console.WriteLine($"  - {albumVersion}");
-                            }
-                            Console.WriteLine($"\nPlease specify the album with: --album \"Album Name\"");
-                        }
-                        return 1;
+                        OutputJson(false, error, artist, track, album);
                     }
+                    else
+                    {
+                        Console.WriteLine($"{_symbols.Error} {error}");
+                    }
+                    return 1;
                 }
 
-                // If album was specified with track, search with album filter first
-                if (_spotifyStreamer is SpotifyStreamer spotifyStreamer && !string.IsNullOrWhiteSpace(album))
+                // Do track search ONCE at the top (shared by both Spotify and Sonos)
+                var trackToSearch = new Track
                 {
-                    // Use album-aware track search
-                    var trackToSearch = new Track
-                    {
-                        Name = track,
-                        Artist = new ArtistInfo { Name = artist }
-                    };
+                    Name = track,
+                    Artist = new ArtistInfo { Name = artist }
+                };
 
-                    var searchResult = await spotifyStreamer.SearchSpotifyTrackWithDetailsAsync(trackToSearch, album);
+                trackSearchResult = await spotifyStreamer.SearchSpotifyTrackWithDetailsAsync(trackToSearch, album);
 
-                    if (searchResult.SpotifyUri == null)
+                // Check for multiple versions if no album was specified
+                if (string.IsNullOrWhiteSpace(album) && trackSearchResult.HasMultipleVersions)
+                {
+                    if (json)
                     {
-                        var error = $"Track not found on album: {artist} - {track} ({album})";
-                        if (json)
-                        {
-                            OutputJson(false, error, artist, track, album);
-                        }
-                        else
-                        {
-                            Console.WriteLine($"{_symbols.Error} {error}");
-                        }
-                        return 1;
+                        OutputJsonError(
+                            "Multiple versions found - album parameter required",
+                            artist,
+                            track,
+                            null,
+                            trackSearchResult
+                        );
                     }
+                    else
+                    {
+                        Console.WriteLine($"{_symbols.Error} Multiple album versions found for this track:");
+                        foreach (var albumVersion in trackSearchResult.AlbumVersions)
+                        {
+                            Console.WriteLine($"  - {albumVersion}");
+                        }
+                        Console.WriteLine($"\nPlease specify the album with: --album \"Album Name\"");
+                    }
+                    return 1;
+                }
 
-                    // Play the specific track URI we found
-                    var spotifyUris = new List<string> { searchResult.SpotifyUri };
+                // Check if track was found
+                if (trackSearchResult.SpotifyUri == null)
+                {
+                    var error = string.IsNullOrWhiteSpace(album)
+                        ? $"Track not found on Spotify: {artist} - {track}"
+                        : $"Track not found on album: {artist} - {track} ({album})";
 
+                    if (json)
+                    {
+                        OutputJson(false, error, artist, track, album);
+                    }
+                    else
+                    {
+                        Console.WriteLine($"{_symbols.Error} {error}");
+                    }
+                    return 1;
+                }
+
+                // Now route to the appropriate player with the found URI
+                var spotifyUris = new List<string> { trackSearchResult.SpotifyUri };
+
+                if (targetPlayer == PlayerType.Sonos)
+                {
+                    result = await PlayOnSonosAsync(spotifyUris, targetRoom!, queue);
+                }
+                else
+                {
                     if (queue)
                     {
                         result = await spotifyStreamer.QueueFromUrisAsync(spotifyUris, device);
@@ -166,27 +268,6 @@ public class PlayCommand : BaseCommand
                     else
                     {
                         result = await spotifyStreamer.PlayNowFromUrisAsync(spotifyUris, device);
-                    }
-                }
-                else
-                {
-                    // No album specified, use normal track search
-                    var tracksToPlay = new List<Track>
-                    {
-                        new Track
-                        {
-                            Name = track,
-                            Artist = new ArtistInfo { Name = artist }
-                        }
-                    };
-
-                    if (queue)
-                    {
-                        result = await _spotifyStreamer.QueueTracksAsync(tracksToPlay, device);
-                    }
-                    else
-                    {
-                        result = await _spotifyStreamer.PlayNowAsync(tracksToPlay, device);
                     }
                 }
             }
@@ -207,31 +288,57 @@ public class PlayCommand : BaseCommand
                     return 1;
                 }
 
-                // Search for album on Spotify and get all track URIs
-                var spotifyUris = await spotifyStreamer.SearchSpotifyAlbumTracksAsync(artist, album!);
-
-                if (!spotifyUris.Any())
+                // For Sonos, use album URI; for Spotify, use individual track URIs
+                if (targetPlayer == PlayerType.Sonos)
                 {
-                    var error = $"Album not found on Spotify: {artist} - {album}";
-                    if (json)
-                    {
-                        OutputJson(false, error, artist, null, album);
-                    }
-                    else
-                    {
-                        Console.WriteLine($"{_symbols.Error} {error}");
-                    }
-                    return 1;
-                }
+                    // Get album URI for Sonos
+                    var albumUri = await spotifyStreamer.SearchSpotifyAlbumUriAsync(artist, album!);
 
-                // Play or queue the album tracks
-                if (queue)
-                {
-                    result = await spotifyStreamer.QueueFromUrisAsync(spotifyUris, device);
+                    if (albumUri == null)
+                    {
+                        var error = $"Album not found on Spotify: {artist} - {album}";
+                        if (json)
+                        {
+                            OutputJson(false, error, artist, null, album);
+                        }
+                        else
+                        {
+                            Console.WriteLine($"{_symbols.Error} {error}");
+                        }
+                        return 1;
+                    }
+
+                    // Play album as a single unit on Sonos
+                    result = await PlayOnSonosAsync(new List<string> { albumUri }, targetRoom!, queue);
                 }
                 else
                 {
-                    result = await spotifyStreamer.PlayNowFromUrisAsync(spotifyUris, device);
+                    // Get individual track URIs for Spotify
+                    var spotifyUris = await spotifyStreamer.SearchSpotifyAlbumTracksAsync(artist, album!);
+
+                    if (!spotifyUris.Any())
+                    {
+                        var error = $"Album not found on Spotify: {artist} - {album}";
+                        if (json)
+                        {
+                            OutputJson(false, error, artist, null, album);
+                        }
+                        else
+                        {
+                            Console.WriteLine($"{_symbols.Error} {error}");
+                        }
+                        return 1;
+                    }
+
+                    // Play or queue the album tracks on Spotify
+                    if (queue)
+                    {
+                        result = await spotifyStreamer.QueueFromUrisAsync(spotifyUris, device);
+                    }
+                    else
+                    {
+                        result = await spotifyStreamer.PlayNowFromUrisAsync(spotifyUris, device);
+                    }
                 }
             }
 
@@ -335,5 +442,62 @@ public class PlayCommand : BaseCommand
         };
 
         Console.WriteLine(JsonSerializer.Serialize(output, new JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    /// <summary>
+    /// Play Spotify URIs on Sonos
+    /// </summary>
+    private async Task<PlaylistStreamResult> PlayOnSonosAsync(List<string> spotifyUris, string roomName, bool queue)
+    {
+        try
+        {
+            if (queue)
+            {
+                // Queue all tracks
+                foreach (var uri in spotifyUris)
+                {
+                    await _sonosStreamer.QueueAsync(uri, roomName);
+                }
+                return new PlaylistStreamResult
+                {
+                    Success = true,
+                    Message = $"Queued {spotifyUris.Count} track(s) to Sonos room '{roomName}'",
+                    TracksFound = spotifyUris.Count,
+                    NotFoundTracks = new List<string>()
+                };
+            }
+            else
+            {
+                // Play first track, then queue the rest
+                if (spotifyUris.Any())
+                {
+                    await _sonosStreamer.PlayNowAsync(spotifyUris[0], roomName);
+
+                    // Queue remaining tracks if any
+                    for (int i = 1; i < spotifyUris.Count; i++)
+                    {
+                        await _sonosStreamer.QueueAsync(spotifyUris[i], roomName);
+                    }
+                }
+
+                return new PlaylistStreamResult
+                {
+                    Success = true,
+                    Message = $"Playing {spotifyUris.Count} track(s) on Sonos room '{roomName}'",
+                    TracksFound = spotifyUris.Count,
+                    NotFoundTracks = new List<string>()
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            return new PlaylistStreamResult
+            {
+                Success = false,
+                Message = $"Error playing on Sonos: {ex.Message}",
+                TracksFound = 0,
+                NotFoundTracks = new List<string>()
+            };
+        }
     }
 }

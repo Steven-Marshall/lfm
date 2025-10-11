@@ -149,6 +149,18 @@ public class ConfigCommand
             Console.WriteLine($"Default Device: {(string.IsNullOrEmpty(config.Spotify.DefaultDevice) ? "❌ Not set" : config.Spotify.DefaultDevice)}");
 
             Console.WriteLine();
+            Console.WriteLine("Sonos Integration:");
+            Console.WriteLine($"API Bridge URL: {(string.IsNullOrEmpty(config.Sonos.HttpApiBaseUrl) ? "❌ Not set" : config.Sonos.HttpApiBaseUrl)}");
+            Console.WriteLine($"Default Room: {(string.IsNullOrEmpty(config.Sonos.DefaultRoom) ? "❌ Not set" : config.Sonos.DefaultRoom)}");
+            Console.WriteLine($"Auto-Discover Rooms: {(config.Sonos.AutoDiscoverRooms ? "✅ Yes" : "❌ No")}");
+            Console.WriteLine($"Room Cache Duration: {config.Sonos.RoomCacheDurationMinutes} minutes");
+            Console.WriteLine($"Timeout: {config.Sonos.TimeoutMs}ms");
+
+            Console.WriteLine();
+            Console.WriteLine("Player Selection:");
+            Console.WriteLine($"Default Player: {config.DefaultPlayer}");
+
+            Console.WriteLine();
             Console.WriteLine("🏷️ Tag Filtering:");
             Console.WriteLine($"Filtering Enabled: {(config.EnableTagFiltering ? "✅ Yes" : "❌ No")}");
             Console.WriteLine($"Tag Threshold: {config.TagFilterThreshold} (minimum tag count for exclusion)");
@@ -879,6 +891,122 @@ public class ConfigCommand
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error setting max empty windows");
+            Console.WriteLine($"{_symbols.Error} Error: {ex.Message}");
+        }
+    }
+
+    // Sonos Configuration Methods
+
+    public async Task SetSonosApiUrlAsync(string url)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                Console.WriteLine($"{_symbols.Error} Sonos API URL cannot be empty.");
+                Console.WriteLine($"{_symbols.Tip} Format: http://192.168.1.24:5005 (IP of your node-sonos-http-api server)");
+                return;
+            }
+
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || (uri.Scheme != "http" && uri.Scheme != "https"))
+            {
+                Console.WriteLine($"{_symbols.Error} Invalid URL format. Must be a valid HTTP/HTTPS URL.");
+                Console.WriteLine($"{_symbols.Tip} Example: http://192.168.1.24:5005");
+                return;
+            }
+
+            var config = await _configManager.LoadAsync();
+            config.Sonos.HttpApiBaseUrl = url.Trim();
+            await _configManager.SaveAsync(config);
+
+            Console.WriteLine($"{_symbols.Success} Sonos API URL set to: {url.Trim()}");
+            Console.WriteLine($"{_symbols.Tip} Test connection with: lfm sonos rooms");
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.ConfigSavedTo, _configManager.GetConfigPath()));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error setting Sonos API URL");
+            Console.WriteLine($"{_symbols.Error} Error: {ex.Message}");
+        }
+    }
+
+    public async Task SetSonosDefaultRoomAsync(string roomName)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(roomName))
+            {
+                Console.WriteLine($"{_symbols.Error} Room name cannot be empty.");
+                Console.WriteLine($"{_symbols.Tip} Use 'lfm sonos rooms' to see available rooms.");
+                return;
+            }
+
+            var config = await _configManager.LoadAsync();
+            config.Sonos.DefaultRoom = roomName.Trim();
+            await _configManager.SaveAsync(config);
+
+            Console.WriteLine($"{_symbols.Success} Default Sonos room set to: {roomName.Trim()}");
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.ConfigSavedTo, _configManager.GetConfigPath()));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error setting Sonos default room");
+            Console.WriteLine($"{_symbols.Error} Error: {ex.Message}");
+        }
+    }
+
+    public async Task ClearSonosDefaultRoomAsync()
+    {
+        try
+        {
+            var config = await _configManager.LoadAsync();
+            var previousRoom = config.Sonos.DefaultRoom;
+            config.Sonos.DefaultRoom = null;
+            await _configManager.SaveAsync(config);
+
+            if (!string.IsNullOrEmpty(previousRoom))
+            {
+                Console.WriteLine($"{_symbols.Success} Default Sonos room cleared (was: {previousRoom}).");
+            }
+            else
+            {
+                Console.WriteLine($"{_symbols.Success} Default Sonos room cleared.");
+            }
+            Console.WriteLine("You'll need to specify --target for Sonos playback.");
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.ConfigSavedTo, _configManager.GetConfigPath()));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error clearing Sonos default room");
+            Console.WriteLine($"{_symbols.Error} Error: {ex.Message}");
+        }
+    }
+
+    public async Task SetDefaultPlayerAsync(string playerType)
+    {
+        try
+        {
+            if (!Enum.TryParse<PlayerType>(playerType, true, out var player))
+            {
+                Console.WriteLine($"{_symbols.Error} Invalid player type. Valid options: Spotify, Sonos");
+                return;
+            }
+
+            var config = await _configManager.LoadAsync();
+            config.DefaultPlayer = player;
+            await _configManager.SaveAsync(config);
+
+            Console.WriteLine($"{_symbols.Success} Default player set to: {player}");
+            if (player == PlayerType.Sonos && string.IsNullOrEmpty(config.Sonos.DefaultRoom))
+            {
+                Console.WriteLine($"{_symbols.Tip} Don't forget to set a default Sonos room:");
+                Console.WriteLine("  lfm config set-sonos-default-room \"Kitchen\"");
+            }
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.ConfigSavedTo, _configManager.GetConfigPath()));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error setting default player");
             Console.WriteLine($"{_symbols.Error} Error: {ex.Message}");
         }
     }

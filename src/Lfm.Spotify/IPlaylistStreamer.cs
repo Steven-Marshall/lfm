@@ -72,6 +72,11 @@ public interface IPlaylistStreamer
     /// Skip to next or previous track
     /// </summary>
     Task<bool> SkipAsync(SkipDirection direction = SkipDirection.Next);
+
+    /// <summary>
+    /// Get new album releases from Spotify
+    /// </summary>
+    Task<List<SpotifyNewReleaseAlbum>> GetNewReleasesAsync(int limit = 50);
 }
 
 /// <summary>

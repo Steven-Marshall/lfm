@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using Lfm.Sonos.Models;
 
 namespace Lfm.Core.Configuration;
 
@@ -8,6 +9,12 @@ public enum UnicodeSupport
     Auto,     // Auto-detect terminal capabilities
     Enabled,  // Force Unicode symbols
     Disabled  // Force ASCII fallbacks
+}
+
+public enum PlayerType
+{
+    Spotify,
+    Sonos
 }
 
 public class LfmConfig
@@ -56,7 +63,12 @@ public class LfmConfig
 
     // Spotify Configuration
     public SpotifyConfig Spotify { get; set; } = new();
-    public string DefaultPlayer { get; set; } = "text"; // "text", "spotify"
+
+    // Sonos Configuration
+    public SonosConfig Sonos { get; set; } = new();
+
+    // Player Selection
+    public PlayerType DefaultPlayer { get; set; } = PlayerType.Spotify;
 
     // Debug settings
     public bool EnableApiDebugLogging { get; set; } = false;
@@ -151,7 +163,8 @@ public class ConfigurationManager : IConfigurationManager
         return new JsonSerializerOptions
         {
             WriteIndented = true,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
         };
     }
 }
