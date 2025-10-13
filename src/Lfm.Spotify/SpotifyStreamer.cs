@@ -40,8 +40,10 @@ public class SpotifyStreamer : IPlaylistStreamer
             await EnsureValidAccessTokenAsync();
             return !string.IsNullOrEmpty(_accessToken);
         }
-        catch
+        catch (Exception ex)
         {
+            // Log the actual error instead of silently failing
+            Console.WriteLine($"⚠️  Spotify authentication check failed: {ex.Message}");
             return false;
         }
     }
@@ -528,7 +530,17 @@ public class SpotifyStreamer : IPlaylistStreamer
         if (!string.IsNullOrEmpty(_config.RefreshToken))
         {
             // Try to refresh the token
-            await RefreshAccessTokenAsync();
+            try
+            {
+                await RefreshAccessTokenAsync();
+            }
+            catch (Exception ex)
+            {
+                // Refresh failed (expired/revoked token), fall back to OAuth flow
+                Console.WriteLine($"⚠️  Refresh token invalid or expired: {ex.Message}");
+                Console.WriteLine($"Starting OAuth flow to re-authenticate...\n");
+                await DoInitialOAuthFlowAsync();
+            }
         }
         else
         {

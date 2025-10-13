@@ -73,24 +73,9 @@ public class PlayCommand : BaseCommand
             // Store target room for Sonos (if applicable)
             string? targetRoom = null;
 
-            // Validate availability based on target player
-            if (targetPlayer == PlayerType.Spotify)
-            {
-                if (!await _spotifyStreamer.IsAvailableAsync())
-                {
-                    var error = "Spotify is not configured or authenticated. Please run 'lfm spotify auth' first.";
-                    if (json)
-                    {
-                        OutputJson(false, error);
-                    }
-                    else
-                    {
-                        Console.WriteLine($"{_symbols.Error} {error}");
-                    }
-                    return 1;
-                }
-            }
-            else // Sonos
+            // Validate Sonos configuration if using Sonos
+            // (Spotify authentication will happen automatically when needed)
+            if (targetPlayer == PlayerType.Sonos)
             {
                 if (!await _sonosStreamer.IsAvailableAsync())
                 {

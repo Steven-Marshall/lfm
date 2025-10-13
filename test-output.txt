@@ -1,0 +1,86 @@
+Searching tracks...
+Searched 250 tracks, found 0 matches (depth: 250/10,000)...
+Searched 500 tracks, found 7 matches (depth: 500/10,000)...
+Searched 750 tracks, found 12 matches (depth: 750/10,000)...
+Searched 1,000 tracks, found 13 matches (depth: 1,000/10,000)...
+Searched 1,250 tracks, found 14 matches (depth: 1,250/10,000)...
+Searched 1,500 tracks, found 14 matches (depth: 1,500/10,000)...
+Searched 1,750 tracks, found 15 matches (depth: 1,750/10,000)...
+Searched 2,000 tracks, found 15 matches (depth: 2,000/10,000)...
+Searched 2,250 tracks, found 15 matches (depth: 2,250/10,000)...
+Searched 2,500 tracks, found 28 matches (depth: 2,500/10,000)...
+Searched 2,750 tracks, found 34 matches (depth: 2,750/10,000)...
+
+Rank Track                                    Artist                         Plays     
+------------------------------------------------------------------------------------------
+1    The Final Cut                            Pink Floyd                     35        
+2    Two Suns in the Sunset                   Pink Floyd                     34        
+3    Southampton Dock                         Pink Floyd                     33        
+4    One of the Few                           Pink Floyd                     31        
+5    The Hero's Return                        Pink Floyd                     31        
+6    Paranoid Eyes                            Pink Floyd                     30        
+7    The Fletcher Memorial Home               Pink Floyd                     30        
+8    Get Your Filthy Hands Off My Desert      Pink Floyd                     29        
+9    Your Possible Pasts                      Pink Floyd                     29        
+10   The Post War Dream                       Pink Floyd                     28        
+
+
+⏱️ API Timing Results:
+Method              | Cache | Time (ms) | Details
+--------------------+-------+-----------+----------
+GetTopTracks        | MISS |     1362 | normal, params: smarshal, overall, 50, 3 [throttle:0ms, http:1290ms, json-read:0ms, json-parse:8ms, cache:42ms]
+GetTopTracks        | MISS |     1362 | normal, params: smarshal, overall, 50, 2 [throttle:0ms, http:1226ms, json-read:0ms, json-parse:76ms, cache:67ms]
+GetTopTracks        | MISS |     1361 | normal, params: smarshal, overall, 50, 5 [throttle:0ms, http:1226ms, json-read:0ms, json-parse:46ms, cache:68ms]
+GetTopTracks        | MISS |     1361 | normal, params: smarshal, overall, 50, 4 [throttle:0ms, http:1226ms, json-read:0ms, json-parse:74ms, cache:68ms]
+GetTopTracks        | MISS |      764 | normal, params: smarshal, overall, 50, 6 [throttle:0ms, http:740ms, json-read:0ms, json-parse:4ms, cache:2ms]
+GetTopTracks        | MISS |      800 | normal, params: smarshal, overall, 50, 8 [throttle:0ms, http:774ms, json-read:0ms, json-parse:6ms, cache:2ms]
+GetTopTracks        | MISS |      812 | normal, params: smarshal, overall, 50, 9 [throttle:0ms, http:789ms, json-read:0ms, json-parse:3ms, cache:2ms]
+GetTopTracks        | MISS |      996 | normal, params: smarshal, overall, 50, 7 [throttle:0ms, http:974ms, json-read:0ms, json-parse:4ms, cache:2ms]
+GetTopTracks        | MISS |      999 | normal, params: smarshal, overall, 50, 10 [throttle:0ms, http:974ms, json-read:0ms, json-parse:5ms, cache:2ms]
+GetTopTracks        | MISS |      809 | normal, params: smarshal, overall, 50, 15 [throttle:0ms, http:792ms, json-read:0ms, json-parse:3ms, cache:15ms]
+GetTopTracks        | MISS |      810 | normal, params: smarshal, overall, 50, 13 [throttle:0ms, http:792ms, json-read:0ms, json-parse:8ms, cache:7ms]
+GetTopTracks        | MISS |      846 | normal, params: smarshal, overall, 50, 14 [throttle:0ms, http:841ms, json-read:0ms, json-parse:1ms, cache:2ms]
+GetTopTracks        | MISS |      890 | normal, params: smarshal, overall, 50, 12 [throttle:0ms, http:884ms, json-read:0ms, json-parse:1ms, cache:2ms]
+GetTopTracks        | MISS |      893 | normal, params: smarshal, overall, 50, 11 [throttle:0ms, http:888ms, json-read:0ms, json-parse:1ms, cache:2ms]
+GetTopTracks        | MISS |      702 | normal, params: smarshal, overall, 50, 19 [throttle:0ms, http:689ms, json-read:0ms, json-parse:1ms, cache:2ms]
+GetTopTracks        | MISS |      790 | normal, params: smarshal, overall, 50, 20 [throttle:0ms, http:776ms, json-read:0ms, json-parse:1ms, cache:2ms]
+GetTopTracks        | MISS |      803 | normal, params: smarshal, overall, 50, 17 [throttle:0ms, http:788ms, json-read:0ms, json-parse:0ms, cache:2ms]
+GetTopTracks        | MISS |      825 | normal, params: smarshal, overall, 50, 16 [throttle:0ms, http:796ms, json-read:0ms, json-parse:0ms, cache:18ms]
+GetTopTracks        | MISS |      903 | normal, params: smarshal, overall, 50, 18 [throttle:0ms, http:888ms, json-read:0ms, json-parse:1ms, cache:3ms]
+GetTopTracks        | MISS |      684 | normal, params: smarshal, overall, 50, 25 [throttle:0ms, http:680ms, json-read:0ms, json-parse:0ms, cache:1ms]
+GetTopTracks        | MISS |      696 | normal, params: smarshal, overall, 50, 24 [throttle:0ms, http:693ms, json-read:0ms, json-parse:0ms, cache:1ms]
+GetTopTracks        | MISS |      725 | normal, params: smarshal, overall, 50, 23 [throttle:0ms, http:719ms, json-read:0ms, json-parse:0ms, cache:4ms]
+GetTopTracks        | MISS |      982 | normal, params: smarshal, overall, 50, 21 [throttle:0ms, http:977ms, json-read:0ms, json-parse:1ms, cache:2ms]
+GetTopTracks        | MISS |     1016 | normal, params: smarshal, overall, 50, 22 [throttle:0ms, http:1012ms, json-read:0ms, json-parse:0ms, cache:2ms]
+GetTopTracks        | MISS |      765 | normal, params: smarshal, overall, 50, 28 [throttle:0ms, http:753ms, json-read:0ms, json-parse:0ms, cache:2ms]
+GetTopTracks        | MISS |      814 | normal, params: smarshal, overall, 50, 29 [throttle:0ms, http:802ms, json-read:0ms, json-parse:0ms, cache:1ms]
+GetTopTracks        | MISS |      843 | normal, params: smarshal, overall, 50, 27 [throttle:0ms, http:829ms, json-read:0ms, json-parse:0ms, cache:2ms]
+GetTopTracks        | MISS |      857 | normal, params: smarshal, overall, 50, 30 [throttle:0ms, http:845ms, json-read:0ms, json-parse:0ms, cache:1ms]
+GetTopTracks        | MISS |     1414 | normal, params: smarshal, overall, 50, 26 [throttle:0ms, http:1401ms, json-read:0ms, json-parse:0ms, cache:1ms]
+GetTopTracks        | MISS |      706 | normal, params: smarshal, overall, 50, 35 [throttle:0ms, http:703ms, json-read:0ms, json-parse:0ms, cache:1ms]
+GetTopTracks        | MISS |      722 | normal, params: smarshal, overall, 50, 31 [throttle:0ms, http:720ms, json-read:0ms, json-parse:0ms, cache:1ms]
+GetTopTracks        | MISS |      804 | normal, params: smarshal, overall, 50, 34 [throttle:0ms, http:798ms, json-read:0ms, json-parse:2ms, cache:3ms]
+GetTopTracks        | MISS |      907 | normal, params: smarshal, overall, 50, 32 [throttle:0ms, http:904ms, json-read:0ms, json-parse:0ms, cache:1ms]
+GetTopTracks        | MISS |      939 | normal, params: smarshal, overall, 50, 33 [throttle:0ms, http:936ms, json-read:0ms, json-parse:0ms, cache:1ms]
+GetTopTracks        | MISS |      739 | normal, params: smarshal, overall, 50, 40 [throttle:0ms, http:729ms, json-read:0ms, json-parse:0ms, cache:2ms]
+GetTopTracks        | MISS |      791 | normal, params: smarshal, overall, 50, 38 [throttle:0ms, http:782ms, json-read:0ms, json-parse:0ms, cache:1ms]
+GetTopTracks        | MISS |      793 | normal, params: smarshal, overall, 50, 39 [throttle:0ms, http:783ms, json-read:0ms, json-parse:0ms, cache:1ms]
+GetTopTracks        | MISS |     1164 | normal, params: smarshal, overall, 50, 36 [throttle:0ms, http:1153ms, json-read:0ms, json-parse:0ms, cache:2ms]
+GetTopTracks        | MISS |     1165 | normal, params: smarshal, overall, 50, 37 [throttle:0ms, http:1153ms, json-read:0ms, json-parse:11ms, cache:1ms]
+GetTopTracks        | MISS |      734 | normal, params: smarshal, overall, 50, 41 [throttle:0ms, http:732ms, json-read:0ms, json-parse:0ms, cache:1ms]
+GetTopTracks        | MISS |      783 | normal, params: smarshal, overall, 50, 42 [throttle:0ms, http:781ms, json-read:0ms, json-parse:0ms, cache:1ms]
+GetTopTracks        | MISS |      853 | normal, params: smarshal, overall, 50, 43 [throttle:0ms, http:849ms, json-read:0ms, json-parse:3ms, cache:3ms]
+GetTopTracks        | MISS |      853 | normal, params: smarshal, overall, 50, 44 [throttle:0ms, http:849ms, json-read:0ms, json-parse:0ms, cache:2ms]
+GetTopTracks        | MISS |      861 | normal, params: smarshal, overall, 50, 45 [throttle:0ms, http:858ms, json-read:0ms, json-parse:0ms, cache:1ms]
+GetTopTracks        | MISS |      777 | normal, params: smarshal, overall, 50, 47 [throttle:0ms, http:767ms, json-read:0ms, json-parse:0ms, cache:1ms]
+GetTopTracks        | MISS |      805 | normal, params: smarshal, overall, 50, 48 [throttle:0ms, http:796ms, json-read:0ms, json-parse:0ms, cache:1ms]
+GetTopTracks        | MISS |      854 | normal, params: smarshal, overall, 50, 49 [throttle:0ms, http:845ms, json-read:0ms, json-parse:0ms, cache:1ms]
+GetTopTracks        | MISS |      856 | normal, params: smarshal, overall, 50, 50 [throttle:0ms, http:847ms, json-read:0ms, json-parse:0ms, cache:2ms]
+GetTopTracks        | MISS |     1019 | normal, params: smarshal, overall, 50, 46 [throttle:0ms, http:1009ms, json-read:0ms, json-parse:0ms, cache:1ms]
+GetTopTracks        | MISS |      774 | normal, params: smarshal, overall, 50, 53 [throttle:0ms, http:771ms, json-read:0ms, json-parse:0ms, cache:1ms]
+GetTopTracks        | MISS |      797 | normal, params: smarshal, overall, 50, 52 [throttle:0ms, http:794ms, json-read:0ms, json-parse:0ms, cache:1ms]
+GetTopTracks        | MISS |      827 | normal, params: smarshal, overall, 50, 55 [throttle:0ms, http:824ms, json-read:0ms, json-parse:0ms, cache:1ms]
+GetTopTracks        | MISS |      906 | normal, params: smarshal, overall, 50, 51 [throttle:0ms, http:899ms, json-read:0ms, json-parse:0ms, cache:5ms]
+GetTopTracks        | MISS |     1051 | normal, params: smarshal, overall, 50, 54 [throttle:0ms, http:1048ms, json-read:0ms, json-parse:0ms, cache:1ms]
+--------------------+-------+-----------+----------
+Total: 54 calls, 0 cache hits (0.0%), 48364ms
