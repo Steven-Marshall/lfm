@@ -95,6 +95,39 @@ Use this section to remember the user's taste and avoid bad recommendations:
 
 **Note**: All playback commands support both Spotify and Sonos. The user's config determines the default player, but you can specify `player: "Spotify"` or `player: "Sonos"` if needed. For Sonos, you can also specify `room: "Room Name"`.
 
+### Deep Search Performance & Strategy
+
+**For `lfm_artist_tracks` and `lfm_artist_albums`:**
+
+These tools search through listening history to find all tracks/albums by a specific artist. Performance depends on search depth.
+
+**Performance Tiers:**
+
+| Depth | Performance | Use Case |
+|-------|-------------|----------|
+| `depth: 500` | 1-2 seconds | Quick check for recent listens |
+| `depth: 2000` | 5-10 seconds | Broader search, good for most cases |
+| `deep: true` | 30+ seconds | Exhaustive search of entire history (100K+ scrobbles) |
+
+**Smart Default Strategy:**
+
+1. **Start with limited depth** for quick results
+2. **If artist not found**, try deeper search
+3. **Use `deep: true`** only when:
+   - User has massive library (100K+ scrobbles)
+   - Artist is obscure or rarely played
+   - You need complete history
+
+**Important Notes:**
+- Progress messages may appear during deep searches - this is normal
+- Depth parameter has no effect when `deep: true` is set
+- Cache dramatically speeds up repeated searches
+
+**Examples:**
+- "Have I heard this artist?" → Start with `depth: 500`
+- "Show me all Pink Floyd albums" → `depth: 2000` or `deep: true`
+- "What's my favorite track by [well-known artist]?" → `depth: 2000` sufficient
+
 ### Understanding User Intent for Playback
 
 **Key distinction: Current session vs Saved collection**
@@ -192,6 +225,58 @@ When using `verbose: true` on `lfm_check`, you may see:
 
 **When recommending music:**
 If album has high playcount with some 0-play tracks + `hasDiscrepancy: true`, assume they heard the full album.
+
+#### Understanding Zero-Play Track Patterns
+
+When you see tracks with 0 plays on albums with high playcounts, the cause depends on context:
+
+**1. High `unaccountedPlays` → Metadata Variant**
+- **Indicator**: `unaccountedPlays > 0` with `hasDiscrepancy: true`
+- **Meaning**: Track was scrobbled under a different name
+- **Common causes**:
+  - Featuring artists: "exile" vs "exile (feat. Bon Iver)"
+  - Part numbers: "Shine On You Crazy Diamond" vs "Shine On You Crazy Diamond (Parts 1-5)"
+  - Remaster suffixes: "Hey Jude" vs "Hey Jude - 2015 Remaster"
+- **Interpretation**: User HAS heard these tracks, just under different metadata
+
+**2. Zero plays at album end → Drop-Off Effect**
+- **Indicator**: 0 plays on final tracks of long albums (60+ minutes, 15+ tracks)
+- **Meaning**: Real-world interruptions during listening (phone calls, appointments, etc.)
+- **Example**: Sufjan Stevens "Illinois" (22 tracks, 74 min) - final tracks often show 0 plays
+- **Interpretation**: Compare track 1 vs final track playcount for completion rate estimate
+
+**3. Zero plays on specific tracks → Bonus Tracks**
+- **Indicator**: 0 plays with `unaccountedPlays: 0` and no drop-off pattern
+- **Meaning**: User likely doesn't own that version (deluxe edition, bonus tracks)
+- **Example**: Taylor Swift "folklore" - "the lakes" shows 0 plays (bonus track not owned)
+- **Interpretation**: User owns standard edition, not deluxe
+
+#### Analyzing Long Albums
+
+For albums with 15+ tracks or 60+ minutes:
+
+**Look for drop-off patterns:**
+- Compare first track plays vs last track plays
+- Significant drop (40-50%) suggests interrupted listens
+- Even distribution suggests complete album listens
+
+**Example Analysis:**
+```
+Taylor Swift - folklore (17 tracks):
+- Track 1 ("the 1"): 33 plays
+- Track 17 ("hoax"): 18 plays
+- Drop-off: 45% → ~18 complete listens + 15 partial listens
+
+Pink Floyd - Wish You Were Here (5 tracks):
+- Track 1: balanced with others
+- Unaccounted: 16 plays
+- Pattern: ~8-9 complete album listens
+```
+
+**When analyzing:**
+- Track variance on short albums (< 10 tracks) = favorite tracks
+- Track variance on long albums (15+ tracks) = combination of favorites + drop-off
+- Use track position to distinguish between the two
 
 ### Discovery Workflows
 

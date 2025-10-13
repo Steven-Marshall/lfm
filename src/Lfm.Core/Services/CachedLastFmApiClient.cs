@@ -22,6 +22,7 @@ public class CachedLastFmApiClient : ILastFmApiClient
     private readonly int _defaultCacheExpiryMinutes;
     private DateTime _lastApiCallTime = DateTime.MinValue;
     private readonly SemaphoreSlim _throttleSemaphore = new(1, 1);
+    private readonly SemaphoreSlim _cleanupLock = new(1, 1);
 
     public bool EnableTiming { get; set; } = false;
     public List<TimingInfo> TimingResults { get; } = new();
@@ -149,9 +150,25 @@ public class CachedLastFmApiClient : ILastFmApiClient
         
         try
         {
-            // Check if cleanup is needed (non-blocking)
-            _ = Task.Run(async () => await TryCleanupIfNeededAsync());
-            
+            // Check if cleanup is needed (non-blocking, skip if one already running)
+            if (_cleanupLock.CurrentCount > 0)
+            {
+                _ = Task.Run(async () =>
+                {
+                    if (await _cleanupLock.WaitAsync(0))
+                    {
+                        try
+                        {
+                            await TryCleanupIfNeededAsync();
+                        }
+                        finally
+                        {
+                            _cleanupLock.Release();
+                        }
+                    }
+                });
+            }
+
             var config = await _configManager.LoadAsync();
             var effectiveBehavior = config.CacheEnabled ? CacheBehavior : CacheBehavior.NoCache;
             
@@ -560,10 +577,19 @@ public class CachedLastFmApiClient : ILastFmApiClient
                 await _cacheStorage.CleanupAsync();
                 _logger.LogInformation("Cache cleanup completed");
             }
-            
-            // Update last cleanup time
-            config.LastCacheCleanup = DateTime.Now;
-            await _configManager.SaveAsync(config);
+
+            // Update last cleanup time - wrap in try-catch to prevent data loss
+            // If config deserialization failed earlier, we don't want to overwrite it
+            try
+            {
+                config.LastCacheCleanup = DateTime.Now;
+                await _configManager.SaveAsync(config);
+            }
+            catch (Exception saveEx)
+            {
+                _logger.LogWarning(saveEx, "Could not update last cleanup timestamp in config, continuing");
+                // Don't fail cleanup if config save fails
+            }
         }
         catch (Exception ex)
         {

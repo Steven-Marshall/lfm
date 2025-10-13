@@ -118,7 +118,12 @@
       "Read(//c/Users/steve/scoop/**)",
       "WebFetch(domain:docs.sonos.com)",
       "WebFetch(domain:github.com)",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "Read(//c/Users/steve/**)",
+      "mcp__lfm__lfm_init",
+      "mcp__lfm__lfm_artist_albums",
+      "mcp__lfm__lfm_check",
+      "mcp__lfm__lfm_bulk_check"
     ],
     "deny": []
   }

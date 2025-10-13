@@ -790,7 +790,7 @@ Quick reference:
             },
             depth: {
               type: 'number',
-              description: 'Maximum number of items to search through (0 for unlimited)'
+              description: 'Search depth (quick: 500, broader: 2000, unlimited: 0). Higher values take longer but find more history.'
             }
           },
           required: ['artist']
@@ -820,7 +820,7 @@ Quick reference:
             },
             depth: {
               type: 'number',
-              description: 'Maximum number of items to search through (0 for unlimited)'
+              description: 'Search depth (quick: 500, broader: 2000, unlimited: 0). Higher values take longer but find more history.'
             }
           },
           required: ['artist']
