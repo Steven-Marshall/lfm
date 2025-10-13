@@ -32,16 +32,21 @@ public static class RecentCommandBuilder
             "Output as JSON");
         jsonOption.AddAlias("-j");
 
+        var (forceCacheOption, forceApiOption, noCacheOption) = CommandOptionBuilders.BuildCacheOptions();
+
         command.AddOption(limitOption);
         command.AddOption(hoursOption);
         command.AddOption(usernameOption);
         command.AddOption(jsonOption);
+        command.AddOption(forceCacheOption);
+        command.AddOption(forceApiOption);
+        command.AddOption(noCacheOption);
 
-        command.SetHandler(async (int limit, int? hours, string? username, bool json) =>
+        command.SetHandler(async (int limit, int? hours, string? username, bool json, bool forceCache, bool forceApi, bool noCache) =>
         {
             var recentCommand = services.GetRequiredService<RecentCommand>();
-            await recentCommand.ExecuteAsync(limit, hours, username, json);
-        }, limitOption, hoursOption, usernameOption, jsonOption);
+            await recentCommand.ExecuteAsync(limit, hours, username, json, forceCache, forceApi, noCache);
+        }, limitOption, hoursOption, usernameOption, jsonOption, forceCacheOption, forceApiOption, noCacheOption);
 
         return command;
     }

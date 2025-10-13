@@ -358,3 +358,68 @@ Pink Floyd - Wish You Were Here (5 tracks):
 - **Sonos**: "Room not found" → verify room name with user, check config
 - Track not found → may need album disambiguation
 - Device not responding → check player is open and logged in
+
+---
+
+## 🔍 Duplicate Scrobble Detection
+
+Duplicate scrobbles can occur when playing music simultaneously on Sonos and Spotify (or other scenarios). Here's how to detect and handle them:
+
+### Detection Workflow
+
+**Command:**
+```
+lfm_recent_tracks --hours 48 --limit 200
+```
+
+**What counts as a duplicate:**
+- Same track appearing **within ~10 minutes**
+- **NOT exact timestamps** (same second) - these are legitimate simultaneous playback
+
+**Criteria:**
+- ✅ **Exact timestamps** (e.g., 1 second apart): OK - simultaneous Sonos/Spotify playback
+- ❌ **Within 10 minutes**: Likely duplicate (verify manually)
+- ✅ **More than 10 minutes apart**: Different listening session, even if same track/album
+
+### Why Exact Timestamps Are OK
+
+When playing on both Sonos and Spotify simultaneously (e.g., switching rooms), Last.fm receives scrobbles from both at the same time. These are **legitimate** dual scrobbles representing the same listening moment, not duplicates to clean up.
+
+**Example patterns:**
+```
+The National - "Sea of Love"      [13:50:57]
+The National - "Fireproof"        [13:50:58]  ✅ 1 second apart = simultaneous playback
+
+The Left Banke - "Walk Away Renee" [09:10]
+The Left Banke - "Walk Away Renee" [09:18]    ❌ 8 minutes apart = likely duplicate
+```
+
+### Manual Cleanup Process
+
+**Important**: Last.fm removed API deletion capability in 2016. Automated deletion is not possible.
+
+**Cleanup workflow:**
+1. Identify duplicates using criteria above
+2. User manually deletes via Last.fm web interface
+3. Verify cleanup with **`--force-api`** to bypass cache:
+   ```
+   lfm_recent_tracks --hours 48 --limit 200 (with force-api option)
+   ```
+
+### Analysis Tips
+
+When checking for duplicates:
+- Focus on tracks within 2-10 minute windows
+- Ignore exact timestamp pairs (simultaneous playback)
+- Look for patterns: repeated tracks outside album context
+- Long gaps (30+ mins) usually indicate intentional replays, not duplicates
+
+**Example output:**
+```
+User: "Check last 48hrs for dupes"
+
+You: [Analyze recent tracks]
+- Found 0 duplicates ✅
+- 4 simultaneous playback pairs (OK)
+- All track repetitions are 30+ minutes apart (intentional album replays)
+```

@@ -5,41 +5,39 @@ using System.Text.Json;
 
 namespace Lfm.Cli.Commands;
 
-public class RecentCommand
+public class RecentCommand : BaseCommand
 {
     private readonly ILastFmService _lastFmService;
-    private readonly IConfigurationManager _configManager;
-    private readonly ISymbolProvider _symbols;
-    private readonly ILogger<RecentCommand> _logger;
 
     public RecentCommand(
-        ILastFmService lastFmService,
+        ILastFmApiClient apiClient,
         IConfigurationManager configManager,
+        ILastFmService lastFmService,
         ISymbolProvider symbolProvider,
         ILogger<RecentCommand> logger)
+        : base(apiClient, configManager, logger, symbolProvider)
     {
         _lastFmService = lastFmService ?? throw new ArgumentNullException(nameof(lastFmService));
-        _configManager = configManager ?? throw new ArgumentNullException(nameof(configManager));
-        _symbols = symbolProvider ?? throw new ArgumentNullException(nameof(symbolProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task ExecuteAsync(
         int limit = 20,
         int? hours = null,
         string? username = null,
-        bool json = false)
+        bool json = false,
+        bool forceCache = false,
+        bool forceApi = false,
+        bool noCache = false)
     {
-        try
+        await ExecuteWithErrorHandlingAsync("recent command", async () =>
         {
-            var config = await _configManager.LoadAsync();
-            var effectiveUsername = username ?? config.DefaultUsername;
+            // Configure cache behavior
+            ConfigureCaching(timing: false, forceCache, forceApi, noCache);
 
-            if (string.IsNullOrEmpty(effectiveUsername))
-            {
-                Console.WriteLine($"{_symbols.Error} No username specified. Use --user or set default username with 'lfm config set username YOUR_USERNAME'");
+            // Get username (from parameter or config default)
+            var effectiveUsername = await GetUsernameAsync(username);
+            if (effectiveUsername == null)
                 return;
-            }
 
             var result = await _lastFmService.GetUserRecentTracksAsync(effectiveUsername, limit, hours);
 
@@ -97,12 +95,7 @@ public class RecentCommand
                 Console.WriteLine();
                 Console.WriteLine($"Total: {result.Tracks.Count} tracks");
             }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting recent tracks");
-            Console.WriteLine($"{_symbols.Error} Error: {ex.Message}");
-        }
+        });
     }
 
     private string GetFormattedTime(Lfm.Core.Models.DateInfo? date)
