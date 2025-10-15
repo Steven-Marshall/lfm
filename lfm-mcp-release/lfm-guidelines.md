@@ -80,6 +80,16 @@ Use this section to remember the user's taste and avoid bad recommendations:
 - `lfm_check` - Single artist/track/album
 - `lfm_bulk_check` - Multiple items (more efficient)
 
+**When `lfm_check` returns 0 plays:**
+- **Don't assume user hasn't heard it** - metadata may not match exactly
+- **Fallback strategy**: Use `lfm_artist_albums` or `lfm_artist_tracks` with `deep: true`
+- These search actual scrobble history, more resilient to metadata variations:
+  - Spacing differences: "Renée / Pretty" vs "Renée/Pretty"
+  - Remaster suffixes: "Hey Jude" vs "Hey Jude (2012 Remaster)"
+  - Featuring artists: "exile" vs "exile (feat. Bon Iver)"
+- `lfm_check` uses Last.fm's autocorrect (handles typos) but requires exact punctuation matching
+- Real scrobbles are the source of truth, not Last.fm's canonical names
+
 **Music Playback (Spotify & Sonos):**
 - `lfm_current_track` - See what user is listening to (for contextual engagement)
 - `lfm_play_now` - Immediate playback (replaces current track)
@@ -95,38 +105,64 @@ Use this section to remember the user's taste and avoid bad recommendations:
 
 **Note**: All playback commands support both Spotify and Sonos. The user's config determines the default player, but you can specify `player: "Spotify"` or `player: "Sonos"` if needed. For Sonos, you can also specify `room: "Room Name"`.
 
+### Track Positions & Album Details - Known LLM Blind Spot
+
+**NEVER reference track numbers or positions without verification.**
+
+Track-level metadata is NOT in LLM knowledge bases reliably. This includes:
+- Track positions ("track 5 is...", "the third song...")
+- Track counts ("this 12-track album...")
+- Which songs appear on which albums (varies by edition)
+
+**Always verify with:**
+- `lfm_check(artist, album, verbose: true)` → Full tracklist with play counts
+- `lfm_current_track()` → Current playback position
+- `lfm_recent_tracks(hours: 1-2)` → Recent listening context (mid-album vs single track?)
+
+**Why:** Track positions are edge-case data for LLMs. You'll hallucinate with false confidence.
+
+**Example workflow:**
+1. Check what's playing: `lfm_current_track()`
+2. Check recent history: `lfm_recent_tracks(hours: 1)`
+   - See if user is mid-album (5 tracks from same album in a row)
+   - Or just playing one track
+3. Get album structure: `lfm_check(artist, album, verbose: true)`
+4. Now discuss with actual data
+
+**Good workflow:**
+1. LLM: Make recommendation based on listening patterns
+2. MCP: Provide factual data (tracklist, current track, play counts, recent history)
+3. LLM: Discuss/contextualize using verified data
+
 ### Deep Search Performance & Strategy
 
 **For `lfm_artist_tracks` and `lfm_artist_albums`:**
 
-These tools search through listening history to find all tracks/albums by a specific artist. Performance depends on search depth.
+These tools search through listening history by **popularity ranking** (top N most-played tracks), NOT chronologically.
 
-**Performance Tiers:**
+**Understanding Depth:**
+- `depth: 2000` = Search your top 2000 most-played tracks
+- `deep: true` = Search entire history (unlimited)
 
-| Depth | Performance | Use Case |
-|-------|-------------|----------|
-| `depth: 500` | 1-2 seconds | Quick check for recent listens |
-| `depth: 2000` | 5-10 seconds | Broader search, good for most cases |
-| `deep: true` | 30+ seconds | Exhaustive search of entire history (100K+ scrobbles) |
+**Critical insight:** If an artist has 14 plays but ranks #2324 in your library, `depth: 2000` will miss them entirely. Depth is about play count ranking, not recency.
 
-**Smart Default Strategy:**
+**Recommended Approach:**
 
-1. **Start with limited depth** for quick results
-2. **If artist not found**, try deeper search
-3. **Use `deep: true`** only when:
-   - User has massive library (100K+ scrobbles)
-   - Artist is obscure or rarely played
-   - You need complete history
+**Default to `deep: true`** for artist discovery:
+- First search is comprehensive (may take 30+ seconds)
+- Cache makes all subsequent searches instant
+- Works for both popular and obscure artists in your library
+- No guessing about ranking thresholds
 
-**Important Notes:**
-- Progress messages may appear during deep searches - this is normal
-- Depth parameter has no effect when `deep: true` is set
-- Cache dramatically speeds up repeated searches
+**When to use limited depth:**
+- You know the artist is well-played in your library
+- Quick check for top-ranked artists only
+- Performance constraints require it
 
 **Examples:**
-- "Have I heard this artist?" → Start with `depth: 500`
-- "Show me all Pink Floyd albums" → `depth: 2000` or `deep: true`
-- "What's my favorite track by [well-known artist]?" → `depth: 2000` sufficient
+- "Have I heard The Left Banke?" → `deep: true` (unknown ranking)
+- "What's my favorite Pink Floyd track?" → `depth: 2000` (guaranteed top-ranked)
+- "Show me all Guided By Voices albums" → `deep: true` (breadth listener: many albums × 1-2 plays each)
 
 ### Understanding User Intent for Playback
 
@@ -225,6 +261,24 @@ When using `verbose: true` on `lfm_check`, you may see:
 
 **When recommending music:**
 If album has high playcount with some 0-play tracks + `hasDiscrepancy: true`, assume they heard the full album.
+
+**When answering "Have I listened to X?":**
+
+Keep it concise and conversational:
+- Calculate actual listens: total plays ÷ track count (or use track average)
+- Answer directly: "Yes, [album] - you've listened 4-5 times"
+- **ONE** interesting detail is fine (e.g., "including the 17-minute epic")
+- **Don't** provide track-by-track breakdowns unless asked
+- **Don't** explain metadata discrepancy math in detail
+- **Don't** turn it into a music history lesson
+
+**Examples:**
+
+✅ **Good:**
+"Yes, you've listened to White Light/White Heat 4-5 times (21 plays, including the 17-minute 'Sister Ray')."
+
+❌ **Bad:**
+"Yes! Track breakdown: Sister Ray (5 plays), The Gift (4 plays)... [8 more lines] ...That title track showing 0 is almost certainly a metadata mismatch - likely scrobbled under a different name (remaster suffix, etc.). No one listens to White Light/White Heat 4-5 times and skips the opening title track..."
 
 #### Understanding Zero-Play Track Patterns
 

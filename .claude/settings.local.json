@@ -123,7 +123,12 @@
       "mcp__lfm__lfm_init",
       "mcp__lfm__lfm_artist_albums",
       "mcp__lfm__lfm_check",
-      "mcp__lfm__lfm_bulk_check"
+      "mcp__lfm__lfm_bulk_check",
+      "Bash(for dir in Lfm.*/)",
+      "Bash(do echo \"=== $dir ===\")",
+      "Bash(done)",
+      "Read(//c/**)",
+      "Bash(node:*)"
     ],
     "deny": []
   }

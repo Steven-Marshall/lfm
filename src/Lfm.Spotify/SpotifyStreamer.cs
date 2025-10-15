@@ -72,7 +72,7 @@ public class SpotifyStreamer : IPlaylistStreamer
 
                 if (firstSpotifyUri != null)
                 {
-                    var startSuccess = await StartPlaybackAsync(firstSpotifyUri, device);
+                    var startSuccess = await StartPlaybackAsync(new List<string> { firstSpotifyUri }, device);
                     if (startSuccess)
                     {
                         Console.WriteLine($"🎵 Started playing: {firstTrack.Artist.Name} - {firstTrack.Name}");
@@ -169,7 +169,7 @@ public class SpotifyStreamer : IPlaylistStreamer
             }
 
             // Start playing first track immediately (interrupts current playback)
-            var startSuccess = await StartPlaybackAsync(firstSpotifyUri, device);
+            var startSuccess = await StartPlaybackAsync(new List<string> { firstSpotifyUri }, device);
             if (!startSuccess)
             {
                 result.Success = false;
@@ -232,6 +232,7 @@ public class SpotifyStreamer : IPlaylistStreamer
 
     /// <summary>
     /// Play Spotify URIs immediately (for album playback)
+    /// Uses atomic API call to play all tracks at once (up to 100 tracks supported)
     /// </summary>
     public async Task<PlaylistStreamResult> PlayNowFromUrisAsync(List<string> spotifyUris, string? device = null)
     {
@@ -250,8 +251,8 @@ public class SpotifyStreamer : IPlaylistStreamer
                 return result;
             }
 
-            // Start playing first track immediately
-            var startSuccess = await StartPlaybackAsync(spotifyUris.First(), device);
+            // Play all tracks in one atomic API call (guaranteed order)
+            var startSuccess = await StartPlaybackAsync(spotifyUris, device);
             if (!startSuccess)
             {
                 result.Success = false;
@@ -259,35 +260,11 @@ public class SpotifyStreamer : IPlaylistStreamer
                 return result;
             }
 
-            Console.WriteLine($"▶️  Now playing album");
-            result.TracksFound++;
-            result.TracksProcessed++;
-
-            // Queue remaining tracks
-            foreach (var uri in spotifyUris.Skip(1))
-            {
-                var queueSuccess = await AddToQueueAsync(uri);
-                if (queueSuccess)
-                {
-                    result.TracksFound++;
-                    Console.WriteLine($"✅ Queued track");
-                }
-                else
-                {
-                    Console.WriteLine($"❌ Failed to queue track");
-                }
-
-                result.TracksProcessed++;
-
-                // Rate limiting
-                if (_config.RateLimitDelayMs > 0)
-                {
-                    await Task.Delay(_config.RateLimitDelayMs);
-                }
-            }
-
-            result.Success = result.TracksFound > 0;
-            result.Message = $"Now playing {result.TracksFound} tracks from album";
+            Console.WriteLine($"▶️  Now playing {spotifyUris.Count} tracks");
+            result.TracksFound = spotifyUris.Count;
+            result.TracksProcessed = spotifyUris.Count;
+            result.Success = true;
+            result.Message = $"Now playing {spotifyUris.Count} tracks from album";
 
             return result;
         }
@@ -1115,16 +1092,16 @@ public class SpotifyStreamer : IPlaylistStreamer
         }
     }
 
-    private async Task<bool> StartPlaybackAsync(string trackUri, string? device = null)
+    private async Task<bool> StartPlaybackAsync(List<string> trackUris, string? device = null)
     {
         _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
 
         try
         {
-            // Prepare the play request
+            // Prepare the play request with multiple URIs (supports up to 100 tracks)
             var playRequest = new
             {
-                uris = new[] { trackUri }
+                uris = trackUris
             };
 
             // If a specific device is requested, include it

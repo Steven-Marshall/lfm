@@ -48,63 +48,120 @@ function parseJsonOutput(output) {
     return JSON.parse(output);
   } catch (error) {
     // If that fails, try to extract JSON from mixed output
+    // Find both array and object positions to extract whichever comes first
 
-    // Method 1: Find a complete JSON object by counting braces
-    let startIndex = output.indexOf('{');
-    if (startIndex !== -1) {
-      let braceCount = 0;
-      let endIndex = -1;
+    const arrayPos = output.indexOf('[');
+    const objectPos = output.indexOf('{');
 
-      for (let i = startIndex; i < output.length; i++) {
-        if (output[i] === '{') braceCount++;
-        else if (output[i] === '}') {
-          braceCount--;
-          if (braceCount === 0) {
-            endIndex = i + 1;
-            break;
-          }
-        }
+    // Determine which structure to try extracting first
+    const tryArrayFirst = arrayPos !== -1 && (objectPos === -1 || arrayPos < objectPos);
+
+    if (tryArrayFirst) {
+      // Try extracting array first
+      const arrayResult = extractArray(output, arrayPos);
+      if (arrayResult) return arrayResult;
+
+      // If array extraction failed, try object
+      if (objectPos !== -1) {
+        const objectResult = extractObject(output, objectPos);
+        if (objectResult) return objectResult;
       }
+    } else if (objectPos !== -1) {
+      // Try extracting object first
+      const objectResult = extractObject(output, objectPos);
+      if (objectResult) return objectResult;
 
-      if (endIndex > startIndex) {
-        try {
-          const jsonStr = output.substring(startIndex, endIndex);
-          return JSON.parse(jsonStr);
-        } catch (innerError) {
-          // Fall through to next method
-        }
-      }
-    }
-
-    // Method 2: Find JSON array
-    startIndex = output.indexOf('[');
-    if (startIndex !== -1) {
-      let bracketCount = 0;
-      let endIndex = -1;
-
-      for (let i = startIndex; i < output.length; i++) {
-        if (output[i] === '[') bracketCount++;
-        else if (output[i] === ']') {
-          bracketCount--;
-          if (bracketCount === 0) {
-            endIndex = i + 1;
-            break;
-          }
-        }
-      }
-
-      if (endIndex > startIndex) {
-        try {
-          const jsonStr = output.substring(startIndex, endIndex);
-          return JSON.parse(jsonStr);
-        } catch (innerError) {
-          // Fall through to error
-        }
+      // If object extraction failed, try array
+      if (arrayPos !== -1) {
+        const arrayResult = extractArray(output, arrayPos);
+        if (arrayResult) return arrayResult;
       }
     }
 
     throw new Error(`Failed to parse JSON output: ${error.message}`);
   }
+
+  // Helper function to extract complete JSON array
+  function extractArray(output, startIndex) {
+    let bracketCount = 0;
+    let endIndex = -1;
+
+    for (let i = startIndex; i < output.length; i++) {
+      if (output[i] === '[') bracketCount++;
+      else if (output[i] === ']') {
+        bracketCount--;
+        if (bracketCount === 0) {
+          endIndex = i + 1;
+          break;
+        }
+      }
+    }
+
+    if (endIndex > startIndex) {
+      try {
+        const jsonStr = output.substring(startIndex, endIndex);
+        return JSON.parse(jsonStr);
+      } catch (error) {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  // Helper function to extract complete JSON object
+  function extractObject(output, startIndex) {
+    let braceCount = 0;
+    let endIndex = -1;
+
+    for (let i = startIndex; i < output.length; i++) {
+      if (output[i] === '{') braceCount++;
+      else if (output[i] === '}') {
+        braceCount--;
+        if (braceCount === 0) {
+          endIndex = i + 1;
+          break;
+        }
+      }
+    }
+
+    if (endIndex > startIndex) {
+      try {
+        const jsonStr = output.substring(startIndex, endIndex);
+        return JSON.parse(jsonStr);
+      } catch (error) {
+        return null;
+      }
+    }
+    return null;
+  }
+}
+
+// Compact helper functions for MCP token optimization
+// These strip URLs and MBIDs that LLMs can't use, saving ~50% tokens
+function compactAlbum(album) {
+  return {
+    name: album.name,
+    playcount: album.playcount,
+    artist: album.artist?.name || album.artist,
+    rank: album['@attr']?.rank
+  };
+}
+
+function compactArtist(artist) {
+  return {
+    name: artist.name,
+    playcount: artist.playcount,
+    rank: artist['@attr']?.rank
+  };
+}
+
+function compactTrack(track) {
+  return {
+    name: track.name,
+    playcount: track.playcount,
+    artist: track.artist?.name || track.artist,
+    rank: track['@attr']?.rank
+  };
 }
 
 // Cross-platform guidelines loading
@@ -1064,7 +1121,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             type: 'text',
             text: JSON.stringify({
               success: true,
-              tracks: result.track || [],
+              tracks: (result.track || []).map(compactTrack),
               count: result.track ? result.track.length : 0,
               attributes: result['@attr'] || {}
             }, null, 2)
@@ -1122,7 +1179,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             type: 'text',
             text: JSON.stringify({
               success: true,
-              artists: result.artist || [],
+              artists: (result.artist || []).map(compactArtist),
               count: result.artist ? result.artist.length : 0,
               attributes: result['@attr'] || {}
             }, null, 2)
@@ -1178,7 +1235,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             type: 'text',
             text: JSON.stringify({
               success: true,
-              albums: result.album || [],
+              albums: (result.album || []).map(compactAlbum),
               count: result.album ? result.album.length : 0,
               attributes: result['@attr'] || {}
             }, null, 2)
@@ -1570,6 +1627,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (album) {
         try {
           const result = parseJsonOutput(output);
+
+          // Add contextual reminder for verbose mode
+          if (verbose) {
+            result._response_guidance = "⚠️ Keep response concise: Answer directly + ONE interesting detail max. Don't provide track-by-track breakdowns or explain metadata discrepancy math unless asked.";
+          }
+
           return {
             content: [
               {
@@ -1789,14 +1852,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       const output = await executeLfmCommand(cmdArgs);
 
-      return {
-        content: [
-          {
-            type: 'text',
-            text: output
-          }
-        ]
-      };
+      // Parse JSON and add contextual reminder about depth parameter
+      try {
+        const result = parseJsonOutput(output);
+        result._depth_guidance = "⚠️ CRITICAL: depth parameter is POPULARITY RANKING (top N by play count), NOT chronological. For broad listeners or obscure artists, use deep:true instead of guessing depth values.";
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2)
+            }
+          ]
+        };
+      } catch (parseError) {
+        // Fallback to raw output if JSON parsing fails
+        return {
+          content: [
+            {
+              type: 'text',
+              text: output
+            }
+          ]
+        };
+      }
     } catch (error) {
       return {
         content: [
@@ -1835,14 +1914,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       const output = await executeLfmCommand(cmdArgs);
 
-      return {
-        content: [
-          {
-            type: 'text',
-            text: output
-          }
-        ]
-      };
+      // Parse JSON and add contextual reminder about depth parameter
+      try {
+        const result = parseJsonOutput(output);
+        result._depth_guidance = "⚠️ CRITICAL: depth parameter is POPULARITY RANKING (top N by play count), NOT chronological. For broad listeners or obscure artists, use deep:true instead of guessing depth values.";
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2)
+            }
+          ]
+        };
+      } catch (parseError) {
+        // Fallback to raw output if JSON parsing fails
+        return {
+          content: [
+            {
+              type: 'text',
+              text: output
+            }
+          ]
+        };
+      }
     } catch (error) {
       return {
         content: [

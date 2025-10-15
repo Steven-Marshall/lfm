@@ -1,327 +1,78 @@
 # Last.fm CLI - Claude Session Notes
 
 ## Project Overview
-Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The project has undergone significant refactoring to eliminate code duplication, simplify architecture, and optimize API usage.
+Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The project has undergone significant refactoring to eliminate code duplication, simplify architecture, and optimize API usage. All major features are complete and production-ready.
 
 ## Current Architecture
 - **Lfm.Cli**: CLI interface with commands and command builders
 - **Lfm.Core**: Core functionality including services, models, and configuration
+- **Lfm.Spotify**: Spotify integration for playback control
+- **Lfm.Sonos**: Sonos integration via node-sonos-http-api
 - Uses System.CommandLine for CLI framework
-- **Implements file-based caching with comprehensive cache management**
+- **File-based caching** with comprehensive cache management (119x performance improvement)
 - Centralized error handling and display services
-
-## Refactoring Status (Per REFACTORING_PLAN.md)
-
-### ✅ Priority 1: Eliminate Duplication (COMPLETED)
-- **Task 1.1**: Base Command Class ✅
-- **Task 1.2**: Consolidate Range Logic ✅  
-- **Task 1.3**: Unify Display Logic ✅
-- **Task 1.4**: Merge Artist Search Commands ✅
-
-### ✅ Priority 2: Simplify Architecture (COMPLETED)
-- **Task 2.1**: Simplify Range Service ✅
-- **Task 2.2**: Extract Command Builders ✅
-- **Task 2.3**: Standardize Error Handling ✅
-
-### ✅ Priority 3: Optimize API Usage (COMPLETED)
-- **Task 3.1**: Remove Redundant API Calls ✅
-- **Task 3.2**: Implement Response Caching ✅ (File-based cache implemented)
-- **Task 3.3**: Optimize Deep Search Performance ✅ (119x improvement achieved)
+- **MCP Server**: Full integration with 28 tools for LLM interactions
 
 ## Key Files
 - `src/Lfm.Cli/Program.cs` - Main entry point and DI setup
 - `src/Lfm.Cli/Commands/BaseCommand.cs` - Shared command functionality
-- `src/Lfm.Core/Configuration/ErrorMessages.cs` - Centralized error messages
 - `src/Lfm.Core/Services/LastFmApiClient.cs` - API client
 - `src/Lfm.Core/Services/CachedLastFmApiClient.cs` - Decorator with comprehensive caching
-- `src/Lfm.Core/Services/Cache/FileCacheStorage.cs` - File-based cache storage
-- `src/Lfm.Core/Configuration/LfmConfig.cs` - Configuration with cache settings
-- `src/Lfm.Cli/Commands/CacheStatusCommand.cs` - Cache status display
-- `src/Lfm.Cli/Commands/CacheClearCommand.cs` - Cache management
-- `src/Lfm.Core/Services/DisplayService.cs` - Display formatting
-
-## Cache Implementation Status
-
-### ✅ File-Based Caching System (COMPLETED)
-
-**Implementation Complete**: Full file-based caching system with comprehensive management capabilities.
-
-**Key Features Implemented:**
-- **Raw API Response Caching**: Caches actual Last.fm API JSON responses
-- **Cross-Platform Support**: XDG Base Directory compliance (Linux/Windows/WSL)
-- **Performance**: 119x speed improvement achieved (6,783ms → 57ms for 10 API calls)
-- **Cache Management**: Automatic cleanup with expiry-first then LRU strategy
-- **User Control**: Cache behavior flags (--force-cache, --force-api, --no-cache)
-- **Management Commands**: cache-status and cache-clear with detailed feedback
-- **Configuration**: Comprehensive cache settings in LfmConfig.cs
-
-**Cache Architecture:**
-- **Decorator Pattern**: CachedLastFmApiClient wraps LastFmApiClient transparently  
-- **SHA256 Key Generation**: Collision-resistant cache keys from API parameters
-- **Storage**: Individual JSON files with metadata for each cached response
-- **Cleanup**: Configurable size limits, file counts, and age-based expiry
-- **Behaviors**: Normal, ForceCache, ForceApi, NoCache modes
-
-**Commands with Cache Support:**
-- ✅ `tracks` command (all cache flags)
-- ✅ `artist-tracks` command (all cache flags)  
-- ✅ `artists` command (all cache flags)
-- ✅ `albums` command (all cache flags)
-- ✅ `artist-albums` command (all cache flags)
-- ✅ `recommendations` command (all cache flags)
-
-**Management Commands:**
-- ✅ `cache-status` - Comprehensive status display with warnings
-- ✅ `cache-clear` - Clear all or expired entries with confirmation
-
-**Next Steps**: User testing and validation
+- `src/Lfm.Core/Configuration/LfmConfig.cs` - Configuration with cache/Spotify/Sonos settings
+- `src/Lfm.Spotify/SpotifyStreamer.cs` - Spotify playback integration
+- `src/Lfm.Sonos/SonosStreamer.cs` - Sonos playback integration
+- `lfm-mcp-release/server.js` - MCP server (2,347 lines, 28 tools)
+- `lfm-mcp-release/lfm-guidelines.md` - LLM usage guidelines (480 lines)
 
 ## Recent Sessions
 
-### Session: 2025-01-16 (Previous)
-- **Status**: Reviewed project after file resync, completed cache removal
-- **Findings**: 
-  - Most refactoring tasks completed successfully
-  - ErrorMessages.cs exists and is properly integrated
-  - Architecture is clean and well-organized
-- **Completed**: 
-  - Marked Task 2.3 (Standardize Error Handling) as completed
-  - Marked Task 3.1 (Remove Redundant API Calls) as completed  
-  - **REMOVED** entire in-memory cache system (600+ lines) for clean slate
-- **Next**: Design and implement file-based caching system
-
-### Session: 2025-01-17 (Cache Implementation)
-- **Status**: ✅ COMPLETE - Full file-based caching system implemented and tested
+### Session: 2025-10-15 (Documentation Refactoring, Parser Fix, Token Optimization)
+- **Status**: ✅ COMPLETE - Documentation split, MCP parser fixed, token usage optimized
 - **Major Accomplishments**:
-  - **Phase 0**: Cross-platform foundation with XDG Base Directory support
-  - **Phase 1-2**: Core cache infrastructure (FileCacheStorage, CacheKeyGenerator, etc.)
-  - **Phase 3**: API client integration with decorator pattern (CachedLastFmApiClient)
-  - **Phase 3.5**: Internal timing validation and performance verification (119x improvement)
-  - **Phase 4**: Cache control with user-facing flags and management commands
-  - **Final**: Compiler warning cleanup (CS1998, CS8604 resolved)
-- **Files Created/Modified**: 15+ files across cache infrastructure, command builders, and commands
-- **Performance Achieved**: 119x speed improvement (6,783ms → 57ms for 10 API calls)
-- **Build Status**: ✅ Both Linux and Windows builds complete with 0 warnings, 0 errors
-- **Ready For**: User testing and validation
-
-### Session: 2025-01-28 (Recommendations Feature)
-- **Status**: ✅ COMPLETE - Music recommendations feature implemented
-- **Feature Added**: `recommendations` command for discovering new artists
-- **Implementation Details**:
-  - Uses Last.fm's `artist.getSimilar` API endpoint
-  - Analyzes user's top artists to find similar artists
-  - Filters out artists user already knows (configurable play count threshold)
-  - Scoring algorithm: similarity × occurrence count across multiple top artists
-  - Full cache support with existing infrastructure
-- **Key Components**:
-  - `GetSimilarArtistsAsync` method in API client and cached wrapper
-  - `SimilarArtist` and `SimilarArtists` models
-  - `RecommendationsCommand` with parallel similar artist fetching
-  - `RecommendationsCommandBuilder` with options for limit, filter, and artist count
-- **Command Options**:
-  - `--limit` / `-l`: Number of recommendations to return (default: 20)
-  - `--filter` / `-f`: Minimum play count filter (default: 0)
-  - `--artist-limit` / `-a`: Number of top artists to analyze
-  - All standard options: period, range, cache flags, verbose, timing
-- **Performance**: Benefits from cached artist data and parallel API calls
-- **Documentation**: README.md and CLAUDE.md updated
-
-### Session: 2025-09-19 (Spotify Device Management & Auto-Playback)
-- **Status**: ✅ COMPLETE - Advanced Spotify device selection and automatic playback implemented
-- **Major Features Added**:
-  - **Device Management System**: Comprehensive device listing, configuration, and selection
-  - **Automatic Playback Start**: Resolves issue where queueing failed when no active Spotify session
-  - **Device Selection Priority**: CLI parameter > config default > active device > smart prioritization
-- **Implementation Details**:
-  - Device selection logic with 4-tier priority system
-  - Automatic playback initiation when no active session (starts first track, queues remaining)
-  - Config file storage for default device preferences
-  - Command-line device override capabilities
-- **New Commands Added**:
-  - `lfm spotify devices` - List available Spotify devices with status/volume
-  - `lfm config set-spotify-default-device "Device Name"` - Set config default
-  - `lfm config clear-spotify-default-device` - Clear config default
-  - `--device` / `-dev` option on tracks/recommendations commands
-- **Key Technical Components**:
-  - Enhanced `EnsurePlaybackActiveAsync` with device parameter and priority logic
-  - New `StartPlaybackAsync` method for playback initiation via Spotify Web API
-  - `DefaultDevice` field added to `SpotifyConfig` with config management
-  - Updated interface signatures throughout service layer for device parameter flow
-- **Device Selection Logic** (src/Lfm.Spotify/SpotifyStreamer.cs:525-572):
-  1. CLI `--device` parameter (highest priority)
-  2. Config file `DefaultDevice` setting
-  3. Currently active Spotify device
-  4. Smart prioritization: Computer > Smartphone > Speaker > other
-- **Automatic Playback** (src/Lfm.Spotify/SpotifyStreamer.cs:65-83):
-  - Detects when no active playback session exists
-  - Starts playing first track on selected device using `/v1/me/player/play` endpoint
-  - Queues remaining tracks normally via existing queue mechanism
-- **Status**: All device management functionality working correctly
-- **Next Steps**: User validation and real-world testing
-
-### Known Issues for Future Sessions
-
-#### 🐛 Recommendations Duplicate Track Bug
-- **Issue**: Recommendations showing duplicate tracks with slight variations
-- **Example**: Wings showing both "Live And Let Die - 2018 Remaster" and "Live and Let Die"
-- **Root Cause**: Last.fm API returns multiple versions/remasters as separate tracks
-- **Potential Solutions**:
-  - Implement track name normalization (remove remaster suffixes, clean punctuation)
-  - Add duplicate detection based on similarity scoring
-  - Filter tracks by release date preference (original vs remaster)
-- **Impact**: Low priority - doesn't break functionality but reduces recommendation quality
-- **Location**: Likely in recommendations track fetching logic (RecommendationsCommand.cs)
-
-#### 🔍 Future Enhancement Opportunities
-- **Progress Bars**: As documented in progressbarproject.md for long-running operations
-- **Enhanced Track Filtering**: More sophisticated duplicate detection across all commands
-- **Device Auto-Discovery**: Automatic detection of new Spotify devices
-- **Playlist Export**: JSON/CSV export functionality for query results
-
-### Session: 2025-06-28 (Albums Bug Fix & API Throttling)
-- **Status**: ✅ COMPLETE - Critical bug fixes and comprehensive API throttling
-- **Branch**: `refactor/service-layer`
-
-#### ✅ Albums Date Range Bug - FIXED
-**Problem**: `albums --year 2023` returned no results despite user having albums
-**Root Cause**: `AlbumInfo` model used `[JsonPropertyName("name")]` but Last.fm recent tracks API returns album names as `"#text"`
-**Solution**: Changed to `[JsonPropertyName("#text")]` to match API response format
-**Testing**: ✅ Verified working for all date ranges
-
-#### ✅ API Throttling Implementation - COMPLETE
-**Problem**: Aggressive API calls causing 500 Internal Server Errors from Last.fm
-**Root Cause Analysis**:
-- **Parallel execution**: Introduced in commit `7958f61` (June 28) for recommendations
-- **Missing throttling**: Date range aggregation had no delays between API calls
-- **No rate limiting**: Individual and paginated calls lacked throttling
-
-**Solutions Implemented**:
-
-1. **Removed Parallel Execution**:
-   - Converted `Task.Run` + `Task.WhenAll` to sequential loops
-   - Removed `ConcurrentDictionary`, switched to regular `Dictionary`
-   - Applied to recommendations similar artist + track fetching
-
-2. **Added Comprehensive Throttling** (100ms delays):
-   - **Date Range Aggregation**: `GetTopAlbumsForDateRangeAsync`, `GetTopTracksForDateRangeAsync`, `GetTopArtistsForDateRangeAsync`
-   - **Range Queries**: `ExecuteRangeQueryAsync` for `--range` parameters
-   - **Deep Search Operations**: `SearchUserTracksForArtistAsync`, `SearchUserAlbumsForArtistAsync`
-   - **Artist Play Count Mapping**: `GetUserArtistPlayCountsAsync`
-   - **Recommendations**: Sequential similar artist + track lookups
-
-3. **Preserved One-Shot Calls** (no throttling):
-   - `artists --period overall` - single API call
-   - `tracks --period overall` - single API call
-   - `albums --period overall` - single API call
-
-**Results**:
-- ✅ **API Reliability**: Eliminated 500 errors from aggressive requests
-- ✅ **Albums Bug Fixed**: Date ranges now return proper album results
-- ✅ **Performance**: One-shot calls remain fast, multi-call operations properly throttled
-- ✅ **Testing**: All functionality verified working across different scenarios
-
-#### ✅ Error Caching Analysis - VERIFIED SAFE
-**Investigation**: Checked if 500 errors were being cached
-**Finding**: `if (apiResult != null)` in cache - we **only cache successful results** ✅
-**Status**: No caching issues, 500 errors correctly not cached
-
-#### ✅ Configuration Integration
-- **Throttle Setting**: `ApiThrottleMs = 100` (configurable via `config set-throttle`)
-- **DI Integration**: Throttle value passed from config to `LastFmApiClient` constructor
-- **Applied Consistently**: All multi-call operations use configured throttle value
-
-**Build Status**: ✅ Clean build, 0 warnings, 0 errors
-**Architecture Status**: Comprehensive API throttling implemented, albums bug resolved
-
-#### ✅ Previous Phase 1 & 2 Refactoring (COMPLETED)
-**Service Layer**: ✅ Full `ILastFmService` with 13 core methods extracted
-**Display Logic**: ✅ Centralized via enhanced `IDisplayService`
-**Command Simplification**: ✅ Commands reduced to pure CLI concerns
-**Business Logic**: ✅ 370+ lines moved from commands to service layer
-**Error Handling**: ✅ Result<T> pattern and ErrorResult classification implemented
-
-### Session: 2025-09-24 (TopTracks Command & Architectural Separation)
-- **Status**: ✅ COMPLETE - New toptracks command with artist diversity algorithm
-- **Major Accomplishments**:
-  - **Architectural Separation**: Clean separation between information (`tracks`) and action (`toptracks`) commands
-  - **TopTracks Command**: New command implementing expanding window algorithm for maximum artist diversity
-  - **Dual Algorithm Approach**: Expanding windows for periods, large sample filtering for date ranges
-  - **Configurable Diversity**: User-configurable `DateRangeDiversityMultiplier` setting with CLI management
-  - **MCP Integration**: Updated MCP server with new `lfm_toptracks` tool
-  - **Performance Optimization**: Resolved API throttling issues and cache expiry problems
-  - **Command Naming**: Final naming settled on `toptracks` for clarity and consistency
-- **Key Technical Components**:
-  - `TopTracksCommand.cs`: Diverse playlist generation with tracks-per-artist limiting
-  - `TopTracksCommandBuilder.cs`: CLI interface for new command with `--tracks-per-artist` parameter
-  - `LfmConfig.cs`: Added `DateRangeDiversityMultiplier` property (default: 10)
-  - `ConfigCommand.cs`: Added `SetDateRangeMultiplierAsync` method with validation
-  - Updated MCP server with clean command separation
-- **Algorithm Details**:
-  - **Period Queries**: Expanding window algorithm (1-20, 21-40, 41-60...) for optimal diversity
-  - **Date Range Queries**: Large sample approach using configurable multiplier (limit × tracks-per-artist × multiplier)
-  - **Performance**: Pragmatic approach balancing diversity with API efficiency
-- **User Experience**: Preview mode by default, action only with `--playlist` or `--playnow`
-- **Documentation**: Updated README.md with new command examples and configuration options
-- **Build Status**: ✅ Clean build, fully functional, ready for user testing
-
-### Session: 2025-10-06 (Album Track Checking & API Performance Analysis)
-- **Status**: ✅ COMPLETE - Album checking with track-level breakdown and comprehensive API timing diagnostics
-- **Major Features Implemented**:
-  - **Album Check Command**: Check album play counts with detailed per-track breakdown
-  - **Apostrophe Variant Handling**: Automatic retry with Unicode variants (U+0027, U+2018, U+2019) for track/album lookups
-  - **Discrepancy Detection**: Intelligent detection and reporting of unaccounted plays due to name mismatches
-  - **API Performance Diagnostics**: Detailed timing breakdown (throttle, HTTP, JSON-read, JSON-parse, cache)
-  - **Throttle Optimization**: Changed default from 100ms to 200ms for Last.fm's 5 req/sec limit
-- **Key Technical Components**:
-  - `CheckCommand.cs`: Album checking with `--album` parameter and `--verbose` for track breakdown
-  - `GetTrackPlaycountWithApostropheRetry`: Handles Unicode apostrophe variants in track names
-  - Discrepancy calculation: `albumTotal - sumOfTracks` with user-friendly messaging
-  - `LastFmApiClient`: Added `LastHttpMs`, `LastJsonReadMs`, `LastJsonParseMs` timing properties
-  - `CachedLastFmApiClient`: Enhanced timing breakdown for all cache behaviors
-- **Album Check Features**:
-  - Console output: Track-by-track breakdown with play counts, percentages, most-played indicator
-  - JSON output: Full data including `unaccountedPlays`, `hasDiscrepancy` fields
-  - Listening pattern analysis: "Heavy rotation" vs "Balanced listening"
-  - Discrepancy notes: Helpful explanation about featuring artists, remixes, remastered versions
-- **Apostrophe Handling**:
-  - Problem: Album API returns U+0027 (`'`), but scrobbles may have U+2018 (`'`) or U+2019 (`'`)
-  - Solution: Try original name, then left quote variant, then right quote variant
-  - Example: "Wish You Were Here" vs "Wish You Were Here" vs "Wish You Were Here"
-  - Applied to: Track lookups, album lookups, individual track checks
-- **Discrepancy Detection**:
-  - Classic example: "exile" (album API) vs "exile (feat. Bon Iver)" (scrobbles)
-  - Shows: "40 plays unaccounted for" instead of misleading "0 plays"
-  - Pink Floyd example: "Shine On You Crazy Diamond" vs "Shine On You Crazy Diamond (Parts 1-5)"
-  - Provides factual information without expensive fuzzy matching (would require 200+ API calls)
-- **API Performance Investigation**:
-  - **Finding**: HTTP/Last.fm backend is the bottleneck (90-95% of time)
-  - **Timing breakdown** for single API call:
-    - HTTP network transfer: 400-4000ms (highly variable, Last.fm server performance)
-    - JSON parsing: 17-32ms (consistently fast, <2% of total time)
-    - JSON stream reading: 0-1ms (negligible)
-    - Cache writing: 20-50ms (~3% of total time)
-    - Throttle: 0-200ms (depends on spacing between calls)
-  - **Comparison across query types** (limit=10):
-    - Tracks: ~850ms HTTP
-    - Albums: ~400-3900ms HTTP (highly variable!)
-    - Artists: ~390ms HTTP
-  - **Conclusion**: Data volume/JSON processing is NOT the issue - it's Last.fm's server response time
-- **MCP Integration**:
-  - Updated `lfm-guidelines.md` with discrepancy interpretation guidance
-  - Added examples of unaccounted plays and how to interpret them
-  - Guidance for LLMs: Don't assume 0-play tracks are disliked if album has high playcount
-  - Real-world example: Taylor Swift "folklore" with "exile (feat. Bon Iver)" mismatch
-- **Configuration Changes**:
-  - `LfmConfig.cs`: `ApiThrottleMs` default changed from 100ms to 200ms
-  - Safer compliance with Last.fm's documented 5 req/sec rate limit
-- **Example Use Case** (Pink Floyd "Wish You Were Here"):
-  - Album: 56 plays total
-  - Track breakdown: 40 plays accounted (WYWH title track: 23, others: 17)
-  - Unaccounted: 16 plays (likely "Shine On You Crazy Diamond" with different part naming)
-  - **Inference**: ~8 full album listens + ~12 extra title track plays
-  - Demonstrates value of discrepancy approach for understanding listening patterns
-- **Build Status**: ✅ Clean build, 0 errors, comprehensive timing diagnostics available
-- **Ready For**: User testing of album check features and MCP integration
+  - **Documentation Refactoring**: Split CLAUDE.md (703→329 lines) into 4 focused files
+  - **Contextual Reminders**: Added just-in-time guidance to 3 MCP tools
+  - **Parser Bug Fix**: Fixed position-based JSON extraction for array-root responses
+  - **Token Optimization**: ~50% token reduction for large MCP queries
+  - **Spotify Auth Fix**: Improved resilience with List<string> signature
+- **Documentation Split**:
+  - Created `SESSION_HISTORY.md` - 7 archived sessions (250 lines)
+  - Created `IMPLEMENTATION_NOTES.md` - Technical reference for completed features (184 lines)
+  - Created `LESSONS_LEARNED.md` - Debugging patterns and best practices (299 lines)
+  - Created `PARSING_BUG_ANALYSIS.md` - Comprehensive parser bug investigation
+  - CLAUDE.md reduced by 53% while maintaining current work focus
+- **Contextual Reminders Implementation**:
+  - `lfm_check` (verbose mode): `_response_guidance` - Concise response pattern reminder
+  - `lfm_artist_tracks`: `_depth_guidance` - Depth is popularity ranking, not chronological
+  - `lfm_artist_albums`: `_depth_guidance` - Same depth parameter clarification
+  - Concept: Just-in-time guidance appearing when context is relevant
+  - Proven pattern from planning mode system reminders
+- **Parser Bug Fix** (`lfm-mcp-release/server.js` lines 45-165):
+  - **Root Cause**: Object-first bias extracted nested objects from array-root responses
+  - **Problem Cases**:
+    - `artist_albums` returning only first album from array `[{album1}, {album2}]`
+    - `play_now` returning `[]` instead of full response object
+  - **Solution**: Position-based parser extracts whichever structure (`[` or `{`) appears first
+  - **Implementation**: Helper functions `extractArray()` and `extractObject()` with fallback logic
+  - **Result**: Correctly handles both object-root and array-root JSON structures
+- **Token Optimization** (`lfm-mcp-release/server.js` lines 139-165):
+  - Added compact helper functions: `compactAlbum()`, `compactArtist()`, `compactTrack()`
+  - Strip URLs and MBIDs that LLMs can't use
+  - Applied to `lfm_albums`, `lfm_artists`, `lfm_tracks` handlers
+  - **Result**: ~50% token reduction (100 albums: ~10,300 → ~5,150 tokens)
+  - Architecture: Post-filtering at MCP layer (cache stores full data for all consumers)
+- **Spotify Authentication Fix** (`src/Lfm.Spotify/SpotifyStreamer.cs`):
+  - Changed `StartPlaybackAsync` signature from `string` to `List<string>`
+  - Ensures atomic album playback (all tracks in one API call)
+  - Prevents race conditions in track ordering
+  - Complements Session 2025-01-19 Spotify album queueing fix
+- **Key Insights**:
+  - Position-based parser is architecturally correct (not a band-aid fix)
+  - Post-filtering optimization: Only place to strip data is MCP layer
+  - Data flow: Last.fm API → Cache (full) → MCP Server (filtered) → LLM
+  - Contextual reminders: 82% token savings vs upfront guidelines (500 + 25/tool vs 4,000)
+- **Build Status**: ✅ Clean build, all features tested and working
+- **Testing**: Parser handles all cases, token reduction verified with 100 albums query
+- **Documentation**: See `PARSING_BUG_ANALYSIS.md` for detailed parser investigation
 
 ### Session: 2025-10-09 (Spotify Album Disambiguation & Parallel API Calls)
 - **Status**: ✅ COMPLETE - Album version disambiguation and parallel API processing for deep searches
@@ -355,11 +106,6 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
   - **Throttling**: Individual call throttling disabled during parallel execution
   - **Batch timing**: Dynamic delay calculation ensures compliance with rate limits
   - **Performance**: Significant speedup for deep searches without violating API limits
-- **MCP Guidelines Refactoring** (see separate commit):
-  - Replaced quiz/password system with trust-based `lfm_init`
-  - Guidelines reduced from 308 to 176 lines
-  - Added user preferences section and response style guidance
-  - Proven effective through Claudette testing (Pink Floyd, Taylor Swift examples)
 - **Configuration**:
   - `ParallelApiCalls`: Number of concurrent API calls in batch mode (default: 5)
   - Compatible with existing cache and throttle settings
@@ -429,6 +175,104 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
 - **Build Status**: ✅ Clean build, all Sonos functionality tested and working
 - **Ready For**: Production use and MCP integration
 
+### Session: 2025-01-19 (MCP Guidelines Refinement & Spotify Album Queueing Fix)
+- **Status**: ✅ COMPLETE - MCP guidelines enhanced, critical Spotify bug fixed, architecture optimization evaluated
+- **Major Accomplishments**:
+  - **MCP Guidelines Updates**: 4 sections added/modified based on real-world testing feedback
+  - **Spotify Album Queueing Bug Fix**: Fixed missing/reordered tracks in album playback
+  - **Depth Parameter Clarification**: Corrected understanding of popularity ranking vs chronological search
+  - **Guidelines Architecture Evaluation**: Analyzed token usage and optimization strategies
+  - **Contextual Reminders Concept**: Proposed just-in-time guidance system (82% token savings)
+- **Guidelines Updates** (`lfm-mcp-release/lfm-guidelines.md`):
+  1. **Track Position Hallucination Prevention** (lines 98-125):
+     - User feedback: LLM confidently stating "track 2 is..." when it's actually track 1
+     - Added "NEVER reference track numbers or positions without verification"
+     - Verification workflow: Use `lfm_check(verbose: true)`, `lfm_current_track()`, or `lfm_recent_tracks()`
+     - Key insight: Track positions are edge-case data for LLMs, leading to false confidence
+  2. **lfm_check Fallback Strategy** (lines 83-91):
+     - When check returns 0 plays, don't assume user hasn't heard it
+     - Fallback: Use `lfm_artist_albums` or `lfm_artist_tracks` with `deep: true`
+     - Handles metadata variations: spacing ("Renée / Pretty" vs "Renée/Pretty"), remaster suffixes, featuring artists
+     - Real scrobbles are source of truth, not Last.fm's canonical names
+  3. **Depth Parameter Simplification** (lines 137-165):
+     - **CRITICAL**: Clarified depth = popularity ranking (top N by play count), NOT chronological
+     - User correction: "is the depth 'tracks' or 'pages'? let's think about edge cases"
+     - Example: Left Banke with 14 plays ranks #2324, missed at depth:2000 (user has 2,323 tracks with MORE plays)
+     - Edge case: Breadth listeners (Guided By Voices: 100 albums × 1-2 plays each = all tracks rank 5000-7000, depth:2000 finds ZERO)
+     - Simplified approach: Default to `deep: true`, let cache handle performance
+     - Removed complex tier explanations that led to wrong mental model
+  4. **Concise Response Pattern** (lines 265-281):
+     - User feedback: "stop all the blurb... 'Yes you have, you've listened to White Light/White Heat 4-5 times'. done."
+     - Pattern: Answer directly with ONE interesting detail max
+     - Good example: "Yes, you've listened to White Light/White Heat 4-5 times (21 plays, including the 17-minute 'Sister Ray')."
+     - Bad example: Track-by-track breakdown, metadata discrepancy math explanations, music history lessons
+- **Spotify Bug Fix** (`src/Lfm.Spotify/SpotifyStreamer.cs`):
+  - **Problem**: Simon & Garfunkel "Bookends" (12 tracks) had 2 tracks missing and some reordered
+  - **Root Cause**: 12 separate API calls (1 play + 11 individual queues) caused race conditions
+  - **Solution**: Changed to ONE atomic API call with all URIs
+  - **Implementation**:
+    - Modified `StartPlaybackAsync` signature from `string` to `List<string>` (lines 1118-1128)
+    - Rewrote `PlayNowFromUrisAsync` to use single atomic call (lines 233-277)
+    - Spotify Web API supports up to 100 URIs in one request
+  - **User Confirmation**: "it queued up cleanly as well so the spotify album play fix is working" ✅
+- **Metadata Matching Investigation**:
+  - **Case**: Left Banke album "Walk Away Renée / Pretty Ballerina" returned 0 plays
+  - **Root Cause**: Spacing difference (MCP query had spaces around slash, scrobbles didn't)
+  - **Findings**:
+    - Last.fm autocorrect enabled for all lookups (handles typos, capitalization)
+    - Custom apostrophe retry logic handles Unicode variants (U+0027, U+2018, U+2019)
+    - NO handling for punctuation spacing differences (slash, dash, etc.)
+  - **User Decision**: "yes. that feels a stretch too far" (regarding adding slash fuzzy matching)
+  - **Mitigation**: Added guidelines recommending fallback to artist_albums with deep:true
+- **Guidelines Architecture Analysis**:
+  - **Current State**: 479 lines, 2,805 words, ~4,000 tokens (2% of 200K context window)
+  - **Project Size**: 19,230 LOC C# code, 2,347 lines MCP server (server.js)
+  - **User Concern**: "it's getting quite long... on the edge of becoming top heavy"
+  - **Options Evaluated**:
+    1. Single file with TOC summary (baseline)
+    2. Split into focused documents (core/technical/examples) - 75% token savings
+    3. Hybrid section-based retrieval
+    4. **Contextual reminders in MCP tool outputs** (user's idea) - 82% savings
+  - **Contextual Reminders Concept**:
+    - User insight: "with our experience with planning mode it might be more responsive to putting in reminders in either the mcp tool or comments in function outputs"
+    - Embed `_guideline_reminder` fields in MCP tool responses
+    - Just-in-time guidance appearing exactly when context is relevant
+    - Proven pattern from plan mode system reminders
+    - Token comparison: 500 baseline + 25 per tool call vs 4,000 baseline
+  - **User Decision**: "i think this is a sleep on it moment for me"
+  - **Approach**: "step by step and tests what works and what doesn't as we go along. be systematic about it."
+  - **Documentation**: User requested documenting insights for future reference even though implementation deferred
+- **Key Insights**:
+  - **Depth Parameter**: Popularity ranking, not chronological - fundamental misunderstanding in guidelines
+  - **LLM Blind Spots**: Track positions and album metadata are edge cases leading to false confidence
+  - **Response Style**: Users want concise answers, not data analyst explanations
+  - **Just-in-Time Guidance**: More elegant than file splitting, proven pattern from existing systems
+- **Testing & Verification**:
+  - Left Banke deep search working correctly with proper depth understanding
+  - Spotify album queueing verified by user in production
+  - Guidelines updates validated through real conversation examples
+  - Token analysis confirms guidelines are only 2% of context budget
+- **Build Status**: ✅ Clean build (0 errors, 10 pre-existing nullable warnings unrelated to changes)
+- **Next Steps**:
+  - User to evaluate contextual reminders approach
+  - Systematic testing if/when implemented
+  - Continue gathering evidence on guidelines usage patterns
+- **📋 Future Work - Recommendations Tool Usage Guidelines**:
+  - **Issue**: Recommendations tool may be overused in MCP context
+  - **History**: Built originally for CLI, later exposed via MCP
+  - **Key Insight**: For good reasoning LLMs, recommendations is rarely needed (9/10 times LLM reasoning is better)
+  - **Current Problem**: LLM may use recommendations unnecessarily instead of applying its own musical knowledge
+  - **Proposed Approach**:
+    - Recommendations should be a **raw starting point** for discovery, not the final answer
+    - LLM should apply its own judgment: musical context, user taste patterns, vibe matching
+    - Guidelines need to clarify: "Your musical knowledge is more valuable than raw similarity scores"
+  - **Example Use Cases**:
+    - ❌ Wrong: "What Beatles album should I try?" → Uses recommendations (LLM knows Beatles discography!)
+    - ✅ Right: "Find similar artists I haven't heard" → Use recommendations as starting pool, then filter with judgment
+    - ✅ Right: "What Monkees album next?" → LLM reasons about Beach Boys connections, listening patterns (as user intended)
+  - **Action**: Determine guidelines strategy to encourage LLM reasoning over tool dependency
+  - **Status**: To be addressed in future session
+
 ## Build/Test Commands
 
 ⚠️ **CRITICAL**: Always use `publish/` directory structure per DIRECTORY_STANDARDS.md ⚠️
@@ -451,74 +295,20 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
 - Publishes to both Windows and Linux
 - Configuration stored in user's AppData/lfm folder
 - API key required from Last.fm
-
-## Unicode Symbol Implementation Status
-
-### ✅ Unicode Auto-Detection & Compatibility (COMPLETED)
-
-**Implementation Complete**: Full Unicode symbol support with auto-detection and manual override capabilities.
-
-**Key Features Implemented:**
-- **Cross-Platform Compatibility**: Supports PowerShell 5.x, PowerShell 7+, cmd.exe, WSL, Linux terminals
-- **Auto-Detection Logic**: Automatically detects terminal Unicode capabilities
-- **Manual Override**: Config option to force enable/disable Unicode symbols
-- **Graceful Fallback**: ASCII alternatives when Unicode not supported
-- **Automatic UTF-8 Encoding**: Sets console encoding to UTF-8 when Unicode is detected
-
-**Architecture:**
-- **SymbolProvider Service**: Centralized symbol management with Unicode/ASCII alternatives
-- **Configuration Integration**: UnicodeSupport enum (Auto, Enabled, Disabled) in LfmConfig.cs
-- **Detection Logic**: Environment variable checks, PowerShell version detection, Windows Terminal detection
-- **Encoding Fix**: Automatic UTF-8 console encoding when Unicode symbols are used
-
-**Commands with Unicode Support:**
-- ✅ All commands use ISymbolProvider for consistent symbol display
-- ✅ Timing displays: ⏱️ vs [TIME]
-- ✅ Status indicators: ✅❌ vs [OK][X]
-- ✅ Cache status: 📊📈🧹 vs [CONFIG][STATS][CLEANUP]
-
-### ✅ Unicode Auto-Detection Issue (RESOLVED)
-
-**Problem**: Config set to "Auto" was initially failing in PowerShell 5/7.
-
-**Root Cause**: Console encoding defaulting to Codepage 850 instead of UTF-8.
-
-**Solution Implemented**: 
-- **EnsureUtf8Encoding()** method in SymbolProvider automatically sets UTF-8 encoding when Unicode is detected
-- **Graceful fallback** to ASCII if UTF-8 encoding fails
-- **Environment-agnostic detection** using WT_SESSION and fallback methods
-
-**Comprehensive Testing Results** (Session 2025-01-18):
-
-| Environment | Config=Auto | Config=Enabled | Unicode Symbols | Console Encoding |
-|-------------|-------------|----------------|-----------------|------------------|
-| **PowerShell 5** | ✅ Perfect | ✅ Perfect | ♫ ✅ ❌ ⏱️ 📋 | UTF-8 (CP: 65001) |
-| **PowerShell 7** | ✅ Perfect | ✅ Perfect | ♫ ✅ ❌ ⏱️ 📋 | UTF-8 (CP: 65001) |
-| **WSL** | ✅ Perfect | ✅ Perfect | ♫ ✅ ❌ ⏱️ 📋 | UTF-8 (CP: 65001) |
-| **CMD** | ✅ Perfect | ✅ Perfect | ♫ ✅ ❌ ⏱️ 📋 | UTF-8 (CP: 65001) |
-
-**Key Technical Insights:**
-- `PSEdition` environment variable is not propagated to child processes (expected behavior)
-- `WT_SESSION` detection works reliably across all Windows Terminal environments
-- Automatic UTF-8 encoding setting resolves all console encoding issues
-- Detection logic works correctly across all tested environments
-
-**Status**: ✅ **COMPLETELY RESOLVED** - Unicode auto-detection working perfectly across all environments
-
-**Investigation Tools Created:**
-- `DetectTest/DetectTest/Program.cs` - Standalone detection testing program (validated solution)
-- `src/Lfm.Cli/Commands/TestUnicodeCommand.cs` - In-app Unicode debugging command
+- Spotify/Sonos integration requires additional configuration
 
 ## Current Project Plans & Status
 
 ### ✅ Primary Development - COMPLETE
 **All major architecture and functionality complete**. The CLI tool is fully functional with:
-- ✅ Complete service layer architecture 
+- ✅ Complete service layer architecture
 - ✅ Comprehensive API throttling and reliability
-- ✅ Full caching implementation with management
-- ✅ All core commands working (artists, tracks, albums, recommendations)
+- ✅ Full caching implementation with management (119x improvement)
+- ✅ All core commands working (artists, tracks, albums, recommendations, toptracks, mixtape)
 - ✅ Date range support across all commands
 - ✅ Unicode symbol support with auto-detection
+- ✅ Spotify + Sonos playback integration
+- ✅ MCP server with 28 tools for LLM interaction
 - ✅ Clean build with 0 warnings, 0 errors
 
 ### 📋 Future Enhancement Plans
@@ -528,7 +318,7 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
 - **Goal**: Add progress bars for long-running operations (30+ seconds)
 - **Priority**: High value for user experience
 - **Effort**: 2-3 days implementation
-- **Key Benefits**: 
+- **Key Benefits**:
   - Real-time feedback for date range aggregation
   - Progress indicators for range queries and recommendations
   - Professional feel for long operations
@@ -537,7 +327,7 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
 
 #### 2. **Additional Features** (Future Considerations)
 - **Enhanced Filtering**: More sophisticated recommendation filters
-- **Export Functionality**: JSON/CSV export for query results  
+- **Export Functionality**: JSON/CSV export for query results
 - **Playlist Generation**: Create playlists from recommendations
 - **Extended Analytics**: Advanced statistics and insights
 - **Configuration Enhancements**: More granular settings
@@ -555,52 +345,33 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
 - **Documentation**: Well-documented with comprehensive README and session notes
 - **Configuration**: Flexible with user-configurable settings for all major behaviors
 
-## Debugging Lessons Learned
+---
 
-### 🎯 Critical Thinking Over Quick Fixes
+## 📚 Documentation References
 
-**Lesson from 2010 Cache Bug** (Session: 2025-09-30)
+**This file focuses on current work and recent sessions. For historical context and implementation details, see:**
 
-As an AI coding assistant, there's a tendency to "make it work" rather than "understand why it's broken." This can lead to premature workarounds instead of proper diagnosis.
+- **[SESSION_HISTORY.md](SESSION_HISTORY.md)** - Archived sessions (2025-01-16 through 2025-10-06)
+  - Cache Implementation (Session 2025-01-17)
+  - Recommendations Feature (Session 2025-01-28)
+  - Spotify Device Management (Session 2025-09-19)
+  - Albums Bug Fix & API Throttling (Session 2025-06-28)
+  - TopTracks Command (Session 2025-09-24)
+  - Album Track Checking (Session 2025-10-06)
 
-**The Bug Pattern:**
-- `lfm artists --year 2010` returned empty results ❌
-- `lfm tracks --year 2010` worked perfectly ✅
-- Other years (2009, 2011) worked fine ✅
+- **[IMPLEMENTATION_NOTES.md](IMPLEMENTATION_NOTES.md)** - Completed implementations
+  - Refactoring Status (all tasks completed)
+  - Cache Implementation (119x performance improvement)
+  - Unicode Symbol Support (auto-detection across platforms)
+  - API Throttling (200ms default, parallel calls support)
+  - Spotify + Sonos Integration
+  - MCP Server Integration
 
-**Initial Mistake:** Suspected Last.fm API limitations and considered implementing automatic chunking workarounds.
-
-**What Should Have Been Obvious:**
-- Both commands use the same underlying `GetRecentTracksAsync` API method
-- If the API worked for tracks, it should work for artists
-- Inconsistent behavior between similar operations strongly suggests **our code**, not the API
-
-**The Real Cause:** Empty responses were being cached due to insufficient validation in `CachedLastFmApiClient.cs`:
-```csharp
-// WRONG: Caches empty objects
-if (apiResult != null) {
-    await CacheAsync(apiResult);
-}
-
-// RIGHT: Validate data exists before caching
-if (apiResult != null && HasData(apiResult)) {
-    await CacheAsync(apiResult);
-}
-```
-
-**Key Principle:**
-
-> **If the bug pattern defies logic for external factors, it's almost certainly our own code. Dig there first.** 🎯
-
-**Debugging Checklist:**
-1. ✅ Do similar operations behave differently? → Suspect our code
-2. ✅ Does forcing fresh data (`--force-api`) work? → Cache/state issue
-3. ✅ Are symptoms logically inconsistent with external API behavior? → Our bug
-4. ✅ Before implementing workarounds, validate the problem is external
-5. ✅ Be skeptical and critical, especially when symptoms don't make sense
-
-**Never:**
-- ❌ Implement "split year into 2" workarounds without understanding root cause
-- ❌ Jump to "API must be broken" conclusions without testing with fresh data
-- ❌ Accept illogical behavior patterns as "just how it is"
-- ❌ Fix to get working without deep dive into why it failed
+- **[LESSONS_LEARNED.md](LESSONS_LEARNED.md)** - Debugging patterns and best practices
+  - Critical Thinking Over Quick Fixes (2010 Cache Bug)
+  - Metadata Matching Complexity (apostrophe variants, featuring artists)
+  - API Performance Analysis (HTTP bottleneck identification)
+  - Spotify API Race Conditions (atomic batch operations)
+  - LLM Blind Spots in MCP Context (track position hallucinations)
+  - Understanding Depth Parameter (popularity ranking vs chronological)
+  - Response Style for Music Conversations (DJ buddy vs data analyst)
