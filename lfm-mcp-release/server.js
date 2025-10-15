@@ -1852,19 +1852,33 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       const output = await executeLfmCommand(cmdArgs);
 
-      // Parse JSON and add contextual reminder about depth parameter
+      // Parse JSON, apply compact functions, and add contextual reminder about depth parameter
       try {
         const result = parseJsonOutput(output);
-        result._depth_guidance = "⚠️ CRITICAL: depth parameter is POPULARITY RANKING (top N by play count), NOT chronological. For broad listeners or obscure artists, use deep:true instead of guessing depth values.";
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2)
-            }
-          ]
-        };
+        // Apply compact function to strip URLs/MBIDs
+        if (Array.isArray(result)) {
+          const compactResult = result.map(compactTrack);
+          compactResult._depth_guidance = "⚠️ CRITICAL: depth parameter is POPULARITY RANKING (top N by play count), NOT chronological. For broad listeners or obscure artists, use deep:true instead of guessing depth values.";
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(compactResult, null, 2)
+              }
+            ]
+          };
+        } else {
+          result._depth_guidance = "⚠️ CRITICAL: depth parameter is POPULARITY RANKING (top N by play count), NOT chronological. For broad listeners or obscure artists, use deep:true instead of guessing depth values.";
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(result, null, 2)
+              }
+            ]
+          };
+        }
       } catch (parseError) {
         // Fallback to raw output if JSON parsing fails
         return {
@@ -1914,19 +1928,33 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       const output = await executeLfmCommand(cmdArgs);
 
-      // Parse JSON and add contextual reminder about depth parameter
+      // Parse JSON, apply compact functions, and add contextual reminder about depth parameter
       try {
         const result = parseJsonOutput(output);
-        result._depth_guidance = "⚠️ CRITICAL: depth parameter is POPULARITY RANKING (top N by play count), NOT chronological. For broad listeners or obscure artists, use deep:true instead of guessing depth values.";
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2)
-            }
-          ]
-        };
+        // Apply compact function to strip URLs/MBIDs
+        if (Array.isArray(result)) {
+          const compactResult = result.map(compactAlbum);
+          compactResult._depth_guidance = "⚠️ CRITICAL: depth parameter is POPULARITY RANKING (top N by play count), NOT chronological. For broad listeners or obscure artists, use deep:true instead of guessing depth values.";
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(compactResult, null, 2)
+              }
+            ]
+          };
+        } else {
+          result._depth_guidance = "⚠️ CRITICAL: depth parameter is POPULARITY RANKING (top N by play count), NOT chronological. For broad listeners or obscure artists, use deep:true instead of guessing depth values.";
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(result, null, 2)
+              }
+            ]
+          };
+        }
       } catch (parseError) {
         // Fallback to raw output if JSON parsing fails
         return {
