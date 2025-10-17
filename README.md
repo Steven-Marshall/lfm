@@ -1,291 +1,246 @@
 # LFM - Last.fm CLI Tool
 
-A powerful command-line interface for retrieving your Last.fm music statistics with intelligent caching and cross-platform support.
+A powerful command-line interface for retrieving your Last.fm music statistics with intelligent caching, cross-platform support, and AI integration.
 
-## Features
+## What is LFM?
 
-- 🎵 **Comprehensive Statistics** - Top artists, tracks, and albums with play counts
-- 🔍 **Similar Artist Discovery** - Find artists similar to any specific artist using Last.fm's similarity algorithm
-- 🎸 **Music Recommendations** - Discover new artists based on your listening history
-- 📊 **Listening History Checks** - Verify if you've listened to specific artists, tracks, or albums with detailed breakdowns
-- 🎧 **Spotify Integration** - Queue tracks and create playlists directly from your Last.fm data
-- 🚀 **Smart Caching** - File-based cache system for improved performance
-- 🌍 **Cross-Platform** - Windows, Linux, and WSL support
-- 🎨 **Unicode Support** - Auto-detecting terminal capabilities with graceful ASCII fallbacks
-- 🔍 **Smart Artist Matching** - Automatic name correction for artist variations
-- ⚡ **Fast Performance** - Optimized API usage with configurable throttling
-- 🔧 **Flexible Configuration** - User-friendly config management
-- 📊 **Cache Management** - Built-in cache status and cleanup commands
+LFM brings your Last.fm listening data to the command line with features like:
 
-## Installation
+- 🎵 **Music Statistics** - Top artists, tracks, and albums with play counts
+- 🔍 **Discovery** - Find similar artists and get personalized recommendations
+- 📊 **Listening History** - Check if you've listened to specific artists, tracks, or albums
+- 🎧 **Playback Integration** - Queue music directly to Spotify or Sonos
+- 🤖 **AI Integration** - Use with Claude Code or Claude Desktop for natural language queries
+- 🚀 **Smart Caching** - Fast performance with intelligent cache management
+- 🌍 **Cross-Platform** - Works on Windows, macOS, and Linux
 
-### Requirements
+## Quick Install
 
-- **.NET 9 Runtime** (required for framework-dependent builds)
-- **Last.fm API Key** (free from [Last.fm API](https://www.last.fm/api))
+Choose your platform:
 
-### Download
+**Windows:**
+```powershell
+iwr -useb https://raw.githubusercontent.com/Steven-Marshall/lfm/master/install.ps1 | iex
+```
 
-Download the latest release for your platform:
+**macOS/Linux:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/Steven-Marshall/lfm/master/install.sh | bash
+```
 
-- **Windows**: `lfm.exe` (3.9MB)
-- **Linux**: `lfm` (2.8MB)
+After installation, configure with your Last.fm API key:
+```bash
+lfm config set api-key YOUR_API_KEY_HERE
+lfm config set username YOUR_LASTFM_USERNAME
+```
 
-### Setup
+Get your API key at: https://www.last.fm/api/account/create
 
-1. **Get a Last.fm API Key**:
-   - Visit https://www.last.fm/api/account/create
-   - Create a new application
-   - Copy your API key
+## Getting Started
 
-2. **Configure the tool**:
-   ```bash
-   # Set your API key
-   lfm config set api-key YOUR_API_KEY_HERE
-   
-   # Set your default username
-   lfm config set username YOUR_LASTFM_USERNAME
-   ```
+- **[Installation Guide](INSTALL.md)** - Detailed platform-specific installation instructions
+- **[Quick Start Guide](QUICKSTART.md)** - Get up and running in 5 minutes
+- **[MCP Setup Guide](MCP_SETUP.md)** - Use LFM with Claude Code or Claude Desktop
+- **[Troubleshooting Guide](TROUBLESHOOTING.md)** - Common issues and solutions
 
-## Usage
+## Usage Examples
 
 ### Basic Commands
 
 ```bash
 # Get your top 10 artists
-lfm artists
+lfm artists --limit 10
 
-# Get your top 20 tracks from the last 7 days
-lfm tracks --limit 20 --period 7day
+# Get your top tracks from last month
+lfm tracks --period 1month --limit 20
 
-# Get your top albums with detailed timing
-lfm albums --timing
+# Get your top albums from 2024
+lfm albums --year 2024 --limit 10
 
-# Get your top artists for a specific year
-lfm artists --year 2023
+# Check if you've listened to an artist
+lfm check "Pink Floyd"
 
-# Get your top tracks for a custom date range
-lfm tracks --from 2024-01-01 --to 2024-06-30
+# Check if you've listened to a specific track
+lfm check "Pink Floyd" "Comfortably Numb"
 
-# Get your top tracks by a specific artist (supports name variations)
-lfm artist-tracks "Radiohead"
-# Also works with: "radiohead", etc.
-
-# Get your top albums by a specific artist (supports name variations)
-lfm artist-albums "Pink Floyd"
-# Also works with: "pink floyd", etc.
-
-# Get global top tracks for an artist (supports name variations)
-lfm tracks --artist "The Beatles"
-# Also works with: "Beatles", "beatles", etc.
-
-# Check if you've listened to an artist, track, or album
-lfm check "Taylor Swift"
-# Output: Taylor Swift: 2,453 plays
-
-lfm check "Taylor Swift" "Anti-Hero"
-# Output: Taylor Swift - Anti-Hero: 87 plays ❤️
-
-lfm check "Taylor Swift" --album "1989"
-# Output: Taylor Swift - 1989: 491 plays (13 tracks)
-
-# Get detailed album analysis with track-level breakdown
-lfm check "Taylor Swift" --album "1989" --verbose
-# Shows per-track play counts and listening patterns
-
-# Find artists similar to a specific artist
-lfm similar "Holly Humberstone"
-# Get 10 similar artists with match scores
-lfm similar "Taylor Swift" --limit 10
-
-# Get personalized artist recommendations based on your listening
-lfm recommendations
-# Exclude artists you already know (10+ plays) - create 20-artist playlist
-lfm recommendations --filter 10 --totalartists 20
-# Create a 30-track playlist with 3 tracks per artist
-lfm recommendations --filter 10 --totaltracks 30 --tracks-per-artist 3
-# Analyze more artists for better recommendations
-lfm recommendations --artist-limit 50 --period 12month --verbose
-
-# Check Last.fm API status and connectivity
-lfm api-status
-# Detailed status with HTTP response information
-lfm api-status --verbose
-# JSON output for monitoring/automation
-lfm api-status --json
-
-# Create playlists from your top tracks (limit tracks per artist for variety)
-lfm toptracks --totaltracks 20 --tracks-per-artist 1
-# More variety from recent listening - 15 artists, 2 tracks each
-lfm toptracks --period 1month --totalartists 15 --tracks-per-artist 2
-# Diverse playlist from specific year - exactly 25 tracks
-lfm toptracks --year 2023 --totaltracks 25 --tracks-per-artist 1 --verbose
-
-# Filter out specific genres using tags (e.g., classical, christmas)
-lfm recommendations --exclude-tags --verbose
-# Configure excluded tags
-lfm config add-excluded-tag "classical"
-lfm config add-excluded-tag "christmas"
-lfm config show-excluded-tags
+# Check album with detailed track breakdown
+lfm check "Pink Floyd" --album "Dark Side of the Moon" --verbose
 ```
 
-### Spotify Integration
+### Discovery
 
 ```bash
+# Find artists similar to one you like
+lfm similar "Taylor Swift" --limit 10
+
+# Get personalized recommendations (exclude artists you already know)
+lfm recommendations --filter 10 --totalartists 20
+
+# Create a diverse playlist from your top tracks
+lfm toptracks --period 1month --totaltracks 25 --tracks-per-artist 1
+
+# Generate a weighted random mixtape
+lfm mixtape --limit 30 --bias 0.5
+```
+
+### Playback (Spotify/Sonos)
+
+```bash
+# Play a track on Spotify or Sonos
+lfm play "Pink Floyd" --track "Money" --album "Dark Side of the Moon"
+
+# Queue an entire album
+lfm play "Pink Floyd" --album "Dark Side of the Moon" --queue
+
+# Play recommendations immediately
+lfm recommendations --filter 10 --totalartists 15 --playnow
+```
+
+For complete command reference, see the [Quick Start Guide](QUICKSTART.md).
+
+## Claude Integration
+
+Use LFM with Claude Code or Claude Desktop to ask natural language questions about your music:
+
+- "What were my top artists in 2024?"
+- "Show me my most-played albums from last month"
+- "Give me music recommendations based on my listening history"
+- "Play Radiohead's OK Computer on Spotify"
+
+See the [MCP Setup Guide](MCP_SETUP.md) for installation instructions.
+
+## Features
+
+### Music Statistics
+- Top artists, tracks, and albums with play counts
+- Flexible time periods (7 days, 1 month, 3 months, 6 months, 12 months, all time)
+- Custom date ranges (e.g., `--from 2024-01-01 --to 2024-06-30`)
+- Specific year queries (e.g., `--year 2023`)
+- Artist-specific track and album searches
+
+### Discovery & Recommendations
+- Similar artist discovery using Last.fm's similarity algorithm
+- Personalized recommendations based on your listening history
+- Filter recommendations by play count (discover truly new artists)
+- Tag-based filtering (exclude genres like classical, christmas)
+- Diversity controls (limit tracks per artist)
+- Weighted random mixtapes with configurable bias
+
+### Listening History
+- Check if you've listened to specific artists, tracks, or albums
+- Detailed album analysis with track-level breakdowns
+- Play count verification
+- Identify which tracks you've heard from an album
+
+### Playback Integration
+- **Spotify Integration** - Queue tracks and albums, create playlists, control playback
+- **Sonos Integration** - Play music directly on Sonos speakers
+- Device management and default configuration
+- Album version disambiguation (studio vs live vs greatest hits)
+
+### Performance & Reliability
+- Smart file-based caching (119x performance improvement)
+- Configurable API throttling (respects Last.fm rate limits)
+- Parallel API processing for deep searches
+- Cache management tools (status, cleanup)
+- API health status checker
+
+### Developer Features
+- Unicode support with auto-detection
+- Smart artist name matching (autocorrect enabled)
+- JSON output for programmatic use
+- Verbose mode for debugging
+- Comprehensive error handling
+
+## Configuration
+
+```bash
+# View current configuration
+lfm config
+
+# Set API key and username
+lfm config set api-key YOUR_API_KEY
+lfm config set username YOUR_USERNAME
+
 # Configure Spotify (requires Spotify app credentials)
 lfm config set-spotify-client-id YOUR_CLIENT_ID
 lfm config set-spotify-client-secret YOUR_CLIENT_SECRET
+lfm config set-spotify-default-device "Device Name"
 
-# Create playlists from your top tracks with artist diversity
-lfm toptracks --totaltracks 20 --tracks-per-artist 1 --year 2024
-lfm toptracks --period 1month --totalartists 15 --tracks-per-artist 2
+# Configure Sonos (requires node-sonos-http-api)
+lfm config set-sonos-api-url "http://192.168.1.24:5005"
+lfm config set-sonos-default-room "Living Room"
 
-# Queue top tracks directly to Spotify
-lfm toptracks --period 7day --totaltracks 20 --tracks-per-artist 1 --playnow
-# With specific device - 10 artists, 2 tracks each
-lfm toptracks --period 1month --totalartists 10 --tracks-per-artist 2 --playnow --device "Web Player (Chrome)"
+# Configure default settings
+lfm config set default-period 1month
+lfm config set default-limit 20
+lfm config set unicode enabled|disabled|auto
 
-# Create Spotify playlists from your top tracks
-lfm toptracks --year 2024 --totaltracks 50 --tracks-per-artist 2 --playlist "My 2024 Top Favorites"
-lfm recommendations --totalartists 15 --tracks-per-artist 2 --playlist "Discover Weekly"
-
-# Manage Spotify devices
-lfm spotify devices
-lfm config set-spotify-default-device "iPhone"
-
-# Manage Spotify playlists
-lfm spotify list-playlists
-lfm spotify delete-playlists "lfm-*"  # Delete all lfm-created playlists
+# Manage excluded genres
+lfm config add-excluded-tag "classical"
+lfm config show-excluded-tags
 ```
 
-### Cache Management
+Configuration is stored in:
+- **Windows**: `%APPDATA%\lfm\config.json`
+- **macOS/Linux**: `~/.config/lfm/config.json`
+
+## Cache Management
 
 ```bash
-# View cache status and statistics
+# View cache status
 lfm cache-status
 
-# Clear expired cache entries
+# Clear expired entries
 lfm cache-clear --expired
 
 # Clear all cache entries
 lfm cache-clear --all
 ```
 
-### Advanced Options
+Cache is stored in:
+- **Windows**: `%LOCALAPPDATA%\lfm\cache\`
+- **macOS/Linux**: `~/.cache/lfm/`
 
-#### Cache Behavior
+## Advanced Usage
+
+### Time Periods
+
+Use these with most commands:
+- `--period 7day` - Last 7 days
+- `--period 1month` - Last month
+- `--period 3month` - Last 3 months
+- `--period 6month` - Last 6 months
+- `--period 12month` - Last 12 months
+- `--period overall` - All time (default)
+
+Or use specific dates:
+- `--year 2023` - Entire year
+- `--from 2024-01-01 --to 2024-06-30` - Custom date range
+
+### Cache Options
+
 - `--force-cache` - Use cached data regardless of expiry
 - `--force-api` - Always call API and cache result
 - `--no-cache` - Disable caching entirely
 
-#### Performance & Debugging
+### Performance Options
+
 - `--timing` - Show API response times and cache hits/misses
 - `--verbose` - Detailed progress information
-- `--delay <ms>` - Throttle API requests (e.g., `--delay 1000`)
+- `--delay <ms>` - Throttle API requests
 
-#### Filtering & Ranges
+### Output Options
+
+- `--json` - JSON output for programmatic use
+- `--limit <n>` - Number of results (1-1000)
 - `--range 10-20` - Display specific position ranges
-- `--limit 50` - Number of results to display (1-1000)
-- `--period overall|7day|1month|3month|6month|12month`
-- `--from YYYY-MM-DD` - Start date for custom date range
-- `--to YYYY-MM-DD` - End date for custom date range
-- `--year YYYY` - Shortcut for entire year (e.g., `--year 2023`)
-
-### Example Workflows
-
-```bash
-# Quick overview of your music
-lfm artists --limit 5
-lfm tracks --limit 5 --period 1month
-
-# Deep dive into a specific artist
-lfm artist-tracks "Pink Floyd" --limit 20 --timing
-
-# Discover new music
-lfm recommendations --filter 5 --limit 10
-# - Analyzes your top artists
-# - Finds similar artists you haven't listened to much
-# - Filter excludes artists with 5+ plays
-
-# Discover new music with genre filtering
-lfm recommendations --exclude-tags --filter 5 --limit 20
-# - Additionally filters out genres based on your configured tags
-# - Useful for excluding classical, christmas, or other unwanted genres
-
-# Performance analysis
-lfm benchmark-cache your-username
-
-# Cache maintenance
-lfm cache-status
-lfm cache-clear --expired
-```
-
-## Configuration
-
-Configuration is stored in platform-appropriate locations:
-- **Windows**: `%APPDATA%\lfm\config.json`
-- **Linux**: `~/.config/lfm/config.json`
-
-### Available Settings
-
-```bash
-# View current configuration
-lfm config
-
-# Set API key
-lfm config set api-key YOUR_KEY
-
-# Set default username
-lfm config set username YOUR_USERNAME
-
-# Set default period
-lfm config set default-period 1month
-
-# Set default limit
-lfm config set default-limit 20
-
-# Enable/disable Unicode symbols
-lfm config set unicode enabled|disabled|auto
-
-# Spotify configuration
-lfm config set-spotify-client-id YOUR_CLIENT_ID
-lfm config set-spotify-client-secret YOUR_CLIENT_SECRET
-lfm config set-spotify-default-device "Device Name"
-
-# Playlist diversity configuration
-lfm config set-date-range-multiplier 15  # Higher = more diverse but slower
-# Affects toptracks commands with date ranges (--year, --from/--to)
-```
-
-## Cache System
-
-LFM uses an intelligent file-based caching system that:
-
-- **Reduces redundant API calls** for frequently accessed data
-- **Respects Last.fm rate limits** with configurable throttling
-- **Cross-platform storage** using XDG Base Directory standards
-- **Automatic cleanup** with configurable size and age limits
-- **Smart expiry** based on data freshness requirements
-
-### Cache Configuration
-
-```bash
-# Cache is stored in:
-# Windows: %LOCALAPPDATA%\lfm\cache\
-# Linux: ~/.cache/lfm/
-
-# Default settings:
-# - Expiry: 60 minutes
-# - Max size: 100 MB
-# - Max files: 10,000
-# - Cleanup interval: 6 hours
-```
 
 ## Building from Source
 
 ### Prerequisites
 
-- **.NET 9 SDK**
+- **.NET 8 or 9 SDK**
 - **Git**
 
 ### Build Instructions
@@ -298,101 +253,36 @@ cd lfm
 # Build for your platform
 dotnet build -c Release
 
-# Or publish for specific platforms
-dotnet publish src/Lfm.Cli -c Release -r win-x64 -o publish/win-x64 --self-contained false
-dotnet publish src/Lfm.Cli -c Release -r linux-x64 -o publish/linux-x64 --self-contained false
-
-# Run tests (if available)
-dotnet test
+# Or publish self-contained binaries
+dotnet publish src/Lfm.Cli -c Release -r win-x64 -o publish/win-x64 --self-contained true
+dotnet publish src/Lfm.Cli -c Release -r osx-x64 -o publish/osx-x64 --self-contained true
+dotnet publish src/Lfm.Cli -c Release -r osx-arm64 -o publish/osx-arm64 --self-contained true
+dotnet publish src/Lfm.Cli -c Release -r linux-x64 -o publish/linux-x64 --self-contained true
 ```
 
 ## Platform Support
 
 ### Windows
-- **PowerShell 5.x** - Full Unicode support with auto-encoding
-- **PowerShell 7+** - Native Unicode support
-- **Command Prompt** - Unicode with auto-configuration
-- **Windows Terminal** - Full feature support
+- PowerShell 5.x, PowerShell 7+, Command Prompt
+- Windows Terminal recommended for full Unicode support
+- Windows 10 or later
 
-### Linux/WSL
-- **Most terminals** - Full Unicode support
-- **Legacy terminals** - Graceful ASCII fallback
-- **WSL integration** - Seamless Windows interoperability
+### macOS
+- Intel Macs (x86_64)
+- Apple Silicon Macs (ARM64 / M1/M2/M3)
+- macOS 10.15 (Catalina) or later
 
-## Performance
+### Linux
+- Most modern distributions (Ubuntu 18.04+, Debian 10+, Fedora 30+)
+- Full Unicode support in most terminals
 
-The caching system provides significant performance improvements for repeated queries:
-- **Cold start**: Initial API calls as needed
-- **Warm cache**: Fast file system access for cached data
-- **Cache hit rate**: High for repeated queries within expiry time
-- **API throttling**: Configurable to respect Last.fm rate limits
-
-## Troubleshooting
-
-### Common Issues
-
-1. **API Key Errors**
-   ```bash
-   # Verify your API key is set
-   lfm config
-   
-   # Reset if needed
-   lfm config set api-key YOUR_NEW_KEY
-   ```
-
-2. **Artist Not Found Issues**
-   ```bash
-   # The tool automatically corrects artist name variations
-   # These commands support autocorrect for "The Beatles":
-   lfm artist-tracks "Beatles"        # Personal tracks by artist
-   lfm artist-albums "beatles"        # Personal albums by artist  
-   lfm tracks --artist "The Beatles"  # Global tracks by artist
-   
-   # If still not found, try the exact name from Last.fm website
-   ```
-
-3. **Unicode Display Issues**
-   ```bash
-   # Force ASCII mode if Unicode characters appear as "?"
-   lfm config set unicode disabled
-   
-   # Or let auto-detection handle it
-   lfm config set unicode auto
-   ```
-
-4. **Performance Issues**
-   ```bash
-   # Check cache status
-   lfm cache-status
-
-   # Clear if cache is corrupted
-   lfm cache-clear --all
-
-   # Benchmark performance
-   lfm benchmark-cache your-username
-   ```
-
-5. **Last.fm API Issues**
-   ```bash
-   # Check if Last.fm endpoints are responding
-   lfm api-status
-
-   # Get detailed status information
-   lfm api-status --verbose
-
-   # JSON output for monitoring scripts
-   lfm api-status --json
-   ```
-
-6. **.NET Runtime Missing**
-   - Download .NET 9 Runtime from https://dotnet.microsoft.com/download/dotnet/9.0
-   - Choose "Run desktop apps" runtime for your platform
-
-### Getting Help
+## Getting Help
 
 - **Built-in help**: `lfm --help` or `lfm <command> --help`
+- **Documentation**: See [QUICKSTART.md](QUICKSTART.md), [INSTALL.md](INSTALL.md), [MCP_SETUP.md](MCP_SETUP.md)
+- **Troubleshooting**: See [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 - **Issues**: [GitHub Issues](https://github.com/Steven-Marshall/lfm/issues)
-- **Last.fm API**: [Official Documentation](https://www.last.fm/api)
+- **Discussions**: [GitHub Discussions](https://github.com/Steven-Marshall/lfm/discussions)
 
 ## Contributing
 

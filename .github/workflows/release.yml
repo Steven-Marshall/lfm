@@ -1,0 +1,128 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Extract version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Build Windows x64
+        run: |
+          dotnet publish src/Lfm.Cli -c Release -r win-x64 -o publish/win-x64 --self-contained true
+          cd publish/win-x64
+          zip -r ../../lfm-windows-x64.zip lfm.exe
+
+      - name: Build macOS Intel
+        run: |
+          dotnet publish src/Lfm.Cli -c Release -r osx-x64 -o publish/osx-x64 --self-contained true
+          cd publish/osx-x64
+          zip -r ../../lfm-macos-intel.zip lfm
+
+      - name: Build macOS Apple Silicon
+        run: |
+          dotnet publish src/Lfm.Cli -c Release -r osx-arm64 -o publish/osx-arm64 --self-contained true
+          cd publish/osx-arm64
+          zip -r ../../lfm-macos-apple-silicon.zip lfm
+
+      - name: Build Linux x64
+        run: |
+          dotnet publish src/Lfm.Cli -c Release -r linux-x64 -o publish/linux-x64 --self-contained true
+          cd publish/linux-x64
+          tar -czf ../../lfm-linux-x64.tar.gz lfm
+
+      - name: Package MCP Server
+        run: |
+          mkdir -p lfm-mcp-server
+          cp lfm-mcp-release/server.js lfm-mcp-server/
+          cp lfm-mcp-release/lfm-guidelines.md lfm-mcp-server/
+          cp lfm-mcp-release/package.json lfm-mcp-server/
+          cp lfm-mcp-release/package-lock.json lfm-mcp-server/
+          cp lfm-mcp-release/README.md lfm-mcp-server/
+          zip -r lfm-mcp-server-v${{ steps.get_version.outputs.VERSION }}.zip lfm-mcp-server/
+
+      - name: Create Release Notes
+        run: |
+          cat > release-notes.md <<'EOF'
+          # LFM v${{ steps.get_version.outputs.VERSION }}
+
+          ## Installation
+
+          ### CLI Tool
+
+          Choose your platform and download the appropriate file:
+
+          **Windows:**
+          - Download `lfm-windows-x64.zip`
+          - Extract to `C:\Users\YourName\lfm`
+          - Add to PATH
+          - Or use the one-liner installer (see [INSTALL.md](INSTALL.md))
+
+          **macOS:**
+          - Intel Macs: Download `lfm-macos-intel.zip`
+          - Apple Silicon (M1/M2/M3): Download `lfm-macos-apple-silicon.zip`
+          - Extract and move to `~/.local/bin/lfm`
+          - Make executable: `chmod +x ~/.local/bin/lfm`
+          - Or use the one-liner installer (see [INSTALL.md](INSTALL.md))
+
+          **Linux:**
+          - Download `lfm-linux-x64.tar.gz`
+          - Extract and move to `~/.local/bin/lfm`
+          - Make executable: `chmod +x ~/.local/bin/lfm`
+          - Or use the one-liner installer (see [INSTALL.md](INSTALL.md))
+
+          ### MCP Server (Claude Integration)
+
+          - Download `lfm-mcp-server-v${{ steps.get_version.outputs.VERSION }}.zip`
+          - Extract to a permanent location (e.g., `~/lfm-mcp` or `C:\Users\YourName\lfm-mcp`)
+          - Run `npm install` in the extracted directory
+          - Follow [MCP_SETUP.md](MCP_SETUP.md) for configuration
+
+          ## Configuration
+
+          After installation:
+          ```bash
+          # Get API key from https://www.last.fm/api/account/create
+          lfm config set api-key YOUR_API_KEY
+          lfm config set username YOUR_LASTFM_USERNAME
+          ```
+
+          ## Documentation
+
+          - [Installation Guide](INSTALL.md) - Detailed platform-specific instructions
+          - [Quick Start Guide](QUICKSTART.md) - Get started in 5 minutes
+          - [MCP Setup Guide](MCP_SETUP.md) - Claude Code/Desktop integration
+          - [Troubleshooting Guide](TROUBLESHOOTING.md) - Common issues and solutions
+
+          ## What's Changed
+
+          See [CHANGELOG.md](CHANGELOG.md) for complete details.
+          EOF
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: release-notes.md
+          files: |
+            lfm-windows-x64.zip
+            lfm-macos-intel.zip
+            lfm-macos-apple-silicon.zip
+            lfm-linux-x64.tar.gz
+            lfm-mcp-server-v${{ steps.get_version.outputs.VERSION }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
