@@ -70,6 +70,38 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
   - Post-filtering optimization: Only place to strip data is MCP layer
   - Data flow: Last.fm API → Cache (full) → MCP Server (filtered) → LLM
   - Contextual reminders: 82% token savings vs upfront guidelines (500 + 25/tool vs 4,000)
+- **📋 Future Work - Playback Orchestration**:
+  - **Issue**: LLM writes narrative before checking playback state
+  - **User Feedback**: "you could have checked... but you were mid narrative"
+  - **Example Failure**:
+    - User asks "Is Fifth Dimension next?"
+    - LLM writes long WHY narrative
+    - LLM asks tentative "Want me to queue it?"
+    - User had JUST FINISHED Mr. Tambourine Man (tools could show this)
+  - **What Should Have Happened**:
+    - Check `lfm_recent_tracks` → see Mr. Tambourine Man just finished
+    - Check `lfm_current_track` → confirm nothing playing
+    - Respond: "I see you just finished Mr. Tambourine Man. Fifth Dimension is the logical next step - shall I queue it?"
+  - **The Challenge**:
+    - Failure happens during text generation (before tool calls)
+    - No technical hook point exists to intercept
+    - Need to train behavioral reflex: "About to suggest playback? Check state first."
+  - **User's Ideal Outcome** ("Championship Vinyl" DJ):
+    - Data-informed AND permission-seeking
+    - Confident AND polite (not tentative "want me to?")
+    - Aware AND respectful (not pushy auto-play)
+    - Template: "I see [data]. [Brief context]. Shall I [action]?"
+  - **Proposed Solution - Phased Approach**:
+    1. **Guideline** (immediate): Add prominent guideline with trigger word recognition
+       - "Before phrases like 'Want me to queue', 'Shall I play' → STOP, check state first"
+       - Mandatory workflow: recent_tracks → current_track → informed offer
+       - Response template with good/bad examples
+    2. **Test & Observe**: Collect failure/success patterns
+    3. **Contextual Reminder** (if needed): Add `_playback_suggestion_guidance` to state-checking tools
+    4. **Hook Experiment** (if needed): user-prompt-submit-hook with pattern detection
+  - **Key Insight**: Problem is behavioral (text generation phase), not technical (tool call phase)
+  - **Action**: Draft guideline using "DJ watching the floor" framing, position prominently in lfm-guidelines.md
+  - **Status**: ✅ IMPLEMENTED (Session 2025-10-16) - Added "Playback State Awareness" section to lfm-guidelines.md
 - **Build Status**: ✅ Clean build, all features tested and working
 - **Testing**: Parser handles all cases, token reduction verified with 100 albums query
 - **Documentation**: See `PARSING_BUG_ANALYSIS.md` for detailed parser investigation
@@ -257,21 +289,32 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
   - User to evaluate contextual reminders approach
   - Systematic testing if/when implemented
   - Continue gathering evidence on guidelines usage patterns
-- **📋 Future Work - Recommendations Tool Usage Guidelines**:
+- **✅ Recommendations Tool Usage Guidelines** (Session 2025-10-16):
+  - **Status**: ✅ IMPLEMENTED - Added "Using lfm_recommendations - LLM Reasoning First" section to lfm-guidelines.md
   - **Issue**: Recommendations tool may be overused in MCP context
   - **History**: Built originally for CLI, later exposed via MCP
   - **Key Insight**: For good reasoning LLMs, recommendations is rarely needed (9/10 times LLM reasoning is better)
-  - **Current Problem**: LLM may use recommendations unnecessarily instead of applying its own musical knowledge
-  - **Proposed Approach**:
-    - Recommendations should be a **raw starting point** for discovery, not the final answer
-    - LLM should apply its own judgment: musical context, user taste patterns, vibe matching
-    - Guidelines need to clarify: "Your musical knowledge is more valuable than raw similarity scores"
-  - **Example Use Cases**:
-    - ❌ Wrong: "What Beatles album should I try?" → Uses recommendations (LLM knows Beatles discography!)
-    - ✅ Right: "Find similar artists I haven't heard" → Use recommendations as starting pool, then filter with judgment
-    - ✅ Right: "What Monkees album next?" → LLM reasons about Beach Boys connections, listening patterns (as user intended)
-  - **Action**: Determine guidelines strategy to encourage LLM reasoning over tool dependency
-  - **Status**: To be addressed in future session
+  - **Implementation**: Added 83-line section (lines 108-190) emphasizing:
+    - "In general, lfm_recommendations is NOT a great starting point"
+    - "Your musical knowledge is more valuable than raw similarity scores"
+    - When NOT to use: Beatles, Pink Floyd, well-known artists (LLM knows discography)
+    - When to use (rarely): Truly obscure artists, as supplement to augment AND filter
+    - Workflow: LLM reasoning first → optionally supplement with tool → augment/filter → curate
+  - **Examples**: Real bad/good examples showing over-reliance vs LLM-first reasoning
+  - **User Clarification**: "not even just starting pool then filter... augment AND filter with judgment"
+- **✅ Listen Before You Speak - Core Workflow Methodology** (Session 2025-10-16):
+  - **Status**: ✅ IMPLEMENTED - Added "Listen Before You Speak" section to Response Style (lfm-guidelines.md lines 31-43)
+  - **Origin**: Test LLM feedback: "I need to internalize: data → think → more data → think → narrative"
+  - **Problem**: LLM starting narratives before completing research phase, discovering gaps mid-response
+  - **Real Example**: Taylor Swift analysis claiming she's an "outlier" without checking artist_albums showed she's top-tier (#9, #13, #23)
+  - **Implementation**: Ultra-concise 9-line section positioned immediately after "Be a DJ buddy" header
+  - **Key Principles**:
+    - "A DJ buddy has spun the records before talking about them"
+    - Workflow: data → think → more data → think → narrative (NOT start narrative → discover gaps)
+    - The test: "Would you need to check mid-response?" → If yes, gather more data first
+    - "When you can see the complete pattern → speak with authority"
+  - **Design Philosophy**: REALLY SIMPLE AND CLEAN - foundational methodology before DO/DON'T lists
+  - **Integration**: Extends DJ metaphor (spun the records = gathered the data)
 
 ## Build/Test Commands
 
