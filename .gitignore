@@ -62,3 +62,6 @@ LFM MCP Testing Session - Key Findi.txt
 my-playlist.txt
 recent-48hrs.json
 test-output.txt
+
+# Legacy MCP prototype (kept locally, not in git)
+lfm-mcp-prototype/
