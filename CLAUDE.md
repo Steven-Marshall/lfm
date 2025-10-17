@@ -388,6 +388,52 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
 - **Documentation**: Well-documented with comprehensive README and session notes
 - **Configuration**: Flexible with user-configurable settings for all major behaviors
 
+### 🚀 Distribution & Releases
+
+**Current Version**: 1.5.0 (CLI) / 0.2.0 (MCP Server)
+
+**Release Infrastructure** (Session 2025-10-17):
+- ✅ Automated GitHub Actions workflow (`.github/workflows/release.yml`)
+- ✅ One-liner installation scripts (`install.ps1`, `install.sh`)
+- ✅ Comprehensive documentation suite (INSTALL.md, QUICKSTART.md, MCP_SETUP.md, TROUBLESHOOTING.md)
+- ✅ Landing page README routing users to appropriate docs
+
+**Creating a New Release** - See [RELEASE.md](RELEASE.md) for detailed instructions:
+
+1. **Update version numbers**:
+   - `src/Lfm.Cli/Lfm.Cli.csproj` → `<Version>1.6.0</Version>`
+   - `lfm-mcp-release/server.js` → `version: '0.3.0'`
+   - `CHANGELOG.md` → Add new release section
+
+2. **Commit and tag**:
+   ```bash
+   git add src/Lfm.Cli/Lfm.Cli.csproj lfm-mcp-release/server.js CHANGELOG.md
+   git commit -m "chore: Bump version to 1.6.0"
+   git push
+   git tag -a v1.6.0 -m "Release v1.6.0"
+   git push --tags
+   ```
+
+3. **GitHub Actions automatically**:
+   - Builds all 4 platform binaries (Windows, macOS Intel/ARM, Linux)
+   - Packages MCP server with **lfm-guidelines.md** (critical file)
+   - Creates GitHub Release with all assets
+   - Generates release notes
+
+**Installation Methods**:
+- **One-liner installers**: Detect platform, download latest, configure PATH
+  - Windows: `iwr -useb https://raw.githubusercontent.com/Steven-Marshall/lfm/master/install.ps1 | iex`
+  - macOS/Linux: `curl -fsSL https://raw.githubusercontent.com/Steven-Marshall/lfm/master/install.sh | bash`
+- **Manual download**: From GitHub Releases page
+- **Building from source**: See README.md
+
+**Key Files**:
+- `RELEASE.md` - Complete release process documentation
+- `INSTALL.md` - Platform-specific installation guide
+- `QUICKSTART.md` - 5-minute getting started guide
+- `MCP_SETUP.md` - Claude integration setup
+- `TROUBLESHOOTING.md` - Common issues reference
+
 ---
 
 ## 📚 Documentation References
