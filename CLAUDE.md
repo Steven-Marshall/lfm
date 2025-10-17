@@ -104,7 +104,7 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
   - **Status**: ✅ IMPLEMENTED (Session 2025-10-16) - Added "Playback State Awareness" section to lfm-guidelines.md
 - **Build Status**: ✅ Clean build, all features tested and working
 - **Testing**: Parser handles all cases, token reduction verified with 100 albums query
-- **Documentation**: See `PARSING_BUG_ANALYSIS.md` for detailed parser investigation
+- **Documentation**: See `docs/PARSING_BUG_ANALYSIS.md` for detailed parser investigation
 
 ### Session: 2025-10-09 (Spotify Album Disambiguation & Parallel API Calls)
 - **Status**: ✅ COMPLETE - Album version disambiguation and parallel API processing for deep searches
@@ -440,7 +440,7 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
 
 **This file focuses on current work and recent sessions. For historical context and implementation details, see:**
 
-- **[SESSION_HISTORY.md](SESSION_HISTORY.md)** - Archived sessions (2025-01-16 through 2025-10-06)
+- **[docs/SESSION_HISTORY.md](docs/SESSION_HISTORY.md)** - Archived sessions (2025-01-16 through 2025-10-06)
   - Cache Implementation (Session 2025-01-17)
   - Recommendations Feature (Session 2025-01-28)
   - Spotify Device Management (Session 2025-09-19)
@@ -448,7 +448,7 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
   - TopTracks Command (Session 2025-09-24)
   - Album Track Checking (Session 2025-10-06)
 
-- **[IMPLEMENTATION_NOTES.md](IMPLEMENTATION_NOTES.md)** - Completed implementations
+- **[docs/IMPLEMENTATION_NOTES.md](docs/IMPLEMENTATION_NOTES.md)** - Completed implementations
   - Refactoring Status (all tasks completed)
   - Cache Implementation (119x performance improvement)
   - Unicode Symbol Support (auto-detection across platforms)
@@ -456,7 +456,7 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
   - Spotify + Sonos Integration
   - MCP Server Integration
 
-- **[LESSONS_LEARNED.md](LESSONS_LEARNED.md)** - Debugging patterns and best practices
+- **[docs/LESSONS_LEARNED.md](docs/LESSONS_LEARNED.md)** - Debugging patterns and best practices
   - Critical Thinking Over Quick Fixes (2010 Cache Bug)
   - Metadata Matching Complexity (apostrophe variants, featuring artists)
   - API Performance Analysis (HTTP bottleneck identification)

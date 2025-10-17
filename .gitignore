@@ -39,3 +39,26 @@ Thumbs.db
 
 # Claude session files
 .claude/api-docs/
+
+# Old planning docs (kept locally, not in git)
+ALBUM_CHECK_FEATURE_PLAN.md
+ARCHITECTURE_REFACTORING_PLAN.md
+DIRECTORY_STANDARDS.md
+lfm_championship_vinyl_thoughts.md
+LFM-MCP.md
+MEMORY_SYSTEM_PLAN.md
+NEW_ALBUM_DISCOVERY_FEATURE.md
+NEW_RELEASES_RESEARCH.md
+progressbarproject.md
+REFACTORING_PLAN.md
+REFACTORING_PLAN_V2.md
+SONOS_INTEGRATION_PLAN.md
+TAG_FILTERING_TEST_PLAN.md
+WEEKLY_CHARTS_OPTIMIZATION.md
+
+# Test files (kept locally, not in git)
+folklore_album.json
+LFM MCP Testing Session - Key Findi.txt
+my-playlist.txt
+recent-48hrs.json
+test-output.txt
