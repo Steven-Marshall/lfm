@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.1] - 2025-10-17
+
+### Fixed
+- **GitHub Release Automation** - Fixed automated release process to enable installation scripts
+  - Ensured GitHub Actions workflow runs on tag push
+  - Creates proper GitHub Release with all platform binaries
+  - Fixes installation scripts that depend on GitHub Releases
+
+### Documentation
+- **User Documentation Suite** - Comprehensive documentation for end users
+  - Created INSTALL.md - Platform-specific installation guide
+  - Created QUICKSTART.md - 5-minute getting started guide
+  - Created MCP_SETUP.md - Claude Code/Desktop integration setup
+  - Created TROUBLESHOOTING.md - Common issues reference
+  - Updated README.md to user-friendly landing page
+  - Created RELEASE.md - Release process documentation
+
+### Maintenance
+- **Repository Cleanup** - Removed legacy files and improved organization
+  - Removed lfm-mcp-prototype directory (2,061 files including node_modules)
+  - Removed old planning docs and test files from git
+  - Moved development docs to docs/ folder
+  - Updated .gitignore to prevent re-adding legacy files
+
 ## [1.5.0] - 2025-10-17
 
 ### Added
