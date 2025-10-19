@@ -25,6 +25,11 @@ public interface ISonosStreamer
     Task QueueAsync(string spotifyUri, string roomName);
 
     /// <summary>
+    /// Clear the current queue in a room
+    /// </summary>
+    Task ClearQueueAsync(string roomName);
+
+    /// <summary>
     /// Pause playback in a room
     /// </summary>
     Task PauseAsync(string roomName);

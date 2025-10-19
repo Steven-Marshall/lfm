@@ -83,6 +83,10 @@ public class SonosStreamer : ISonosStreamer
         var state = await GetPlaybackStateAsync(roomName);
         var wasPlaying = state?.PlaybackState == "PLAYING";
 
+        // Clear the queue first to match Spotify "play now" behavior (clean slate)
+        _logger.LogDebug("Clearing queue before play now on room '{Room}'", roomName);
+        await ClearQueueAsync(roomName);
+
         // Call /room/spotify/now/uri endpoint
         var encodedRoom = Uri.EscapeDataString(roomName);
         // NOTE: Don't encode the Spotify URI - node-sonos-http-api expects it raw in the URL path
@@ -146,6 +150,36 @@ public class SonosStreamer : ISonosStreamer
         {
             throw new InvalidOperationException(
                 $"Failed to queue on Sonos room '{roomName}'. Network error: {ex.Message}", ex);
+        }
+    }
+
+    public async Task ClearQueueAsync(string roomName)
+    {
+        await ValidateAvailabilityAsync();
+        await ValidateRoomAsync(roomName);
+
+        var encodedRoom = Uri.EscapeDataString(roomName);
+        var url = $"{_config.HttpApiBaseUrl}/{encodedRoom}/clearqueue";
+
+        try
+        {
+            _logger.LogDebug("Calling Sonos API: {Url}", url);
+            var response = await _httpClient.GetAsync(url);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorBody = await response.Content.ReadAsStringAsync();
+                _logger.LogError("Sonos API error {StatusCode}: {Error}", response.StatusCode, errorBody);
+                throw new InvalidOperationException(
+                    $"Failed to clear queue on Sonos room '{roomName}'. HTTP {response.StatusCode}: {errorBody}");
+            }
+
+            _logger.LogInformation("Cleared queue on Sonos room '{Room}'", roomName);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new InvalidOperationException(
+                $"Failed to clear queue on Sonos room '{roomName}'. Network error: {ex.Message}", ex);
         }
     }
 

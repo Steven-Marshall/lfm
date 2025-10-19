@@ -333,7 +333,7 @@ public class PlayCommand : BaseCommand
                 {
                     OutputJson(
                         true,
-                        queue ? $"Queued {result.TracksFound} tracks" : $"Playing {result.TracksFound} tracks",
+                        result.Message,
                         artist,
                         track,
                         album,
@@ -446,7 +446,7 @@ public class PlayCommand : BaseCommand
                 return new PlaylistStreamResult
                 {
                     Success = true,
-                    Message = $"Queued {spotifyUris.Count} track(s) to Sonos room '{roomName}'",
+                    Message = $"Queued to Sonos room '{roomName}'",
                     TracksFound = spotifyUris.Count,
                     NotFoundTracks = new List<string>()
                 };
@@ -468,7 +468,7 @@ public class PlayCommand : BaseCommand
                 return new PlaylistStreamResult
                 {
                     Success = true,
-                    Message = $"Playing {spotifyUris.Count} track(s) on Sonos room '{roomName}'",
+                    Message = $"Playing on Sonos room '{roomName}'",
                     TracksFound = spotifyUris.Count,
                     NotFoundTracks = new List<string>()
                 };
