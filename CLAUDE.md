@@ -26,6 +26,57 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
 
 ## Recent Sessions
 
+### Session: 2025-10-29 (Album Disambiguation for Exact Matching)
+- **Status**: ✅ COMPLETE - Spotify album exact matching implemented to handle fuzzy search issues
+- **Major Features Implemented**:
+  - **Two-Phase Album Selection**: Discovery phase shows all versions, exact match phase forces specific album
+  - **Client-Side Filtering**: Request multiple Spotify results and filter for exact name match
+  - **MCP Integration**: Added exactMatch parameter to lfm_play_now and lfm_queue tools
+  - **Comprehensive Guidelines**: Added detailed usage documentation for LLMs
+- **Problem Discovery**:
+  - User's friend (Claudette) discovered "Neu!" by Neu! was playing "Neu! 75" instead of correct album
+  - Root cause: Spotify's search API is always fuzzy/relevance-based with no exact-match mode
+  - Code was using `limit=1`, only getting Spotify's top-ranked result (most popular)
+- **Solution Architecture**:
+  - Changed from `limit=1` to `limit=10` to get multiple Spotify results
+  - Phase 1 (Discovery): When multiple versions found without exactMatch, return error listing all options
+  - Phase 2 (Exact Match): When exactMatch=true, filter client-side for exact album name match
+  - Edge case handling: When multiple albums have identical names, take first (most popular/canonical)
+- **Key Technical Components**:
+  - `SpotifyModels.cs`: New `AlbumSearchResult` and `AlbumVersionInfo` models
+  - `SpotifyStreamer.cs`: Updated `SearchSpotifyAlbumTracksAsync` and `SearchSpotifyAlbumUriAsync` with exactMatch parameter
+  - `PlayCommand.cs`: Added exactMatch parameter, enhanced error output with album version details
+  - `PlayCommandBuilder.cs`: Added `--exact-match` CLI option, migrated to InvocationContext pattern
+  - `server.js`: Added exactMatch parameter to lfm_play_now and lfm_queue MCP tools
+  - `lfm-guidelines.md`: Added "Album Disambiguation - Handling Multiple Versions" section (lines 384-447)
+- **Implementation Details**:
+  - Both album search methods updated in 4 locations (primary + fallback paths)
+  - Client-side exact matching: `albums.Where(a => a.Name.Equals(albumName, StringComparison.Ordinal))`
+  - Edge case: When exactMatch finds multiple identical names, takes first (Spotify's canonical version)
+  - Enhanced JSON error output includes all album versions with track counts and release dates
+- **Brutal Edge Case**:
+  - Discovered during testing: "Neu!" has TWO albums with identical names "Neu!" (1972)
+  - Distinguishing features: 6 tracks (original) vs 39 tracks (deluxe/compilation)
+  - Solution: When exactMatch=true and identical names exist, automatically take first result
+  - User feedback: "brutal" but pragmatic solution for rare edge case
+- **System.CommandLine Fix**:
+  - Hit 10-parameter limit when adding exactMatch parameter
+  - Migrated PlayCommandBuilder to InvocationContext pattern
+  - Removes parameter count limitation for future extensibility
+- **Guidelines for LLM Usage**:
+  - Two-phase workflow: Discover options first, then use exactMatch to select specific version
+  - User preference: Original studio albums over remasters/live/greatest hits unless specified
+  - When to use: After "multiple versions detected" error, for self-titled albums, when user specifies version
+  - When not to use: Don't use on first attempt (need to see options first)
+- **Testing & Verification**:
+  - ✅ Discovery phase correctly returns multiple album versions with details
+  - ✅ Exact match phase correctly filters to specific album
+  - ✅ Edge case handling verified with Neu! albums (identical names)
+  - ✅ MCP tools properly pass exactMatch parameter to CLI
+- **Build Status**: ✅ Clean build, workaround for file lock (copy from bin to publish)
+- **Commit**: `273cebb` - feat: Add album disambiguation for exact matching
+- **User Insight**: "funnily enough, on first listen of each album, i think neu!75 is my favourite"
+
 ### Session: 2025-10-15 (Documentation Refactoring, Parser Fix, Token Optimization)
 - **Status**: ✅ COMPLETE - Documentation split, MCP parser fixed, token usage optimized
 - **Major Accomplishments**:
