@@ -26,8 +26,8 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
 
 ## Recent Sessions
 
-### Session: 2025-10-29 (Album Disambiguation for Exact Matching)
-- **Status**: ✅ COMPLETE - Spotify album exact matching implemented to handle fuzzy search issues
+### Session: 2025-10-29 (Album Disambiguation & Deep Search Bug Fixes)
+- **Status**: ✅ COMPLETE - Spotify album exact matching + deep search timeout JSON fix + lfm_check guidelines
 - **Major Features Implemented**:
   - **Two-Phase Album Selection**: Discovery phase shows all versions, exact match phase forces specific album
   - **Client-Side Filtering**: Request multiple Spotify results and filter for exact name match
@@ -76,6 +76,33 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
 - **Build Status**: ✅ Clean build, workaround for file lock (copy from bin to publish)
 - **Commit**: `273cebb` - feat: Add album disambiguation for exact matching
 - **User Insight**: "funnily enough, on first listen of each album, i think neu!75 is my favourite"
+- **Deep Search Bug Fix** (discovered and fixed same session):
+  - **Problem**: `lfm_artist_albums` with `deep: true` returning `[{}]` from MCP
+  - **Root Cause**: When Last.fm API endpoints were down, deep search timed out
+  - **Secondary Cause**: ArtistSearchCommand timeout handler didn't respect `--json` flag
+  - **Result**: MCP server received plain text ("⏰ Search timed out...") instead of JSON
+  - **parseJsonOutput failure**: Couldn't find valid JSON, returned malformed `[{}]`
+  - **Fix**: Modified OperationCanceledException handler in ArtistSearchCommand.cs (lines 281-329)
+    - JSON mode: Returns `[]` for no matches, valid JSON array for partial results
+    - Text mode: Keeps existing user-friendly messages
+  - **Testing**: Verified with 1-second timeout returning valid `[]` instead of text
+  - **Commit**: `99a8a43` - fix: Deep search timeout now respects --json flag
+- **lfm_check Guidelines** (added to lfm-guidelines.md):
+  - **Problem**: LLMs using `lfm_check` for album exploration hitting metadata mismatches
+  - **Real Example**: Peter Gabriel conversation showed pattern:
+    - User: "what have i listened to of his... probably PG 3 or 4 the most"
+    - LLM: Multiple `lfm_check` calls with "Peter Gabriel 3: Melt", "Peter Gabriel 4: Security" → 0 plays
+    - Reality: Scrobbled as "Peter Gabriel 3", "Security" (without prefix/suffix)
+    - Total: 299 plays, but only 29 accounted for (270 missing due to metadata issues)
+    - Solution: `lfm_artist_albums` immediately showed all 10 albums with correct play counts
+  - **Guideline Added** (55 lines): "Using lfm_check - When It Works and When It Doesn't"
+    - When to use: Artist checks (reliable), specific verification, yes/no questions
+    - When NOT to use: Exploration ("what have you listened to"), building comprehensive views
+    - Problem: Metadata fragmentation (remasters, punctuation, featured artists, spacing)
+    - Better approach: Use `lfm_artist_albums` or `lfm_artist_tracks` for exploration
+    - Shows ACTUAL metadata in user's scrobbles, not guessed canonical names
+  - **Key Insight**: "album_artist is sort of the preferred way" - user's observation
+  - **Commit**: `99a8a43` - same commit as deep search fix
 
 ### Session: 2025-10-15 (Documentation Refactoring, Parser Fix, Token Optimization)
 - **Status**: ✅ COMPLETE - Documentation split, MCP parser fixed, token usage optimized
