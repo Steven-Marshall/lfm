@@ -280,31 +280,51 @@ public class ArtistSearchCommand<T, TResponse> : BaseCommand
             }
             catch (OperationCanceledException)
             {
-                if (userCancelled)
+                if (json)
                 {
-                    Console.WriteLine($"\n🛑 Search cancelled by user.");
-                }
-                else
-                {
-                    Console.WriteLine($"\n⏰ Search timed out after {timeoutMs / 1000} seconds.");
-                }
-                
-                Console.WriteLine($"Searched {itemsSearched:N0} {_itemTypeName} and found {artistItems.Count} matches.");
-                
-                if (artistItems.Any())
-                {
-                    // Take only the requested limit, preserving the original order
-                    artistItems = artistItems.Take(limit).ToList();
-                    if (verbose)
+                    // JSON output mode - return structured data even on timeout/cancellation
+                    if (artistItems.Any())
                     {
-                        Console.WriteLine($"\nShowing partial results - your top {artistItems.Count} {_itemTypeName} by: {artist}");
+                        // Return partial results as JSON
+                        artistItems = artistItems.Take(limit).ToList();
+                        var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
+                        Console.WriteLine(JsonSerializer.Serialize(artistItems, jsonOptions));
                     }
-                    _displayMethod(artistItems, 1);
+                    else
+                    {
+                        // No matches - return empty array
+                        Console.WriteLine("[]");
+                    }
                 }
                 else
                 {
-                    var reason = userCancelled ? "cancellation" : "timeout";
-                    Console.WriteLine($"No matches found before {reason}.");
+                    // Text output mode - show informative messages
+                    if (userCancelled)
+                    {
+                        Console.WriteLine($"\n🛑 Search cancelled by user.");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"\n⏰ Search timed out after {timeoutMs / 1000} seconds.");
+                    }
+
+                    Console.WriteLine($"Searched {itemsSearched:N0} {_itemTypeName} and found {artistItems.Count} matches.");
+
+                    if (artistItems.Any())
+                    {
+                        // Take only the requested limit, preserving the original order
+                        artistItems = artistItems.Take(limit).ToList();
+                        if (verbose)
+                        {
+                            Console.WriteLine($"\nShowing partial results - your top {artistItems.Count} {_itemTypeName} by: {artist}");
+                        }
+                        _displayMethod(artistItems, 1);
+                    }
+                    else
+                    {
+                        var reason = userCancelled ? "cancellation" : "timeout";
+                        Console.WriteLine($"No matches found before {reason}.");
+                    }
                 }
             }
             finally

@@ -203,6 +203,62 @@ filtered for [user preference] and added [artist] because [musical reasoning]."
 - User context + musical knowledge > algorithms
 - When in doubt, reason it out yourself
 
+### Using lfm_check - When It Works and When It Doesn't
+
+**The Tool:**
+`lfm_check` verifies if a user has listened to a specific artist, track, or album.
+
+**When to use lfm_check:**
+- ✅ Artist checks: `lfm_check(artist: "Peter Gabriel")` - Reliable, returns total plays
+- ✅ Specific verification: "Have you listened to [exact track/album name]?"
+- ✅ Quick binary answer: User asked a yes/no question about a specific item
+
+**When NOT to use lfm_check:**
+- ❌ Exploring what albums/tracks a user has: Use `lfm_artist_albums` or `lfm_artist_tracks` instead
+- ❌ Building comprehensive views: Check returns zero when metadata doesn't match
+- ❌ Discovery questions: "What have you listened to by X?"
+
+**The Problem: Metadata Fragmentation**
+
+Albums and tracks have **severe metadata matching issues**:
+- Album names vary: "Peter Gabriel 3: Melt" vs "Peter Gabriel 3" vs "Melt"
+- Remaster suffixes: "Abbey Road (Remastered)" vs "Abbey Road"
+- Punctuation spacing: "Walk Away Renée / Pretty Ballerina" vs "Walk Away Renée/Pretty Ballerina"
+- Featured artists: "Song (feat. X)" vs "Song" vs "Song [feat. X]"
+
+**Result:** `lfm_check` returns 0 plays even though the user HAS listened!
+
+**Better Approach for Albums/Tracks:**
+
+**Instead of checking individual albums:**
+```
+❌ lfm_check(artist: "Peter Gabriel", album: "Peter Gabriel 3: Melt") → 0 plays (metadata mismatch)
+❌ lfm_check(artist: "Peter Gabriel", album: "Peter Gabriel 4: Security") → 0 plays (metadata mismatch)
+```
+
+**Get comprehensive view:**
+```
+✅ lfm_artist_albums(artist: "Peter Gabriel", limit: 20)
+   Returns ALL albums with play counts:
+   - "Peter Gabriel 2" - 55 plays
+   - "Security" - 33 plays
+   - "Peter Gabriel 3" - 32 plays
+   (Notice: "Security" not "Peter Gabriel 4: Security")
+```
+
+**Workflow when user asks "What have I listened to of X":**
+1. **DON'T** try to verify specific albums with lfm_check
+2. **DO** use `lfm_artist_albums` or `lfm_artist_tracks` to get comprehensive data
+3. Then discuss based on actual scrobbled data
+
+**Why lfm_artist_albums/tracks are better:**
+- Shows what metadata is ACTUALLY in the user's scrobbles
+- Reveals all albums/tracks with play counts
+- No guessing about exact naming
+- One call instead of multiple check attempts
+
+**Exception:** If lfm_check returns 0 plays AND you have reason to believe the user HAS listened, fall back to artist_albums/artist_tracks with `deep: true` to find what the actual metadata looks like.
+
 ### Track Positions & Album Details - Known LLM Blind Spot
 
 **NEVER reference track numbers or positions without verification.**
