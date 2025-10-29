@@ -71,6 +71,28 @@ public class TrackSearchResult
     public List<string> AlbumVersions { get; set; } = new();
 }
 
+/// <summary>
+/// Result of album search with version detection
+/// </summary>
+public class AlbumSearchResult
+{
+    public string? SpotifyUri { get; set; }
+    public List<string>? TrackUris { get; set; }
+    public bool HasMultipleVersions { get; set; }
+    public List<AlbumVersionInfo> AlbumVersions { get; set; } = new();
+}
+
+/// <summary>
+/// Information about a specific album version
+/// </summary>
+public class AlbumVersionInfo
+{
+    public string Name { get; set; } = string.Empty;
+    public string? ReleaseDate { get; set; }
+    public string Uri { get; set; } = string.Empty;
+    public int TrackCount { get; set; }
+}
+
 // Playlist Creation
 public class CreatePlaylistRequest
 {
@@ -204,6 +226,12 @@ public class SpotifyAlbumItem
 
     [JsonPropertyName("uri")]
     public string Uri { get; set; } = string.Empty;
+
+    [JsonPropertyName("release_date")]
+    public string? ReleaseDate { get; set; }
+
+    [JsonPropertyName("total_tracks")]
+    public int TotalTracks { get; set; }
 }
 
 // Album Tracks Response

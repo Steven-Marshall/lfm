@@ -749,14 +749,16 @@ public class SpotifyStreamer : IPlaylistStreamer
     /// <summary>
     /// Search for an album on Spotify and return the album URI
     /// </summary>
-    public async Task<string?> SearchSpotifyAlbumUriAsync(string artistName, string albumName)
+    public async Task<AlbumSearchResult> SearchSpotifyAlbumUriAsync(string artistName, string albumName, bool exactMatch = false)
     {
+        var result = new AlbumSearchResult();
+
         await EnsureValidAccessTokenAsync();
         _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
 
-        // Search for album on Spotify
+        // Search for album on Spotify - get multiple results for disambiguation
         var query = HttpUtility.UrlEncode($"artist:\"{artistName}\" album:\"{albumName}\"");
-        var searchUrl = $"https://api.spotify.com/v1/search?q={query}&type=album&limit=1";
+        var searchUrl = $"https://api.spotify.com/v1/search?q={query}&type=album&limit=10";
 
         try
         {
@@ -766,105 +768,102 @@ public class SpotifyStreamer : IPlaylistStreamer
             if (response.IsSuccessStatusCode)
             {
                 var searchResponse = JsonSerializer.Deserialize<SpotifyAlbumSearchResponse>(json);
-                var firstAlbum = searchResponse?.Albums?.Items.FirstOrDefault();
+                var albums = searchResponse?.Albums?.Items ?? new List<SpotifyAlbumItem>();
 
-                if (firstAlbum != null)
+                if (albums.Any())
                 {
-                    return firstAlbum.Uri; // Returns spotify:album:XXXXX
-                }
-            }
+                    // Filter for exact match if requested
+                    var candidateAlbums = exactMatch
+                        ? albums.Where(a => a.Name.Equals(albumName, StringComparison.Ordinal)).ToList()
+                        : albums;
 
-            // Try loose search if precise search failed and fallback is enabled
-            if (_config.FallbackToLooseSearch)
-            {
-                query = HttpUtility.UrlEncode($"{artistName} {albumName}");
-                searchUrl = $"https://api.spotify.com/v1/search?q={query}&type=album&limit=1";
-
-                response = await _httpClient.GetAsync(searchUrl);
-                json = await response.Content.ReadAsStringAsync();
-
-                if (response.IsSuccessStatusCode)
-                {
-                    var searchResponse = JsonSerializer.Deserialize<SpotifyAlbumSearchResponse>(json);
-                    var firstAlbum = searchResponse?.Albums?.Items.FirstOrDefault();
-
-                    if (firstAlbum != null)
+                    if (candidateAlbums.Count == 1)
                     {
-                        return firstAlbum.Uri;
+                        // Single match - return URI
+                        result.SpotifyUri = candidateAlbums.First().Uri;
+                        result.HasMultipleVersions = false;
+                        return result;
                     }
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"⚠️  Error searching for album: {ex.Message}");
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Search for an album on Spotify and return all track URIs
-    /// </summary>
-    public async Task<List<string>> SearchSpotifyAlbumTracksAsync(string artistName, string albumName)
-    {
-        await EnsureValidAccessTokenAsync();
-        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
-
-        // Search for album on Spotify
-        var query = HttpUtility.UrlEncode($"artist:\"{artistName}\" album:\"{albumName}\"");
-        var searchUrl = $"https://api.spotify.com/v1/search?q={query}&type=album&limit=1";
-
-        try
-        {
-            var response = await _httpClient.GetAsync(searchUrl);
-            var json = await response.Content.ReadAsStringAsync();
-
-            if (response.IsSuccessStatusCode)
-            {
-                var searchResponse = JsonSerializer.Deserialize<SpotifyAlbumSearchResponse>(json);
-                var firstAlbum = searchResponse?.Albums?.Items.FirstOrDefault();
-
-                if (firstAlbum != null)
-                {
-                    // Get album tracks
-                    var tracksUrl = $"https://api.spotify.com/v1/albums/{firstAlbum.Id}/tracks";
-                    var tracksResponse = await _httpClient.GetAsync(tracksUrl);
-                    var tracksJson = await tracksResponse.Content.ReadAsStringAsync();
-
-                    if (tracksResponse.IsSuccessStatusCode)
+                    else if (candidateAlbums.Count > 1)
                     {
-                        var albumTracks = JsonSerializer.Deserialize<SpotifyAlbumTracksResponse>(tracksJson);
-                        return albumTracks?.Items.Select(t => t.Uri).ToList() ?? new List<string>();
-                    }
-                }
-            }
-
-            // Try loose search if precise search failed and fallback is enabled
-            if (_config.FallbackToLooseSearch)
-            {
-                query = HttpUtility.UrlEncode($"{artistName} {albumName}");
-                searchUrl = $"https://api.spotify.com/v1/search?q={query}&type=album&limit=1";
-
-                response = await _httpClient.GetAsync(searchUrl);
-                json = await response.Content.ReadAsStringAsync();
-
-                if (response.IsSuccessStatusCode)
-                {
-                    var searchResponse = JsonSerializer.Deserialize<SpotifyAlbumSearchResponse>(json);
-                    var firstAlbum = searchResponse?.Albums?.Items.FirstOrDefault();
-
-                    if (firstAlbum != null)
-                    {
-                        // Get album tracks
-                        var tracksUrl = $"https://api.spotify.com/v1/albums/{firstAlbum.Id}/tracks";
-                        var tracksResponse = await _httpClient.GetAsync(tracksUrl);
-                        var tracksJson = await tracksResponse.Content.ReadAsStringAsync();
-
-                        if (tracksResponse.IsSuccessStatusCode)
+                        // Multiple versions found
+                        if (exactMatch)
                         {
-                            var albumTracks = JsonSerializer.Deserialize<SpotifyAlbumTracksResponse>(tracksJson);
-                            return albumTracks?.Items.Select(t => t.Uri).ToList() ?? new List<string>();
+                            // If exactMatch is true and we still have multiple (edge case: identical names),
+                            // just take the first one (usually the canonical/most popular version)
+                            result.SpotifyUri = candidateAlbums.First().Uri;
+                            result.HasMultipleVersions = false;
+                            return result;
+                        }
+                        else
+                        {
+                            // Discovery mode - return options
+                            result.HasMultipleVersions = true;
+                            result.AlbumVersions = candidateAlbums.Select(a => new AlbumVersionInfo
+                            {
+                                Name = a.Name,
+                                ReleaseDate = a.ReleaseDate,
+                                Uri = a.Uri,
+                                TrackCount = a.TotalTracks
+                            }).ToList();
+                            return result;
+                        }
+                    }
+                }
+            }
+
+            // Try loose search if precise search failed and fallback is enabled
+            if (_config.FallbackToLooseSearch && !result.AlbumVersions.Any())
+            {
+                query = HttpUtility.UrlEncode($"{artistName} {albumName}");
+                searchUrl = $"https://api.spotify.com/v1/search?q={query}&type=album&limit=10";
+
+                response = await _httpClient.GetAsync(searchUrl);
+                json = await response.Content.ReadAsStringAsync();
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var searchResponse = JsonSerializer.Deserialize<SpotifyAlbumSearchResponse>(json);
+                    var albums = searchResponse?.Albums?.Items ?? new List<SpotifyAlbumItem>();
+
+                    if (albums.Any())
+                    {
+                        // Filter for exact match if requested
+                        var candidateAlbums = exactMatch
+                            ? albums.Where(a => a.Name.Equals(albumName, StringComparison.Ordinal)).ToList()
+                            : albums;
+
+                        if (candidateAlbums.Count == 1)
+                        {
+                            // Single match - return URI
+                            result.SpotifyUri = candidateAlbums.First().Uri;
+                            result.HasMultipleVersions = false;
+                            return result;
+                        }
+                        else if (candidateAlbums.Count > 1)
+                        {
+                            // Multiple versions found
+                            if (exactMatch)
+                            {
+                                // If exactMatch is true and we still have multiple (edge case: identical names),
+                                // just take the first one (usually the canonical/most popular version)
+                                result.SpotifyUri = candidateAlbums.First().Uri;
+                                result.HasMultipleVersions = false;
+                                return result;
+                            }
+                            else
+                            {
+                                // Discovery mode - return options
+                                result.HasMultipleVersions = true;
+                                result.AlbumVersions = candidateAlbums.Select(a => new AlbumVersionInfo
+                                {
+                                    Name = a.Name,
+                                    ReleaseDate = a.ReleaseDate,
+                                    Uri = a.Uri,
+                                    TrackCount = a.TotalTracks
+                                }).ToList();
+                                return result;
+                            }
                         }
                     }
                 }
@@ -875,7 +874,178 @@ public class SpotifyStreamer : IPlaylistStreamer
             Console.WriteLine($"⚠️  Error searching for album: {ex.Message}");
         }
 
-        return new List<string>();
+        return result;
+    }
+
+    /// <summary>
+    /// Search for an album on Spotify and return all track URIs
+    /// </summary>
+    public async Task<AlbumSearchResult> SearchSpotifyAlbumTracksAsync(string artistName, string albumName, bool exactMatch = false)
+    {
+        var result = new AlbumSearchResult();
+
+        await EnsureValidAccessTokenAsync();
+        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
+
+        // Search for album on Spotify - get multiple results for disambiguation
+        var query = HttpUtility.UrlEncode($"artist:\"{artistName}\" album:\"{albumName}\"");
+        var searchUrl = $"https://api.spotify.com/v1/search?q={query}&type=album&limit=10";
+
+        try
+        {
+            var response = await _httpClient.GetAsync(searchUrl);
+            var json = await response.Content.ReadAsStringAsync();
+
+            if (response.IsSuccessStatusCode)
+            {
+                var searchResponse = JsonSerializer.Deserialize<SpotifyAlbumSearchResponse>(json);
+                var albums = searchResponse?.Albums?.Items ?? new List<SpotifyAlbumItem>();
+
+                if (albums.Any())
+                {
+                    // Filter for exact match if requested
+                    var candidateAlbums = exactMatch
+                        ? albums.Where(a => a.Name.Equals(albumName, StringComparison.Ordinal)).ToList()
+                        : albums;
+
+                    if (candidateAlbums.Count == 1)
+                    {
+                        // Single match - get tracks and return
+                        var album = candidateAlbums.First();
+                        var tracksUrl = $"https://api.spotify.com/v1/albums/{album.Id}/tracks";
+                        var tracksResponse = await _httpClient.GetAsync(tracksUrl);
+                        var tracksJson = await tracksResponse.Content.ReadAsStringAsync();
+
+                        if (tracksResponse.IsSuccessStatusCode)
+                        {
+                            var albumTracks = JsonSerializer.Deserialize<SpotifyAlbumTracksResponse>(tracksJson);
+                            result.TrackUris = albumTracks?.Items.Select(t => t.Uri).ToList();
+                            result.SpotifyUri = album.Uri;
+                            result.HasMultipleVersions = false;
+                            return result;
+                        }
+                    }
+                    else if (candidateAlbums.Count > 1)
+                    {
+                        // Multiple versions found
+                        if (exactMatch)
+                        {
+                            // If exactMatch is true and we still have multiple (edge case: identical names),
+                            // just take the first one (usually the canonical/most popular version)
+                            var album = candidateAlbums.First();
+                            var tracksUrl = $"https://api.spotify.com/v1/albums/{album.Id}/tracks";
+                            var tracksResponse = await _httpClient.GetAsync(tracksUrl);
+                            var tracksJson = await tracksResponse.Content.ReadAsStringAsync();
+
+                            if (tracksResponse.IsSuccessStatusCode)
+                            {
+                                var albumTracks = JsonSerializer.Deserialize<SpotifyAlbumTracksResponse>(tracksJson);
+                                result.TrackUris = albumTracks?.Items.Select(t => t.Uri).ToList();
+                                result.SpotifyUri = album.Uri;
+                                result.HasMultipleVersions = false;
+                                return result;
+                            }
+                        }
+                        else
+                        {
+                            // Discovery mode - return options
+                            result.HasMultipleVersions = true;
+                            result.AlbumVersions = candidateAlbums.Select(a => new AlbumVersionInfo
+                            {
+                                Name = a.Name,
+                                ReleaseDate = a.ReleaseDate,
+                                Uri = a.Uri,
+                                TrackCount = a.TotalTracks
+                            }).ToList();
+                            return result;
+                        }
+                    }
+                }
+            }
+
+            // Try loose search if precise search failed and fallback is enabled
+            if (_config.FallbackToLooseSearch && !result.AlbumVersions.Any())
+            {
+                query = HttpUtility.UrlEncode($"{artistName} {albumName}");
+                searchUrl = $"https://api.spotify.com/v1/search?q={query}&type=album&limit=10";
+
+                response = await _httpClient.GetAsync(searchUrl);
+                json = await response.Content.ReadAsStringAsync();
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var searchResponse = JsonSerializer.Deserialize<SpotifyAlbumSearchResponse>(json);
+                    var albums = searchResponse?.Albums?.Items ?? new List<SpotifyAlbumItem>();
+
+                    if (albums.Any())
+                    {
+                        // Filter for exact match if requested
+                        var candidateAlbums = exactMatch
+                            ? albums.Where(a => a.Name.Equals(albumName, StringComparison.Ordinal)).ToList()
+                            : albums;
+
+                        if (candidateAlbums.Count == 1)
+                        {
+                            // Single match - get tracks and return
+                            var album = candidateAlbums.First();
+                            var tracksUrl = $"https://api.spotify.com/v1/albums/{album.Id}/tracks";
+                            var tracksResponse = await _httpClient.GetAsync(tracksUrl);
+                            var tracksJson = await tracksResponse.Content.ReadAsStringAsync();
+
+                            if (tracksResponse.IsSuccessStatusCode)
+                            {
+                                var albumTracks = JsonSerializer.Deserialize<SpotifyAlbumTracksResponse>(tracksJson);
+                                result.TrackUris = albumTracks?.Items.Select(t => t.Uri).ToList();
+                                result.SpotifyUri = album.Uri;
+                                result.HasMultipleVersions = false;
+                                return result;
+                            }
+                        }
+                        else if (candidateAlbums.Count > 1)
+                        {
+                            // Multiple versions found
+                            if (exactMatch)
+                            {
+                                // If exactMatch is true and we still have multiple (edge case: identical names),
+                                // just take the first one (usually the canonical/most popular version)
+                                var album = candidateAlbums.First();
+                                var tracksUrl = $"https://api.spotify.com/v1/albums/{album.Id}/tracks";
+                                var tracksResponse = await _httpClient.GetAsync(tracksUrl);
+                                var tracksJson = await tracksResponse.Content.ReadAsStringAsync();
+
+                                if (tracksResponse.IsSuccessStatusCode)
+                                {
+                                    var albumTracks = JsonSerializer.Deserialize<SpotifyAlbumTracksResponse>(tracksJson);
+                                    result.TrackUris = albumTracks?.Items.Select(t => t.Uri).ToList();
+                                    result.SpotifyUri = album.Uri;
+                                    result.HasMultipleVersions = false;
+                                    return result;
+                                }
+                            }
+                            else
+                            {
+                                // Discovery mode - return options
+                                result.HasMultipleVersions = true;
+                                result.AlbumVersions = candidateAlbums.Select(a => new AlbumVersionInfo
+                                {
+                                    Name = a.Name,
+                                    ReleaseDate = a.ReleaseDate,
+                                    Uri = a.Uri,
+                                    TrackCount = a.TotalTracks
+                                }).ToList();
+                                return result;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"⚠️  Error searching for album: {ex.Message}");
+        }
+
+        return result;
     }
 
     private async Task<bool> AddToQueueAsync(string trackUri)

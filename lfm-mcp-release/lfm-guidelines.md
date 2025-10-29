@@ -381,6 +381,70 @@ sophistication → Beatles-inspired power pop."
 - You just checked in the last 1-2 messages
 - User is asking about historical data (not current session)
 
+### Album Disambiguation - Handling Multiple Versions
+
+**When Playing Albums: Two-Phase Approach**
+
+Albums often have multiple versions (original, remaster, deluxe, live) on Spotify. The system uses a two-phase approach:
+
+**Phase 1: Discovery (without `exactMatch`)**
+```
+LLM: lfm_play_now(artist: "Neu!", album: "Neu!")
+CLI: Returns error with multiple versions:
+  - "Neu!" (1972, 6 tracks)
+  - "Neu! 2" (1973, 6 tracks)
+  - "Neu! 75" (1975, 6 tracks)
+```
+
+**Phase 2: Exact Match (with `exactMatch: true`)**
+```
+LLM: lfm_play_now(artist: "Neu!", album: "Neu!", exactMatch: true)
+CLI: Filters Spotify results for exact album name match
+     Plays "Neu!" (1972) ✅
+```
+
+**How Exact Matching Works:**
+1. CLI requests 10 results from Spotify (Spotify always returns fuzzy matches)
+2. CLI filters client-side for albums where `name == "Neu!"` exactly
+3. If exactly one match → plays it
+4. If multiple exact matches (rare: different remasters with identical names) → error with release dates
+5. If no exact match → error
+
+**When to Use `exactMatch`:**
+- ✅ After receiving "multiple versions detected" error
+- ✅ For self-titled albums (e.g., "Neu!", "The Beatles")
+- ✅ When user specifies a particular version (e.g., "the 1972 original")
+- ❌ Don't use on first attempt (you need to see the options first)
+
+**User Preference:**
+Users typically prefer original studio albums over remasters/live/greatest hits unless explicitly requested.
+
+**Example Workflow:**
+```
+User: "Play Neu! by Neu!"
+
+1. Try without exactMatch first
+   → Get error with 3 options
+
+2. Analyze options:
+   - "Neu!" (1972) ← Original studio album
+   - "Neu! 2" (1973) ← Different album
+   - "Neu! 75" (1975) ← Different album
+
+3. Retry with exactMatch:
+   lfm_play_now(artist: "Neu!", album: "Neu!", exactMatch: true)
+   → Plays the 1972 original ✅
+```
+
+**Edge Cases:**
+- **Remasters with identical names**: "Dark Side of the Moon" (1973 original), "Dark Side of the Moon" (2011 remaster)
+  - System returns options with release dates
+  - LLM picks based on user preference (usually original)
+
+- **Fuzzy matches vs exact**: "Neu!" query matches "Neu! 2" and "Neu! 75" in Spotify's fuzzy search
+  - Without `exactMatch`: All 3 returned
+  - With `exactMatch`: Only "Neu!" (1972) matches
+
 ### Understanding Album Metadata
 
 **Album Play Counts = Sum of Track Plays (NOT "times album was played")**

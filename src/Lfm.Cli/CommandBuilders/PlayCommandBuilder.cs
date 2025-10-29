@@ -55,6 +55,11 @@ public static class PlayCommandBuilder
             aliases: new[] { "--json", "-j" },
             description: "Output results in JSON format");
 
+        var exactMatchOption = new Option<bool>(
+            aliases: new[] { "--exact-match", "-e" },
+            description: "Force exact album name matching to resolve ambiguity (default: false)",
+            getDefaultValue: () => false);
+
         command.AddOption(trackOption);
         command.AddOption(albumOption);
         command.AddOption(deviceOption);
@@ -62,15 +67,25 @@ public static class PlayCommandBuilder
         command.AddOption(roomOption);
         command.AddOption(queueOption);
         command.AddOption(jsonOption);
+        command.AddOption(exactMatchOption);
 
         // Handler
-        command.SetHandler(async (string artist, string? track, string? album, string? device, string? player, string? room, bool queue, bool json) =>
+        command.SetHandler(async (context) =>
         {
-            var playCommand = services.GetRequiredService<PlayCommand>();
-            var result = await playCommand.ExecuteAsync(artist, track, album, device, player, room, queue, json);
-            Environment.ExitCode = result;
+            var artist = context.ParseResult.GetValueForArgument(artistArgument);
+            var track = context.ParseResult.GetValueForOption(trackOption);
+            var album = context.ParseResult.GetValueForOption(albumOption);
+            var device = context.ParseResult.GetValueForOption(deviceOption);
+            var player = context.ParseResult.GetValueForOption(playerOption);
+            var room = context.ParseResult.GetValueForOption(roomOption);
+            var queue = context.ParseResult.GetValueForOption(queueOption);
+            var json = context.ParseResult.GetValueForOption(jsonOption);
+            var exactMatch = context.ParseResult.GetValueForOption(exactMatchOption);
 
-        }, artistArgument, trackOption, albumOption, deviceOption, playerOption, roomOption, queueOption, jsonOption);
+            var playCommand = services.GetRequiredService<PlayCommand>();
+            var result = await playCommand.ExecuteAsync(artist, track, album, device, player, room, queue, json, exactMatch);
+            Environment.ExitCode = result;
+        });
 
         return command;
     }

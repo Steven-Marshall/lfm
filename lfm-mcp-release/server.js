@@ -931,6 +931,11 @@ Reading these guidelines will help you provide accurate interpretations, avoid b
             room: {
               type: 'string',
               description: 'Sonos room name (overrides config default, Sonos only)'
+            },
+            exactMatch: {
+              type: 'boolean',
+              description: 'Force exact album name matching to resolve ambiguity when multiple album versions exist (e.g., original vs remaster). Use after receiving "multiple versions detected" error.',
+              default: false
             }
           },
           required: ['artist']
@@ -966,6 +971,11 @@ Reading these guidelines will help you provide accurate interpretations, avoid b
             room: {
               type: 'string',
               description: 'Sonos room name (overrides config default, Sonos only)'
+            },
+            exactMatch: {
+              type: 'boolean',
+              description: 'Force exact album name matching to resolve ambiguity when multiple album versions exist (e.g., original vs remaster). Use after receiving "multiple versions detected" error.',
+              default: false
             }
           },
           required: ['artist']
@@ -2031,6 +2041,7 @@ ${guidelinesContent}`;
       const player = args.player;
       const device = args.device;
       const room = args.room;
+      const exactMatch = args.exactMatch || false;
 
       if (!artist) {
         throw new Error('Artist name is required');
@@ -2063,6 +2074,10 @@ ${guidelinesContent}`;
 
       if (room) {
         cmdArgs.push('--room', room);
+      }
+
+      if (exactMatch) {
+        cmdArgs.push('--exact-match');
       }
 
       const output = await executeLfmCommand(cmdArgs);
@@ -2100,6 +2115,7 @@ ${guidelinesContent}`;
       const player = args.player;
       const device = args.device;
       const room = args.room;
+      const exactMatch = args.exactMatch || false;
 
       if (!artist) {
         throw new Error('Artist name is required');
@@ -2132,6 +2148,10 @@ ${guidelinesContent}`;
 
       if (room) {
         cmdArgs.push('--room', room);
+      }
+
+      if (exactMatch) {
+        cmdArgs.push('--exact-match');
       }
 
       const output = await executeLfmCommand(cmdArgs);

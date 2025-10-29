@@ -40,7 +40,8 @@ public class PlayCommand : BaseCommand
         string? player = null,
         string? room = null,
         bool queue = false,
-        bool json = false)
+        bool json = false,
+        bool exactMatch = false)
     {
         try
         {
@@ -277,11 +278,33 @@ public class PlayCommand : BaseCommand
                 if (targetPlayer == PlayerType.Sonos)
                 {
                     // Get album URI for Sonos
-                    var albumUri = await spotifyStreamer.SearchSpotifyAlbumUriAsync(artist, album!);
+                    var albumSearchResult = await spotifyStreamer.SearchSpotifyAlbumUriAsync(artist, album!, exactMatch);
 
-                    if (albumUri == null)
+                    // Check if multiple versions detected
+                    if (albumSearchResult.HasMultipleVersions)
                     {
-                        var error = $"Album not found on Spotify: {artist} - {album}";
+                        var errorMessage = $"Multiple album versions found. Please specify which version using --exact-match flag.";
+                        if (json)
+                        {
+                            OutputJsonAlbumError(errorMessage, artist, album, albumSearchResult);
+                        }
+                        else
+                        {
+                            Console.WriteLine($"{_symbols.Error} {errorMessage}");
+                            Console.WriteLine($"\nAvailable versions:");
+                            foreach (var version in albumSearchResult.AlbumVersions)
+                            {
+                                Console.WriteLine($"  - {version.Name} ({version.ReleaseDate}) - {version.TrackCount} tracks");
+                            }
+                        }
+                        return 1;
+                    }
+
+                    if (albumSearchResult.SpotifyUri == null)
+                    {
+                        var error = exactMatch
+                            ? $"No exact match found for album: {artist} - {album}"
+                            : $"Album not found on Spotify: {artist} - {album}";
                         if (json)
                         {
                             OutputJson(false, error, artist, null, album);
@@ -294,16 +317,38 @@ public class PlayCommand : BaseCommand
                     }
 
                     // Play album as a single unit on Sonos
-                    result = await PlayOnSonosAsync(new List<string> { albumUri }, targetRoom!, queue);
+                    result = await PlayOnSonosAsync(new List<string> { albumSearchResult.SpotifyUri }, targetRoom!, queue);
                 }
                 else
                 {
                     // Get individual track URIs for Spotify
-                    var spotifyUris = await spotifyStreamer.SearchSpotifyAlbumTracksAsync(artist, album!);
+                    var albumSearchResult = await spotifyStreamer.SearchSpotifyAlbumTracksAsync(artist, album!, exactMatch);
 
-                    if (!spotifyUris.Any())
+                    // Check if multiple versions detected
+                    if (albumSearchResult.HasMultipleVersions)
                     {
-                        var error = $"Album not found on Spotify: {artist} - {album}";
+                        var errorMessage = $"Multiple album versions found. Please specify which version using --exact-match flag.";
+                        if (json)
+                        {
+                            OutputJsonAlbumError(errorMessage, artist, album, albumSearchResult);
+                        }
+                        else
+                        {
+                            Console.WriteLine($"{_symbols.Error} {errorMessage}");
+                            Console.WriteLine($"\nAvailable versions:");
+                            foreach (var version in albumSearchResult.AlbumVersions)
+                            {
+                                Console.WriteLine($"  - {version.Name} ({version.ReleaseDate}) - {version.TrackCount} tracks");
+                            }
+                        }
+                        return 1;
+                    }
+
+                    if (albumSearchResult.TrackUris == null || !albumSearchResult.TrackUris.Any())
+                    {
+                        var error = exactMatch
+                            ? $"No exact match found for album: {artist} - {album}"
+                            : $"Album not found on Spotify: {artist} - {album}";
                         if (json)
                         {
                             OutputJson(false, error, artist, null, album);
@@ -318,11 +363,11 @@ public class PlayCommand : BaseCommand
                     // Play or queue the album tracks on Spotify
                     if (queue)
                     {
-                        result = await spotifyStreamer.QueueFromUrisAsync(spotifyUris, device);
+                        result = await spotifyStreamer.QueueFromUrisAsync(albumSearchResult.TrackUris, device);
                     }
                     else
                     {
-                        result = await spotifyStreamer.PlayNowFromUrisAsync(spotifyUris, device);
+                        result = await spotifyStreamer.PlayNowFromUrisAsync(albumSearchResult.TrackUris, device);
                     }
                 }
             }
@@ -424,6 +469,41 @@ public class PlayCommand : BaseCommand
             multipleVersionsDetected = true,
             albumVersions = searchResult?.AlbumVersions ?? new List<string>(),
             suggestion = $"Users typically prefer studio albums over live/greatest hits versions unless explicitly requested. The studio album appears to be '{suggestedAlbum}'. Please retry with the 'album' parameter set to your preferred version."
+        };
+
+        Console.WriteLine(JsonSerializer.Serialize(output, new JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    private void OutputJsonAlbumError(string errorMessage, string? artist, string? album, Lfm.Spotify.Models.AlbumSearchResult albumSearchResult)
+    {
+        // Identify which album is likely the original/standard version
+        string? suggestedAlbum = null;
+        if (albumSearchResult.AlbumVersions != null && albumSearchResult.AlbumVersions.Any())
+        {
+            // Heuristic: prefer albums without "Live", "Greatest", "Deluxe", "Remaster" in the name
+            var preferredVersion = albumSearchResult.AlbumVersions.FirstOrDefault(a =>
+                !a.Name.Contains("Live", StringComparison.OrdinalIgnoreCase) &&
+                !a.Name.Contains("Greatest", StringComparison.OrdinalIgnoreCase) &&
+                !a.Name.Contains("Deluxe", StringComparison.OrdinalIgnoreCase) &&
+                !a.Name.Contains("Remaster", StringComparison.OrdinalIgnoreCase)
+            );
+            suggestedAlbum = preferredVersion?.Name ?? albumSearchResult.AlbumVersions.First().Name;
+        }
+
+        var output = new
+        {
+            success = false,
+            error = errorMessage,
+            artist = artist,
+            album = album,
+            multipleVersionsDetected = true,
+            albumVersions = albumSearchResult.AlbumVersions?.Select(v => new
+            {
+                name = v.Name,
+                releaseDate = v.ReleaseDate,
+                trackCount = v.TrackCount
+            }).ToList(),
+            suggestion = $"Multiple album versions found. Users typically prefer original studio albums over remasters/live/greatest hits unless explicitly requested. The original appears to be '{suggestedAlbum}'. Please retry with exactMatch: true and the exact album name."
         };
 
         Console.WriteLine(JsonSerializer.Serialize(output, new JsonSerializerOptions { WriteIndented = true }));
