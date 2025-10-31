@@ -26,6 +26,49 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
 
 ## Recent Sessions
 
+### Session: 2025-10-30 (Spotify Playlist Management)
+- **Status**: ✅ COMPLETE - Full playlist playback and listing functionality
+- **Major Features Implemented**:
+  - **Playlist Playback by Name**: Play user playlists with fuzzy/exact name matching
+  - **Playlist Listing**: List all user playlists with track counts and ownership status
+  - **Two-Phase Disambiguation**: Same pattern as albums (discovery → exact match)
+  - **Dual Player Support**: Both Spotify and Sonos integration
+  - **MCP Integration**: Two new tools (lfm_play_playlist, lfm_get_playlists)
+- **Key Technical Components**:
+  - `SpotifyModels.cs`: New `PlaylistSearchResult` model for disambiguation
+  - `SpotifyStreamer.cs`:
+    - `SearchPlaylistByNameAsync()` - Fuzzy search with exactMatch parameter
+    - `PlayPlaylistAsync()` - Play playlist by ID
+  - `SonosStreamer.cs`: `PlayPlaylistAsync()` using `spotify:user:spotify:playlist:{id}` format
+  - `PlaylistCommand.cs`: Play command with player routing and disambiguation
+  - `PlaylistsCommand.cs`: List all user playlists
+  - `server.js`: Two new MCP tools added
+- **Implementation Details**:
+  - **User Playlists Only**: No public/Spotify playlists (design decision for simplicity)
+  - **Fuzzy Search**: Case-insensitive contains matching by default
+  - **Exact Match**: Case-insensitive equality when `exactMatch=true`
+  - **Edge Case Handling**: Multiple playlists with identical names → take first
+  - **URI Formats**:
+    - Spotify: `spotify:playlist:{id}`
+    - Sonos: `spotify:user:spotify:playlist:{id}` (required prefix per node-sonos-http-api)
+- **Interface Updates**:
+  - `IPlaylistStreamer`: Added `SearchPlaylistByNameAsync()` and `PlayPlaylistAsync()`
+  - `ISonosStreamer`: Added `PlayPlaylistAsync()`
+- **CLI Commands**:
+  - `lfm playlists` - List all playlists with track counts
+  - `lfm playlist --name "Name"` - Play playlist
+  - `lfm playlist --name "Name" --exact-match` - Force exact matching
+  - Works with `--player`, `--device`, `--room`, `--json` flags
+- **MCP Tools**:
+  - `lfm_get_playlists()` - Returns array of {name, trackCount, isOwned}
+  - `lfm_play_playlist(playlistName, exactMatch, player, device, room)`
+- **Testing & Verification**:
+  - ✅ Clean build (0 errors, 10 pre-existing warnings)
+  - ✅ Consistent disambiguation pattern with albums
+  - ✅ Both Spotify and Sonos playback paths implemented
+- **Build Status**: ✅ Clean build, files copied to publish/win-x64
+- **Commit**: `9a434e4` - feat: Add Spotify playlist playback and listing
+
 ### Session: 2025-10-29 (Album Disambiguation & Deep Search Bug Fixes)
 - **Status**: ✅ COMPLETE - Spotify album exact matching + deep search timeout JSON fix + lfm_check guidelines
 - **Major Features Implemented**:
