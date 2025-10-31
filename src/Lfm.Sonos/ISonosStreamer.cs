@@ -25,6 +25,11 @@ public interface ISonosStreamer
     Task QueueAsync(string spotifyUri, string roomName);
 
     /// <summary>
+    /// Play a Spotify playlist by ID on Sonos
+    /// </summary>
+    Task PlayPlaylistAsync(string playlistId, string roomName);
+
+    /// <summary>
     /// Clear the current queue in a room
     /// </summary>
     Task ClearQueueAsync(string roomName);

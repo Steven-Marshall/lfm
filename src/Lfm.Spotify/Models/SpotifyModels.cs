@@ -172,6 +172,16 @@ public class PlaylistInfo
     public bool IsOwned { get; set; }
 }
 
+/// <summary>
+/// Result of playlist search with multiple match detection
+/// </summary>
+public class PlaylistSearchResult
+{
+    public string? PlaylistUri { get; set; }
+    public bool HasMultipleMatches { get; set; }
+    public List<PlaylistInfo> Playlists { get; set; } = new();
+}
+
 // Device models for playback control
 public class SpotifyDevicesResponse
 {

@@ -387,6 +387,93 @@ public class SpotifyStreamer : IPlaylistStreamer
         return playlists;
     }
 
+    /// <summary>
+    /// Search for a user's playlist by name with optional exact matching
+    /// </summary>
+    public async Task<PlaylistSearchResult> SearchPlaylistByNameAsync(string playlistName, bool exactMatch = false)
+    {
+        var result = new PlaylistSearchResult();
+
+        try
+        {
+            // Get all user playlists
+            var allPlaylists = await GetUserPlaylistsAsync();
+
+            if (!allPlaylists.Any())
+            {
+                return result;
+            }
+
+            // Filter by name
+            List<PlaylistInfo> candidatePlaylists;
+
+            if (exactMatch)
+            {
+                // Exact match: case-insensitive equality
+                candidatePlaylists = allPlaylists
+                    .Where(p => p.Name.Equals(playlistName, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+            }
+            else
+            {
+                // Fuzzy match: case-insensitive contains
+                candidatePlaylists = allPlaylists
+                    .Where(p => p.Name.Contains(playlistName, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+            }
+
+            if (candidatePlaylists.Count == 0)
+            {
+                // No matches found
+                return result;
+            }
+            else if (candidatePlaylists.Count == 1)
+            {
+                // Single match - return URI
+                var playlist = candidatePlaylists.First();
+                result.PlaylistUri = $"spotify:playlist:{playlist.Id}";
+                result.HasMultipleMatches = false;
+                result.Playlists = candidatePlaylists;
+                return result;
+            }
+            else
+            {
+                // Multiple matches found
+                if (exactMatch)
+                {
+                    // Edge case: multiple playlists with identical names
+                    // Take first one (user can disambiguate by renaming if needed)
+                    var playlist = candidatePlaylists.First();
+                    result.PlaylistUri = $"spotify:playlist:{playlist.Id}";
+                    result.HasMultipleMatches = false;
+                    result.Playlists = candidatePlaylists;
+                    return result;
+                }
+                else
+                {
+                    // Discovery mode - return all matches
+                    result.HasMultipleMatches = true;
+                    result.Playlists = candidatePlaylists;
+                    return result;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error searching for playlist: {ex.Message}");
+            return result;
+        }
+    }
+
+    /// <summary>
+    /// Play a playlist by ID on Spotify
+    /// </summary>
+    public async Task<PlaylistStreamResult> PlayPlaylistAsync(string playlistId, string? device = null)
+    {
+        var playlistUri = $"spotify:playlist:{playlistId}";
+        return await PlayNowFromUrisAsync(new List<string> { playlistUri }, device);
+    }
+
     public async Task<bool> DeletePlaylistAsync(string playlistId)
     {
         try

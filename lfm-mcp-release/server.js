@@ -982,6 +982,46 @@ Reading these guidelines will help you provide accurate interpretations, avoid b
         }
       },
       {
+        name: 'lfm_play_playlist',
+        description: 'Play a Spotify playlist by name. Searches user\'s saved playlists only. Use exactMatch for disambiguation when multiple playlists have similar names.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            playlistName: {
+              type: 'string',
+              description: 'Playlist name (required)'
+            },
+            player: {
+              type: 'string',
+              description: 'Music player: Spotify or Sonos (overrides config default)',
+              enum: ['Spotify', 'Sonos']
+            },
+            device: {
+              type: 'string',
+              description: 'Specific Spotify device to use (overrides config default, Spotify only)'
+            },
+            room: {
+              type: 'string',
+              description: 'Sonos room name (overrides config default, Sonos only)'
+            },
+            exactMatch: {
+              type: 'boolean',
+              description: 'Force exact playlist name matching when multiple playlists have similar names. Use after receiving "multiple playlists found" error.',
+              default: false
+            }
+          },
+          required: ['playlistName']
+        }
+      },
+      {
+        name: 'lfm_get_playlists',
+        description: 'Get a list of all user\'s Spotify playlists with track counts',
+        inputSchema: {
+          type: 'object',
+          properties: {}
+        }
+      },
+      {
         name: 'lfm_activate_device',
         description: 'Wake up / activate a Spotify device to make it ready to receive commands (solves "no active device" issues)',
         inputSchema: {
@@ -2153,6 +2193,96 @@ ${guidelinesContent}`;
       if (exactMatch) {
         cmdArgs.push('--exact-match');
       }
+
+      const output = await executeLfmCommand(cmdArgs);
+      const result = parseJsonOutput(output);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2)
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: false,
+              error: error.message
+            }, null, 2)
+          }
+        ],
+        isError: true
+      };
+    }
+  }
+
+  if (name === 'lfm_play_playlist') {
+    try {
+      const playlistName = args.playlistName;
+      const player = args.player;
+      const device = args.device;
+      const room = args.room;
+      const exactMatch = args.exactMatch || false;
+
+      if (!playlistName) {
+        throw new Error('Playlist name is required');
+      }
+
+      // Build command arguments
+      const cmdArgs = ['playlist', '--name', playlistName, '--json'];
+
+      if (player) {
+        cmdArgs.push('--player', player);
+      }
+
+      if (device) {
+        cmdArgs.push('--device', device);
+      }
+
+      if (room) {
+        cmdArgs.push('--room', room);
+      }
+
+      if (exactMatch) {
+        cmdArgs.push('--exact-match');
+      }
+
+      const output = await executeLfmCommand(cmdArgs);
+      const result = parseJsonOutput(output);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2)
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: false,
+              error: error.message
+            }, null, 2)
+          }
+        ],
+        isError: true
+      };
+    }
+  }
+
+  if (name === 'lfm_get_playlists') {
+    try {
+      // Build command arguments
+      const cmdArgs = ['playlists', '--json'];
 
       const output = await executeLfmCommand(cmdArgs);
       const result = parseJsonOutput(output);

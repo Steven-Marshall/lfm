@@ -122,6 +122,17 @@ public class SonosStreamer : ISonosStreamer
         }
     }
 
+    /// <summary>
+    /// Play a Spotify playlist by ID on Sonos
+    /// </summary>
+    public async Task PlayPlaylistAsync(string playlistId, string roomName)
+    {
+        // Construct Spotify playlist URI with required Sonos format
+        // Note: Sonos requires "spotify:user:spotify:playlist:{id}" format
+        var playlistUri = $"spotify:user:spotify:playlist:{playlistId}";
+        await PlayNowAsync(playlistUri, roomName);
+    }
+
     public async Task QueueAsync(string spotifyUri, string roomName)
     {
         await ValidateAvailabilityAsync();

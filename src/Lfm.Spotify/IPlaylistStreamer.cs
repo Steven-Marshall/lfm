@@ -39,6 +39,16 @@ public interface IPlaylistStreamer
     Task<List<PlaylistInfo>> GetUserPlaylistsAsync();
 
     /// <summary>
+    /// Search for a user's playlist by name with optional exact matching
+    /// </summary>
+    Task<PlaylistSearchResult> SearchPlaylistByNameAsync(string playlistName, bool exactMatch = false);
+
+    /// <summary>
+    /// Play a playlist by ID on Spotify
+    /// </summary>
+    Task<PlaylistStreamResult> PlayPlaylistAsync(string playlistId, string? device = null);
+
+    /// <summary>
     /// Delete/unfollow a playlist
     /// </summary>
     Task<bool> DeletePlaylistAsync(string playlistId);
