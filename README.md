@@ -92,6 +92,12 @@ lfm play "Pink Floyd" --track "Money" --album "Dark Side of the Moon"
 # Queue an entire album
 lfm play "Pink Floyd" --album "Dark Side of the Moon" --queue
 
+# Play a playlist by name
+lfm playlist --name "Chill Vibes"
+
+# List all your playlists
+lfm playlists
+
 # Play recommendations immediately
 lfm recommendations --filter 10 --totalartists 15 --playnow
 ```
@@ -133,8 +139,9 @@ See the [MCP Setup Guide](MCP_SETUP.md) for installation instructions.
 - Identify which tracks you've heard from an album
 
 ### Playback Integration
-- **Spotify Integration** - Queue tracks and albums, create playlists, control playback
+- **Spotify Integration** - Queue tracks and albums, manage playlists, control playback
 - **Sonos Integration** - Play music directly on Sonos speakers
+- **Playlist Management** - List and play playlists by name with fuzzy matching
 - Device management and default configuration
 - Album version disambiguation (studio vs live vs greatest hits)
 

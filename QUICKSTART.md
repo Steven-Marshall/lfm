@@ -169,6 +169,8 @@ lfm tracks --from 2024-01-01 --to 2024-06-30 --limit 20
 | Find similar artists | `lfm similar "Artist Name"` |
 | Get recommendations | `lfm recommendations --filter 5` |
 | Artist's top tracks | `lfm artist-tracks "Artist Name"` |
+| List all playlists | `lfm playlists` |
+| Play a playlist | `lfm playlist --name "Playlist Name"` |
 | Help with any command | `lfm <command> --help` |
 
 ---
@@ -186,6 +188,10 @@ lfm config set-spotify-client-secret YOUR_CLIENT_SECRET
 
 # Then queue music:
 lfm play "Pink Floyd" --album "Dark Side of the Moon"
+
+# List and play your playlists:
+lfm playlists
+lfm playlist --name "Your Playlist Name"
 ```
 
 See the [full README](README.md#spotify-integration) for details.

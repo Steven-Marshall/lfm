@@ -10,6 +10,7 @@ Once set up, you can ask Claude questions like:
 - "Give me music recommendations based on my listening history"
 - "Check if I've listened to Pink Floyd's Dark Side of the Moon"
 - "Play Radiohead's OK Computer on Spotify"
+- "List all my playlists and play my favorites playlist"
 
 Claude will use the LFM MCP server to answer using your actual Last.fm data.
 
@@ -426,6 +427,8 @@ Discovery:
 Playback (if Spotify configured):
 - "Play Pink Floyd's Dark Side of the Moon"
 - "Queue some music similar to what I've been listening to"
+- "List all my playlists"
+- "Play my 'Chill Vibes' playlist"
 
 ---
 

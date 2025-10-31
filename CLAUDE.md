@@ -11,7 +11,7 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
 - Uses System.CommandLine for CLI framework
 - **File-based caching** with comprehensive cache management (119x performance improvement)
 - Centralized error handling and display services
-- **MCP Server**: Full integration with 28 tools for LLM interactions
+- **MCP Server**: Full integration with 30 tools for LLM interactions
 
 ## Key Files
 - `src/Lfm.Cli/Program.cs` - Main entry point and DI setup
@@ -21,7 +21,7 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
 - `src/Lfm.Core/Configuration/LfmConfig.cs` - Configuration with cache/Spotify/Sonos settings
 - `src/Lfm.Spotify/SpotifyStreamer.cs` - Spotify playback integration
 - `src/Lfm.Sonos/SonosStreamer.cs` - Sonos playback integration
-- `lfm-mcp-release/server.js` - MCP server (2,347 lines, 28 tools)
+- `lfm-mcp-release/server.js` - MCP server (2,458 lines, 30 tools)
 - `lfm-mcp-release/lfm-guidelines.md` - LLM usage guidelines (480 lines)
 
 ## Recent Sessions
@@ -379,7 +379,7 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
   - **Mitigation**: Added guidelines recommending fallback to artist_albums with deep:true
 - **Guidelines Architecture Analysis**:
   - **Current State**: 479 lines, 2,805 words, ~4,000 tokens (2% of 200K context window)
-  - **Project Size**: 19,230 LOC C# code, 2,347 lines MCP server (server.js)
+  - **Project Size**: 19,230 LOC C# code, 2,458 lines MCP server (server.js)
   - **User Concern**: "it's getting quite long... on the edge of becoming top heavy"
   - **Options Evaluated**:
     1. Single file with TOC summary (baseline)
@@ -472,7 +472,7 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
 - ✅ Date range support across all commands
 - ✅ Unicode symbol support with auto-detection
 - ✅ Spotify + Sonos playback integration
-- ✅ MCP server with 28 tools for LLM interaction
+- ✅ MCP server with 30 tools for LLM interaction
 - ✅ Clean build with 0 warnings, 0 errors
 
 ### 📋 Future Enhancement Plans

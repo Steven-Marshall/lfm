@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2025-10-31
+
+### Added
+
+#### Playlist Management Features
+- **Play Playlists by Name** - New `lfm playlist` command to play Spotify playlists
+  - Fuzzy name matching for easy playlist discovery
+  - Exact match mode with `--exact-match` flag for disambiguation
+  - Works with both Spotify and Sonos players
+  - Supports `--player`, `--device`, `--room`, `--json` options
+- **List All Playlists** - New `lfm playlists` command
+  - Shows all user playlists with track counts
+  - Indicates owned vs followed playlists
+  - JSON output support for programmatic use
+
+#### MCP Server Enhancements (v0.3.0)
+- **New MCP Tools** - Added 2 new tools for playlist management (30 tools total)
+  - `lfm_play_playlist` - Play user playlists by name with disambiguation support
+  - `lfm_get_playlists` - Get list of all user playlists with metadata
+- **Two-Phase Disambiguation** - Same pattern as albums for consistent UX
+  - Discovery phase: Fuzzy search shows all matching playlists
+  - Exact match phase: Filter for specific playlist when multiple matches found
+
+#### Technical Improvements
+- **Interface Extensions**
+  - `IPlaylistStreamer`: Added `SearchPlaylistByNameAsync()` and `PlayPlaylistAsync()`
+  - `ISonosStreamer`: Added `PlayPlaylistAsync()`
+- **New Models** - `PlaylistSearchResult` for disambiguation support
+- **URI Format Handling**
+  - Spotify: `spotify:playlist:{id}`
+  - Sonos: `spotify:user:spotify:playlist:{id}` (required format)
+
+### Documentation
+- Updated all documentation with playlist features (README, QUICKSTART, MCP_SETUP)
+- Updated MCP tool counts (28 → 30 tools)
+- Added playlist usage examples and command references
+- Updated CLAUDE.md session notes with implementation details
+
+### Technical Details
+- **Commands**: `PlaylistCommand`, `PlaylistsCommand`
+- **Command Builders**: `PlaylistCommandBuilder`, `PlaylistsCommandBuilder`
+- **Search Strategy**: Reuses existing `GetUserPlaylistsAsync()` with client-side filtering
+- **Design Decision**: User playlists only (no public/Spotify playlists for simplicity)
+
 ## [1.5.1] - 2025-10-17
 
 ### Fixed
