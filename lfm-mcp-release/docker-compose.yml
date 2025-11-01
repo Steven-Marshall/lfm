@@ -15,27 +15,10 @@ services:
       - HTTP_PORT=8002
       - AUTH_TOKEN=${LFM_AUTH_TOKEN}
       - ALLOWED_ORIGINS=*
-
-      # Last.fm Configuration
-      - LASTFM_USERNAME=${LASTFM_USERNAME}
-      - LASTFM_API_KEY=${LASTFM_API_KEY}
-
-      # Spotify Configuration (Optional)
-      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID:-}
-      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET:-}
-      - SPOTIFY_REFRESH_TOKEN=${SPOTIFY_REFRESH_TOKEN:-}
-
-      # Sonos Configuration (Optional)
-      - SONOS_API_URL=${SONOS_API_URL:-}
-      - SONOS_DEFAULT_ROOM=${SONOS_DEFAULT_ROOM:-}
-
-      # Cache Configuration
-      - CACHE_DURATION_MINUTES=60
-      - API_THROTTLE_MS=200
-      - PARALLEL_API_CALLS=5
     volumes:
-      # Persistent config and cache
-      - lfm-config:/app/config
+      # Mount local config.json directly (contains all settings)
+      - ./config.json:/app/config/config.json:ro
+      # Persistent cache
       - lfm-cache:/app/cache
     restart: unless-stopped
     healthcheck:

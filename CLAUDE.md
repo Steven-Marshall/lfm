@@ -489,7 +489,22 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
 - **Architecture**: IProgressReporter interface with Console/Null implementations
 - **Integration**: Leverages existing throttling points for minimal code changes
 
-#### 2. **Additional Features** (Future Considerations)
+#### 2. **Config Export/Import Commands** 🔧
+- **Status**: TODO - Currently using direct config.json copy for Docker deployment
+- **Goal**: Add CLI commands for easier config management across environments
+- **Priority**: Medium - Nice to have for multi-environment deployments
+- **Effort**: 1-2 days implementation
+- **Key Benefits**:
+  - Easy config migration between machines
+  - Simpler Docker deployment (no manual file copying)
+  - Version control friendly (can export/import specific settings)
+- **Proposed Commands**:
+  - `lfm config export [--output config.json]` - Export current config to file
+  - `lfm config import <file>` - Import config from file
+  - `lfm config export --env` - Export as environment variables for Docker
+- **Current Workaround**: Copy `%APPDATA%\Roaming\lfm\config.json` to deployment location
+
+#### 3. **Additional Features** (Future Considerations)
 - **Enhanced Filtering**: More sophisticated recommendation filters
 - **Export Functionality**: JSON/CSV export for query results
 - **Playlist Generation**: Create playlists from recommendations
