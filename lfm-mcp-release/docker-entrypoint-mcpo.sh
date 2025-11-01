@@ -2,7 +2,7 @@
 set -e
 
 echo "========================================="
-echo "LFM MCP Server - Docker Startup"
+echo "LFM MCPO Server - Docker Startup"
 echo "========================================="
 
 # Configuration paths
@@ -31,9 +31,8 @@ mkdir -p "$CACHE_DIR"
 echo "Configuration:"
 echo "  Config file: $CONFIG_FILE"
 echo "  Cache dir:   $CACHE_DIR"
-echo "  HTTP port:   ${HTTP_PORT:-8002}"
-echo "  Auth:        ${AUTH_TOKEN:+Enabled}"
+echo "  MCPO port:   ${MCPO_PORT:-8001}"
 echo "========================================="
 
-# Start the MCP HTTP server
-exec node server-http.js
+# Start MCPO wrapping the stdio MCP server
+exec mcpo --port "${MCPO_PORT:-8001}" -- node /app/server.js

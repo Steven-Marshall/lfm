@@ -193,7 +193,7 @@ const httpServer = http.createServer(async (req, res) => {
 
         // Find the right session's transport to handle this message
         // In a production system with multiple clients, you'd route by session ID
-        // For now, we'll use the first (and likely only) active session
+        // For now, we'll use the most recent active session
         const sessionArray = Array.from(sessions.values());
 
         if (sessionArray.length === 0) {
@@ -205,9 +205,9 @@ const httpServer = http.createServer(async (req, res) => {
           return;
         }
 
-        // Handle message with the session's transport
+        // Handle message with the session's transport (use most recent session)
         // The SSE transport will route it to the connected server
-        const { transport } = sessionArray[0];
+        const { transport } = sessionArray[sessionArray.length - 1];
         await transport.handleMessage(message);
 
         res.writeHead(202, { 'Content-Type': 'application/json' });
@@ -253,6 +253,9 @@ httpServer.listen(port, '0.0.0.0', () => {
   console.error(`Health:      http://localhost:${port}/health`);
   console.error(`Auth:        ${authToken ? 'Enabled' : 'DISABLED (⚠️  not recommended for production)'}`);
   console.error(`CORS:        ${allowedOrigins.join(', ')}`);
+  console.error('========================================');
+  console.error(`DEBUG: LFM_CONFIG_PATH=${process.env.LFM_CONFIG_PATH || 'NOT SET'}`);
+  console.error(`DEBUG: LFM_CACHE_PATH=${process.env.LFM_CACHE_PATH || 'NOT SET'}`);
   console.error('========================================');
   console.error('Waiting for connections...');
   console.error('');

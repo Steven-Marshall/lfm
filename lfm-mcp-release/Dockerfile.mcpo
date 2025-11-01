@@ -1,7 +1,7 @@
-# Multi-stage Dockerfile for LFM MCP Server
-# Supports both AMD64 and ARM64 architectures
+# Dockerfile for MCPO (MCP over OpenAPI)
+# Wraps stdio MCP server and exposes as REST API for Open WebUI
 
-# Build argument for target architecture (linux-x64 or linux-arm64)
+# Build argument for target architecture
 ARG TARGET_ARCH=linux-x64
 
 # Stage 1: Build .NET CLI binary
@@ -23,36 +23,44 @@ RUN dotnet restore ./Lfm.Cli/Lfm.Cli.csproj
 COPY src/ ./
 
 # Build and publish for specified architecture
-# Default: linux-x64 (for local testing)
-# Override with --build-arg TARGET_ARCH=linux-arm64 for Spark/ARM64
 RUN dotnet publish ./Lfm.Cli/Lfm.Cli.csproj \
     -c Release \
     -r ${TARGET_ARCH} \
     -o /app/lfm \
     --self-contained false
 
-# Stage 2: Runtime image with Node.js
-FROM node:20-slim
+# Stage 2: Runtime with Python, Node.js, and MCPO
+FROM python:3.11-slim
 
-# Install .NET runtime dependencies and .NET runtime
+# Install Node.js, .NET runtime, and system dependencies
+# Note: Using libicu-dev for latest version (Trixie has libicu74)
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     libc6 \
     libgcc-s1 \
     libgssapi-krb5-2 \
-    libicu72 \
+    libicu-dev \
     libssl3 \
     libstdc++6 \
     zlib1g \
     wget \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install .NET 8 Runtime (matches target framework in csproj)
+# Install Node.js 20
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install .NET 8 Runtime
 RUN wget https://dot.net/v1/dotnet-install.sh -O dotnet-install.sh \
     && chmod +x dotnet-install.sh \
     && ./dotnet-install.sh --channel 8.0 --runtime dotnet --install-dir /usr/share/dotnet \
     && rm dotnet-install.sh \
     && ln -s /usr/share/dotnet/dotnet /usr/bin/dotnet
+
+# Install MCPO via pip
+RUN pip install --no-cache-dir mcpo
 
 WORKDIR /app
 
@@ -63,7 +71,6 @@ COPY --from=build-dotnet /app/lfm /app/lfm
 COPY lfm-mcp-release/package*.json ./
 COPY lfm-mcp-release/server-core.js ./
 COPY lfm-mcp-release/server.js ./
-COPY lfm-mcp-release/server-http.js ./
 COPY lfm-mcp-release/lfm-guidelines.md ./
 
 # Install Node.js dependencies
@@ -76,15 +83,16 @@ RUN mkdir -p /app/config /app/cache
 ENV PATH="/app/lfm:${PATH}"
 
 # Copy startup script
-COPY lfm-mcp-release/docker-entrypoint.sh ./
-RUN chmod +x docker-entrypoint.sh
+COPY lfm-mcp-release/docker-entrypoint-mcpo.sh ./
+RUN chmod +x docker-entrypoint-mcpo.sh
 
-# Expose HTTP port
-EXPOSE 8002
+# Expose MCPO port
+EXPOSE 8001
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:8002/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+  CMD curl -f http://localhost:8001/health || exit 1
 
-# Default: Run HTTP/SSE server
-CMD ["/app/docker-entrypoint.sh"]
+# Start MCPO wrapping the stdio MCP server
+# MCPO will expose the MCP tools as OpenAPI endpoints
+CMD ["/app/docker-entrypoint-mcpo.sh"]

@@ -19,20 +19,23 @@ async function executeLfmCommand(args) {
   return new Promise((resolve, reject) => {
     // Use the main lfm installation
     const lfmPath = 'lfm';
-    const process = spawn(lfmPath, args, { cwd: __dirname });
+    const childProcess = spawn(lfmPath, args, {
+      cwd: __dirname,
+      env: process.env  // Pass environment variables to child process
+    });
 
     let stdout = '';
     let stderr = '';
 
-    process.stdout.on('data', (data) => {
+    childProcess.stdout.on('data', (data) => {
       stdout += data.toString();
     });
 
-    process.stderr.on('data', (data) => {
+    childProcess.stderr.on('data', (data) => {
       stderr += data.toString();
     });
 
-    process.on('close', (code) => {
+    childProcess.on('close', (code) => {
       if (code !== 0) {
         reject(new Error(`Command failed with code ${code}: ${stderr}`));
       } else {

@@ -7,6 +7,8 @@ services:
     build:
       context: ..
       dockerfile: lfm-mcp-release/Dockerfile
+      args:
+        TARGET_ARCH: ${TARGET_ARCH:-linux-x64}
     container_name: lfm-mcp-http
     ports:
       - "8002:8002"
@@ -31,28 +33,29 @@ services:
   # MCPO - MCP over OpenAPI
   # For Open WebUI integration
   # Note: This service wraps the stdio MCP server to provide OpenAPI interface
-  # Uncomment if you want to run MCPO alongside the HTTP/SSE server
-  #
-  # mcpo:
-  #   build:
-  #     context: ..
-  #     dockerfile: lfm-mcp-release/Dockerfile.mcpo
-  #   container_name: lfm-mcpo
-  #   ports:
-  #     - "8001:8001"
-  #   environment:
-  #     - MCPO_PORT=8001
-  #     - LASTFM_USERNAME=${LASTFM_USERNAME}
-  #     - LASTFM_API_KEY=${LASTFM_API_KEY}
-  #     - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID:-}
-  #     - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET:-}
-  #     - SPOTIFY_REFRESH_TOKEN=${SPOTIFY_REFRESH_TOKEN:-}
-  #     - SONOS_API_URL=${SONOS_API_URL:-}
-  #     - SONOS_DEFAULT_ROOM=${SONOS_DEFAULT_ROOM:-}
-  #   volumes:
-  #     - lfm-config:/app/config
-  #     - lfm-cache:/app/cache
-  #   restart: unless-stopped
+  lfm-mcpo:
+    build:
+      context: ..
+      dockerfile: lfm-mcp-release/Dockerfile.mcpo
+      args:
+        TARGET_ARCH: ${TARGET_ARCH:-linux-x64}
+    container_name: lfm-mcpo
+    ports:
+      - "8001:8001"
+    environment:
+      - MCPO_PORT=8001
+    volumes:
+      # Mount local config.json directly (contains all settings)
+      - ./config.json:/app/config/config.json:ro
+      # Persistent cache (shared with SSE server)
+      - lfm-cache:/app/cache
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
 volumes:
   lfm-config:

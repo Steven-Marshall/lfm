@@ -26,6 +26,87 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
 
 ## Recent Sessions
 
+### Session: 2025-11-01 (SSE/MCPO Docker Deployment - LOCAL TESTING COMPLETE)
+- **Status**: 🟡 IN PROGRESS - Local x64 testing complete, ready for Spark ARM64 deployment
+- **Major Features Implemented**:
+  - **SSE Transport for Remote Access**: HTTP/SSE server for Claude Code/Desktop remote connectivity
+  - **MCPO Integration**: MCP over OpenAPI for Open WebUI browser-based LLM chat
+  - **Docker Multi-Transport Architecture**: Single codebase supporting stdio, SSE, and OpenAPI
+  - **Multi-Architecture Support**: Build system supports both linux-x64 and linux-arm64
+- **Architecture Overview**:
+  ```
+  Current Setup (Windows x64):
+  ├── lfm-mcp-http (port 8002) → Claude Code via SSE ✅ TESTED
+  └── lfm-mcpo (port 8001) → Open WebUI via OpenAPI ✅ TESTED
+
+  Future Setup (Spark ARM64):
+  ├── lfm-mcp-http (port 8002) → Remote Claude access
+  └── lfm-mcpo (port 8001) → Open WebUI integration
+  ```
+- **Key Technical Components**:
+  - `lfm-mcp-release/server-core.js` - Shared MCP logic extracted from server.js
+  - `lfm-mcp-release/server-http.js` - SSE transport implementation (HTTP server wrapping MCP)
+  - `lfm-mcp-release/Dockerfile` - Multi-stage build (.NET SDK → Node.js runtime)
+  - `lfm-mcp-release/Dockerfile.mcpo` - Multi-stage build (.NET SDK → Python 3.11 + Node.js + mcpo)
+  - `lfm-mcp-release/docker-entrypoint.sh` - Startup script for SSE server
+  - `lfm-mcp-release/docker-entrypoint-mcpo.sh` - Startup script for MCPO server
+  - `lfm-mcp-release/docker-compose.yml` - Orchestrates both services with shared config/cache
+  - `lfm-mcp-release/.env` - TARGET_ARCH configuration (linux-x64 or linux-arm64)
+- **Critical Fixes During Implementation**:
+  1. **Session Routing Bug**: POST messages routed to `sessionArray[0]` (oldest) → fixed to use `sessionArray[sessionArray.length - 1]` (newest)
+  2. **Config File Path**: LFM CLI hardcodes `/root/.config/lfm/config.json` → entrypoint copies mounted config to expected location
+  3. **Environment Variables**: Node.js spawn() wasn't passing env vars → added `env: process.env` parameter
+  4. **libicu Dependency**: Python 3.11-slim uses Debian Trixie with libicu74 → changed from `libicu72` to `libicu-dev`
+  5. **Claude Desktop SSE**: Discovered Claude Desktop only supports stdio, not SSE (Zod validation rejects)
+- **Testing Results** (Local x64):
+  - ✅ SSE Server (port 8002):
+    - Claude Code successfully connected via `.claude.json` config
+    - Last.fm API: 10/10 endpoints healthy
+    - Sonos playback: Successfully played "Hallogallo" by NEU!
+    - Spotify playback: Successfully played "Every You Every Me" by Placebo
+  - ✅ MCPO Server (port 8001):
+    - OpenAPI docs available at http://localhost:8001/docs
+    - Tested `POST /lfm_tracks` - Returned top 5 tracks correctly
+    - Tested `POST /lfm_current_track` - Showed "Hallogallo" paused on Sonos
+    - All 30+ MCP tools exposed as REST endpoints
+- **Configuration Files**:
+  - `.claude.json` (Claude Code) - SSE transport config:
+    ```json
+    "lfm-docker": {
+      "type": "sse",
+      "url": "http://localhost:8002/sse",
+      "headers": {
+        "Authorization": "Bearer <token>"
+      }
+    }
+    ```
+  - `claude_desktop_config.json` - Stdio only (SSE not supported by Claude Desktop)
+- **Docker Configuration**:
+  - Shared volumes: `config.json` (read-only) and `lfm-cache` (persistent)
+  - Environment variables: `HTTP_PORT`, `AUTH_TOKEN`, `ALLOWED_ORIGINS`, `MCPO_PORT`, `LFM_CACHE_PATH`
+  - Health checks: SSE uses Node.js HTTP check, MCPO uses curl (but MCPO doesn't have /health endpoint - this is expected)
+- **⏸️ NEXT STEPS (After Break)**:
+  1. **Test MCPO from WebUI on Laptop**: Verify Open WebUI can connect to http://localhost:8001 and use LFM tools
+  2. **Verify Spotify Integration in WebUI**: Ensure playback commands work through OpenAPI endpoints
+  3. **Deploy to Spark (ARM64)**:
+     - Update `.env`: Change `TARGET_ARCH=linux-arm64`
+     - Rebuild both containers: `docker-compose build`
+     - Copy `docker-compose.yml`, `.env`, `config.json` to Spark
+     - Start services on Spark: `docker-compose up -d`
+     - Update Claude Code config to point to Spark's IP: `http://<spark-ip>:8002/sse`
+     - Configure Open WebUI to use Spark's MCPO: `http://<spark-ip>:8001`
+- **Build Status**: ✅ Clean build on x64, ready for ARM64 rebuild
+- **Branch**: `feature/sse-transport` (ready to merge after Spark deployment tested)
+- **Files Modified**:
+  - `lfm-mcp-release/server-core.js` - Environment variable passing fix (line 22-25)
+  - `lfm-mcp-release/server-http.js` - Session routing fix (line 210), debug logging (lines 257-258)
+  - `lfm-mcp-release/docker-entrypoint.sh` - Config file copy (lines 20-29)
+  - `lfm-mcp-release/Dockerfile` - Multi-arch build arg support (lines 4-5, 10, 28-31)
+  - `lfm-mcp-release/Dockerfile.mcpo` - NEW - MCPO Docker build (98 lines)
+  - `lfm-mcp-release/docker-entrypoint-mcpo.sh` - NEW - MCPO startup script (36 lines)
+  - `lfm-mcp-release/docker-compose.yml` - Enabled MCPO service, added build args (lines 7-11, 36-58)
+  - `lfm-mcp-release/.env` - Documented TARGET_ARCH configuration (lines 11-18)
+
 ### Session: 2025-10-30 (Spotify Playlist Management)
 - **Status**: ✅ COMPLETE - Full playlist playback and listing functionality
 - **Major Features Implemented**:
