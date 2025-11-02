@@ -57,9 +57,16 @@ function cleanupSession(sessionId) {
   const session = sessions.get(sessionId);
   if (session) {
     try {
+      // Close the SSE transport
       session.transport.close();
+
+      // Explicitly close the MCP server instance
+      // This ensures proper cleanup of any server resources, handlers, or state
+      if (session.server && typeof session.server.close === 'function') {
+        session.server.close();
+      }
     } catch (error) {
-      console.error(`Error closing transport for session ${sessionId}:`, error);
+      console.error(`Error closing session ${sessionId}:`, error);
     }
     sessions.delete(sessionId);
     console.error(`Session ${sessionId} closed. Active sessions: ${sessions.size}`);

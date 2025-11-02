@@ -273,18 +273,6 @@ function wrapWithAutoGuidelines(toolResponse) {
   };
 }
 
-// Session state tracking (persists for duration of server process)
-//
-// IMPORTANT: This state is per-process and only works for STATEFUL transports:
-// ✅ Stdio (Claude Desktop/Code) - One long-lived Node.js process per session
-// ✅ SSE (HTTP transport) - One long-lived process with persistent connections
-// ❌ MCPO/OpenAPI - May spawn new process per request (stateless REST)
-//
-// For MCPO, consider disabling lfm_init tool or implementing shared state (Redis/file)
-const sessionState = {
-  initialized: false
-};
-
 // ============================================
 // MCP SERVER FACTORY
 // ============================================
@@ -294,6 +282,23 @@ const sessionState = {
  * @returns {Server} Configured MCP server ready to connect to a transport
  */
 function createMcpServer() {
+  // Per-connection session state
+  //
+  // IMPORTANT: This state is scoped to each MCP server instance (one per connection).
+  // Each SSE connection gets its own server instance via createMcpServer(), so each
+  // connection maintains independent initialization state.
+  //
+  // Benefits:
+  // ✅ Multiple simultaneous connections each get full guidelines on first lfm_init
+  // ✅ Disconnect and reconnect gets fresh state (guidelines load again)
+  // ✅ No shared state pollution between connections
+  //
+  // For stdio transport: Process dies on disconnect anyway, so per-connection = per-process
+  // For SSE transport: Long-lived Node.js process, multiple connection instances
+  const sessionState = {
+    initialized: false
+  };
+
   // Create MCP server
 const server = new Server(
   {
