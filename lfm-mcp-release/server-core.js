@@ -274,6 +274,13 @@ function wrapWithAutoGuidelines(toolResponse) {
 }
 
 // Session state tracking (persists for duration of server process)
+//
+// IMPORTANT: This state is per-process and only works for STATEFUL transports:
+// ✅ Stdio (Claude Desktop/Code) - One long-lived Node.js process per session
+// ✅ SSE (HTTP transport) - One long-lived process with persistent connections
+// ❌ MCPO/OpenAPI - May spawn new process per request (stateless REST)
+//
+// For MCPO, consider disabling lfm_init tool or implementing shared state (Redis/file)
 const sessionState = {
   initialized: false
 };
@@ -2052,10 +2059,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   if (name === 'lfm_init') {
     try {
-      // Mark session as initialized
+      // Deduplication: Prevent flooding context with 23K token guidelines on repeated calls
+      //
+      // STATEFUL TRANSPORTS (stdio, SSE): This check prevents repeated dumps of full guidelines
+      // within the same session. Second+ calls return brief confirmation (~10 tokens).
+      //
+      // STATELESS TRANSPORTS (MCPO): Each request spawns fresh process, so this check
+      // always evaluates to false. Guidelines will be returned every time (~23K tokens/call).
+      // For MCPO, consider disabling this tool in the LLM interface or implementing
+      // shared state storage (Redis, file-based cache, etc.).
+      if (sessionState.initialized) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: '✅ Already initialized. Guidelines are active and ready to use.'
+            }
+          ]
+        };
+      }
+
+      // Mark session as initialized (first call only for this process)
       sessionState.initialized = true;
 
-      // Return friendly success message + guidelines
+      // Return friendly success message + guidelines (ONCE per session)
       const successMessage = `✅ Last.fm MCP service initialized successfully!
 
 I've loaded the guidelines and I'm ready to help you with:
