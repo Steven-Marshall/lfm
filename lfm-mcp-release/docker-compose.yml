@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # LFM MCP Server - HTTP/SSE Transport
   # For Claude Desktop and Claude Code remote access
