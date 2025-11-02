@@ -30,35 +30,6 @@ services:
       retries: 3
       start_period: 5s
 
-  # MCPO - MCP over OpenAPI
-  # For Open WebUI integration
-  # Note: This service wraps the stdio MCP server to provide OpenAPI interface
-  lfm-mcpo:
-    build:
-      context: ..
-      dockerfile: lfm-mcp-release/Dockerfile.mcpo
-      args:
-        TARGET_ARCH: ${TARGET_ARCH:-linux-x64}
-    container_name: lfm-mcpo
-    ports:
-      - "8001:8001"
-    environment:
-      - MCPO_PORT=8001
-    volumes:
-      # Mount local config.json directly (contains all settings)
-      - ./config.json:/app/config/config.json:ro
-      # Persistent cache (shared with SSE server)
-      - lfm-cache:/app/cache
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
 volumes:
-  lfm-config:
-    driver: local
   lfm-cache:
     driver: local
