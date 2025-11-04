@@ -1,16 +1,24 @@
 #!/usr/bin/env node
 
 /**
- * LFM MCP Server - HTTP/SSE Transport
+ * LFM MCP Server - Streamable HTTP Transport
  *
- * This server provides HTTP/SSE transport for remote MCP access.
+ * This server provides Streamable HTTP transport for remote MCP access.
  * It enables Claude Desktop, Claude Code, and other MCP clients to connect
  * remotely instead of requiring local stdio communication.
  *
  * Architecture:
- * - GET /sse        → Establishes SSE connection (server→client messages)
- * - POST /message   → Receives client→server messages
- * - GET /health     → Health check endpoint
+ * - POST /mcp        → Initialize session or send messages
+ * - GET /mcp         → Establish event stream (Server-Sent Events) for server→client messages
+ * - DELETE /mcp      → Close session
+ * - GET /health      → Health check endpoint
+ *
+ * Streamable HTTP Benefits (vs old HTTP+SSE):
+ * - Single endpoint (no /sse + /message coordination)
+ * - Session resumability (reconnect without losing state)
+ * - No 5-minute idle timeout
+ * - Dynamic upgrade to SSE for long-running tasks
+ * - Built-in session management with secure IDs
  *
  * Authentication: Bearer token (required for production)
  * CORS: Configurable via ALLOWED_ORIGINS environment variable
@@ -24,9 +32,12 @@
  *   ALLOWED_ORIGINS  - Comma-separated CORS origins (default: *)
  */
 
-const http = require('http');
+const { version } = require('./package.json');
+const express = require('express');
+const cors = require('cors');
+const { randomUUID } = require('crypto');
 const { createMcpServer } = require('./server-core.js');
-const { SSEServerTransport } = require('@modelcontextprotocol/sdk/server/sse.js');
+const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/server/streamableHttp.js');
 
 // ============================================
 // CONFIGURATION
@@ -44,11 +55,16 @@ const authToken = args.includes('--auth-token')
 
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || '*').split(',').map(o => o.trim());
 
+// Session timeout: default 8 hours (480 minutes)
+// Can be overridden with SESSION_TIMEOUT_MINUTES environment variable
+const SESSION_TIMEOUT_MS = parseInt(process.env.SESSION_TIMEOUT_MINUTES || '480') * 60 * 1000;
+
 // ============================================
 // SESSION MANAGEMENT
 // ============================================
 
-const sessions = new Map(); // sessionId -> { transport, server }
+// Map of session ID -> { transport, server, timeoutHandle, lastActivity }
+const sessions = new Map();
 
 /**
  * Clean up a session when it closes
@@ -57,11 +73,15 @@ function cleanupSession(sessionId) {
   const session = sessions.get(sessionId);
   if (session) {
     try {
-      // Close the SSE transport
+      // Cancel any pending timeout
+      if (session.timeoutHandle) {
+        clearTimeout(session.timeoutHandle);
+      }
+
+      // Close the transport
       session.transport.close();
 
-      // Explicitly close the MCP server instance
-      // This ensures proper cleanup of any server resources, handlers, or state
+      // Close the MCP server instance
       if (session.server && typeof session.server.close === 'function') {
         session.server.close();
       }
@@ -73,196 +93,298 @@ function cleanupSession(sessionId) {
   }
 }
 
-// ============================================
-// HTTP REQUEST HANDLER
-// ============================================
+/**
+ * Update session activity timestamp and reset timeout
+ */
+function touchSession(sessionId) {
+  const session = sessions.get(sessionId);
+  if (!session) return;
 
-const httpServer = http.createServer(async (req, res) => {
-  // CORS headers
-  const origin = req.headers.origin || '*';
-  const allowedOrigin = allowedOrigins.includes('*') || allowedOrigins.includes(origin)
-    ? origin
-    : allowedOrigins[0];
-
-  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-
-  // Handle preflight requests
-  if (req.method === 'OPTIONS') {
-    res.writeHead(200);
-    res.end();
-    return;
+  // Cancel the old timeout
+  if (session.timeoutHandle) {
+    clearTimeout(session.timeoutHandle);
   }
 
-  // Authentication check (skip for health endpoint)
-  if (req.url !== '/health') {
-    if (authToken) {
-      const authHeader = req.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        res.writeHead(401, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          error: 'Missing or invalid Authorization header',
-          message: 'Include "Authorization: Bearer <token>" header'
-        }));
-        return;
-      }
+  // Start a new timeout
+  session.timeoutHandle = setTimeout(() => {
+    console.error(`Session ${sessionId} timed out after ${SESSION_TIMEOUT_MS / 60000} minutes of inactivity`);
+    cleanupSession(sessionId);
+  }, SESSION_TIMEOUT_MS);
 
-      const token = authHeader.substring(7); // Remove "Bearer " prefix
-      if (token !== authToken) {
-        res.writeHead(403, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          error: 'Invalid authentication token',
-          message: 'The provided token is not valid'
-        }));
-        return;
-      }
+  // Update last activity timestamp
+  session.lastActivity = Date.now();
+}
+
+// ============================================
+// EXPRESS APP SETUP
+// ============================================
+
+const app = express();
+
+// CORS configuration
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
     }
+  },
+  credentials: true,
+  methods: 'GET,POST,DELETE',
+  exposedHeaders: [
+    'mcp-session-id',
+    'last-event-id',
+    'mcp-protocol-version'
+  ]
+};
+
+app.use(cors(corsOptions));
+
+// IMPORTANT: Do NOT parse body for /mcp endpoint - StreamableHTTPServerTransport needs raw stream
+// Only parse body for other endpoints (like /health)
+app.use((req, res, next) => {
+  if (req.path === '/mcp') {
+    // Skip body parsing for MCP endpoint
+    return next();
+  }
+  // Parse JSON for other endpoints
+  express.json()(req, res, next);
+});
+
+// ============================================
+// AUTHENTICATION MIDDLEWARE
+// ============================================
+
+function authenticate(req, res, next) {
+  // Skip auth for health endpoint
+  if (req.path === '/health') {
+    return next();
   }
 
-  // Route handling
-  const url = new URL(req.url, `http://${req.headers.host}`);
+  // Check auth token if configured
+  if (authToken) {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.error(`AUTH FAILED: Missing or invalid Authorization header`);
+      return res.status(401).json({
+        error: 'Missing or invalid Authorization header',
+        message: 'Include "Authorization: Bearer <token>" header'
+      });
+    }
 
-  // ============================================
-  // HEALTH CHECK ENDPOINT
-  // ============================================
-  if (url.pathname === '/health' && req.method === 'GET') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({
-      status: 'healthy',
-      transport: 'sse',
-      activeSessions: sessions.size,
-      version: '0.3.0',
-      authentication: authToken ? 'enabled' : 'disabled'
-    }));
-    return;
+    const token = authHeader.substring(7); // Remove "Bearer " prefix
+    if (token !== authToken) {
+      console.error(`AUTH FAILED: Invalid token`);
+      return res.status(403).json({
+        error: 'Invalid authentication token',
+        message: 'The provided token is not valid'
+      });
+    }
+    console.error(`AUTH OK: ${req.method} ${req.path}`);
   }
 
-  // ============================================
-  // SSE ENDPOINT - Establish server→client stream
-  // ============================================
-  if (url.pathname === '/sse' && req.method === 'GET') {
-    try {
-      // Create SSE transport
-      const transport = new SSEServerTransport('/message', res);
+  next();
+}
+
+app.use(authenticate);
+
+// ============================================
+// HEALTH CHECK ENDPOINT
+// ============================================
+
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'healthy',
+    transport: 'streamable-http',
+    activeSessions: sessions.size,
+    version: version,
+    authentication: authToken ? 'enabled' : 'disabled',
+    spec: '2025-03-26'
+  });
+});
+
+// ============================================
+// MCP ENDPOINT - Streamable HTTP
+// ============================================
+
+/**
+ * POST /mcp - Initialize session or send message
+ */
+app.post('/mcp', async (req, res) => {
+  try {
+    const sessionId = req.headers['mcp-session-id'];
+    let session;
+
+    // Check if session exists
+    if (sessionId && sessions.has(sessionId)) {
+      // Use existing session
+      session = sessions.get(sessionId);
+      // Reset timeout on activity
+      touchSession(sessionId);
+    } else {
+      // Create new session
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => randomUUID(),
+        onsessioninitialized: (newSessionId) => {
+          console.error(`New session initialized: ${newSessionId}. Active sessions: ${sessions.size + 1}`);
+        }
+      });
 
       // Create MCP server instance for this session
       const server = createMcpServer();
 
-      // Store session
-      const sessionId = transport.sessionId;
-      sessions.set(sessionId, { transport, server });
+      // Create session timeout
+      const timeoutHandle = setTimeout(() => {
+        const actualSessionId = transport.sessionId;
+        console.error(`Session ${actualSessionId} timed out after ${SESSION_TIMEOUT_MS / 60000} minutes of inactivity`);
+        cleanupSession(actualSessionId);
+      }, SESSION_TIMEOUT_MS);
 
-      // Set up cleanup on close
-      transport.onclose = () => {
-        cleanupSession(sessionId);
-      };
-
-      transport.onerror = (error) => {
-        console.error(`Transport error for session ${sessionId}:`, error);
-        cleanupSession(sessionId);
+      // Create session object
+      // Note: sessionState for lfm_init is managed internally by server-core.js
+      session = {
+        transport,
+        server,
+        timeoutHandle,
+        lastActivity: Date.now()
       };
 
       // Connect server to transport
       await server.connect(transport);
 
-      console.error(`New SSE connection established. Session: ${sessionId}. Active sessions: ${sessions.size}`);
+      // Store session (sessionId will be set by transport during handleRequest)
+      // We'll update the map after handleRequest completes
+      session.tempTransport = transport;
+    }
 
-      // SSE transport handles the response, don't end it here
-      return;
-    } catch (error) {
-      console.error('Error establishing SSE connection:', error);
-      if (!res.headersSent) {
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          error: 'Failed to establish SSE connection',
-          message: error.message
-        }));
+    // Handle the request
+    await session.transport.handleRequest(req, res);
+
+    // If this was a new session, store it in the map
+    if (session.tempTransport) {
+      const actualSessionId = session.transport.sessionId;
+      if (actualSessionId) {
+        sessions.set(actualSessionId, session);
+        delete session.tempTransport;
+        // Touch session to ensure timeout is properly set with correct sessionId
+        touchSession(actualSessionId);
       }
-      return;
+    }
+  } catch (error) {
+    console.error('==== ERROR handling POST /mcp ====');
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('==================================');
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: 'Failed to handle MCP request',
+        message: error.message,
+        stack: error.stack
+      });
     }
   }
+});
 
-  // ============================================
-  // POST ENDPOINT - Receive client→server messages
-  // ============================================
-  if (url.pathname === '/message' && req.method === 'POST') {
-    let body = '';
+/**
+ * GET /mcp - Establish SSE stream
+ */
+app.get('/mcp', async (req, res) => {
+  try {
+    const sessionId = req.headers['mcp-session-id'];
 
-    req.on('data', chunk => {
-      body += chunk.toString();
+    if (!sessionId || !sessions.has(sessionId)) {
+      return res.status(404).json({
+        error: 'Session not found',
+        message: 'Initialize a session first via POST /mcp'
+      });
+    }
+
+    const session = sessions.get(sessionId);
+
+    // Reset timeout on activity
+    touchSession(sessionId);
+
+    // Set up cleanup when SSE connection closes
+    req.on('close', () => {
+      console.error(`SSE connection closed for session ${sessionId}`);
     });
 
-    req.on('end', async () => {
-      try {
-        const message = JSON.parse(body);
-
-        // Find the right session's transport to handle this message
-        // In a production system with multiple clients, you'd route by session ID
-        // For now, we'll use the most recent active session
-        const sessionArray = Array.from(sessions.values());
-
-        if (sessionArray.length === 0) {
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({
-            error: 'No active session found',
-            message: 'Establish an SSE connection first via GET /sse'
-          }));
-          return;
-        }
-
-        // Handle message with the session's transport (use most recent session)
-        // The SSE transport will route it to the connected server
-        const { transport } = sessionArray[sessionArray.length - 1];
-        await transport.handleMessage(message);
-
-        res.writeHead(202, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ accepted: true }));
-      } catch (error) {
-        console.error('Error handling POST message:', error);
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          error: 'Failed to process message',
-          message: error.message
-        }));
-      }
-    });
-
-    return;
+    // Handle SSE stream
+    await session.transport.handleRequest(req, res);
+  } catch (error) {
+    console.error('Error handling GET /mcp:', error);
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: 'Failed to establish SSE stream',
+        message: error.message
+      });
+    }
   }
+});
 
-  // ============================================
-  // 404 - Unknown route
-  // ============================================
-  res.writeHead(404, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify({
+/**
+ * DELETE /mcp - Close session
+ */
+app.delete('/mcp', async (req, res) => {
+  try {
+    const sessionId = req.headers['mcp-session-id'];
+
+    if (!sessionId || !sessions.has(sessionId)) {
+      return res.status(404).json({
+        error: 'Session not found'
+      });
+    }
+
+    cleanupSession(sessionId);
+
+    res.json({
+      success: true,
+      message: 'Session closed'
+    });
+  } catch (error) {
+    console.error('Error handling DELETE /mcp:', error);
+    res.status(500).json({
+      error: 'Failed to close session',
+      message: error.message
+    });
+  }
+});
+
+// ============================================
+// 404 HANDLER
+// ============================================
+
+app.use((req, res) => {
+  res.status(404).json({
     error: 'Not found',
     availableEndpoints: {
       'GET /health': 'Health check',
-      'GET /sse': 'Establish SSE connection (requires auth)',
-      'POST /message': 'Send client message (requires auth)'
+      'POST /mcp': 'Initialize session or send message (requires auth)',
+      'GET /mcp': 'Establish SSE stream (requires auth + session ID)',
+      'DELETE /mcp': 'Close session (requires auth + session ID)'
     }
-  }));
+  });
 });
 
 // ============================================
 // SERVER STARTUP
 // ============================================
 
-httpServer.listen(port, '0.0.0.0', () => {
+const server = app.listen(port, '0.0.0.0', () => {
   console.error('========================================');
-  console.error('LFM MCP HTTP Server (SSE Transport)');
+  console.error('LFM MCP Server (Streamable HTTP)');
   console.error('========================================');
   console.error(`Port:        ${port}`);
-  console.error(`SSE:         http://localhost:${port}/sse`);
-  console.error(`POST:        http://localhost:${port}/message`);
+  console.error(`Endpoint:    http://localhost:${port}/mcp`);
   console.error(`Health:      http://localhost:${port}/health`);
-  console.error(`Auth:        ${authToken ? 'Enabled' : 'DISABLED (⚠️  not recommended for production)'}`);
+  console.error(`Auth:        ${authToken ? 'Enabled' : 'DISABLED (⚠️  not recommended for production)'}`)
   console.error(`CORS:        ${allowedOrigins.join(', ')}`);
-  console.error('========================================');
-  console.error(`DEBUG: LFM_CONFIG_PATH=${process.env.LFM_CONFIG_PATH || 'NOT SET'}`);
-  console.error(`DEBUG: LFM_CACHE_PATH=${process.env.LFM_CACHE_PATH || 'NOT SET'}`);
+  console.error(`Timeout:     ${SESSION_TIMEOUT_MS / 60000} minutes`);
+  console.error(`Spec:        2025-03-26 (Streamable HTTP)`);
   console.error('========================================');
   console.error('Waiting for connections...');
   console.error('');
@@ -280,8 +402,8 @@ function shutdown() {
     cleanupSession(sessionId);
   });
 
-  // Close HTTP server
-  httpServer.close(() => {
+  // Close Express server
+  server.close(() => {
     console.error('Server closed');
     process.exit(0);
   });

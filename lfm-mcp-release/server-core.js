@@ -2,6 +2,7 @@
 // Shared MCP server logic for LFM
 // Extracted from server.js for reuse across stdio and HTTP transports
 
+const { version } = require('./package.json');
 const { spawn } = require('child_process');
 const { Server } = require('@modelcontextprotocol/sdk/server/index.js');
 const {
@@ -14,6 +15,59 @@ const path = require('path');
 // ============================================
 // UTILITY FUNCTIONS
 // ============================================
+
+// Constants
+const LASTFM_LAUNCH_DATE = '2005-01-01';
+
+/**
+ * Get today's date in YYYY-MM-DD format
+ * @returns {string} Today's date
+ */
+function getTodayDate() {
+  return new Date().toISOString().split('T')[0];
+}
+
+/**
+ * Add date range arguments to command args array
+ * Handles year, from/to, or period parameters
+ * @param {Array} cmdArgs - Command arguments array to modify
+ * @param {object} params - Object with year, from, to, period properties
+ */
+function addDateRangeArgs(cmdArgs, { year, from, to, period = 'overall' }) {
+  if (year) {
+    cmdArgs.push('--year', year);
+  } else if (from || to) {
+    // CLI requires both from and to when using date ranges
+    const fromDate = from || LASTFM_LAUNCH_DATE;
+    const toDate = to || getTodayDate();
+    cmdArgs.push('--from', fromDate, '--to', toDate);
+  } else if (period !== 'overall') {
+    cmdArgs.push('--period', period);
+  }
+}
+
+/**
+ * Create a standardized error response for MCP
+ * @param {Error} error - The error object
+ * @param {string} context - Optional context description (e.g., "checking listening history")
+ * @returns {object} MCP error response object
+ */
+function createErrorResponse(error, context = '') {
+  const errorMessage = context
+    ? `Error ${context}: ${error.message}`
+    : error.message;
+
+  return {
+    content: [{
+      type: 'text',
+      text: JSON.stringify({
+        success: false,
+        error: errorMessage
+      }, null, 2)
+    }],
+    isError: true
+  };
+}
 
 async function executeLfmCommand(args) {
   return new Promise((resolve, reject) => {
@@ -294,7 +348,7 @@ function createMcpServer() {
   // ✅ No shared state pollution between connections
   //
   // For stdio transport: Process dies on disconnect anyway, so per-connection = per-process
-  // For SSE transport: Long-lived Node.js process, multiple connection instances
+  // For Streamable HTTP transport: Long-lived Node.js process, multiple connection instances
   const sessionState = {
     initialized: false
   };
@@ -303,7 +357,7 @@ function createMcpServer() {
 const server = new Server(
   {
     name: 'lfm-mcp',
-    version: '0.3.0',
+    version: version,
   },
   {
     capabilities: {
@@ -1180,16 +1234,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       // Handle date range parameters
-      if (year) {
-        cmdArgs.push('--year', year);
-      } else if (from || to) {
-        // CLI requires both from and to when using date ranges
-        const fromDate = from || '2005-01-01'; // Last.fm launched in 2005
-        const toDate = to || new Date().toISOString().split('T')[0]; // Today
-        cmdArgs.push('--from', fromDate, '--to', toDate);
-      } else if (period !== 'overall') {
-        cmdArgs.push('--period', period);
-      }
+      addDateRangeArgs(cmdArgs, { year, from, to, period });
 
 
       const output = await executeLfmCommand(cmdArgs);
@@ -1211,18 +1256,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       return wrapWithAutoGuidelines(response);
     } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              success: false,
-              error: error.message
-            }, null, 2)
-          }
-        ],
-        isError: true
-      };
+      return createErrorResponse(error);
     }
   }
 
@@ -1238,16 +1272,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const cmdArgs = ['artists', '--limit', limit.toString(), '--json'];
 
       // Handle date range parameters
-      if (year) {
-        cmdArgs.push('--year', year);
-      } else if (from || to) {
-        // CLI requires both from and to when using date ranges
-        const fromDate = from || '2005-01-01'; // Last.fm launched in 2005
-        const toDate = to || new Date().toISOString().split('T')[0]; // Today
-        cmdArgs.push('--from', fromDate, '--to', toDate);
-      } else if (period !== 'overall') {
-        cmdArgs.push('--period', period);
-      }
+      addDateRangeArgs(cmdArgs, { year, from, to, period });
 
 
       const output = await executeLfmCommand(cmdArgs);
@@ -1267,18 +1292,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         ]
       };
     } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              success: false,
-              error: error.message
-            }, null, 2)
-          }
-        ],
-        isError: true
-      };
+      return createErrorResponse(error);
     }
   }
 
@@ -1294,16 +1308,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const cmdArgs = ['albums', '--limit', limit.toString(), '--json'];
 
       // Handle date range parameters
-      if (year) {
-        cmdArgs.push('--year', year);
-      } else if (from || to) {
-        // CLI requires both from and to when using date ranges
-        const fromDate = from || '2005-01-01'; // Last.fm launched in 2005
-        const toDate = to || new Date().toISOString().split('T')[0]; // Today
-        cmdArgs.push('--from', fromDate, '--to', toDate);
-      } else if (period !== 'overall') {
-        cmdArgs.push('--period', period);
-      }
+      addDateRangeArgs(cmdArgs, { year, from, to, period });
 
 
       const output = await executeLfmCommand(cmdArgs);
@@ -1323,18 +1328,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         ]
       };
     } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              success: false,
-              error: error.message
-            }, null, 2)
-          }
-        ],
-        isError: true
-      };
+      return createErrorResponse(error);
     }
   }
 
@@ -1382,16 +1376,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       // Handle date range parameters
-      if (year) {
-        cmdArgs.push('--year', year);
-      } else if (from || to) {
-        // CLI requires both from and to when using date ranges
-        const fromDate = from || '2005-01-01'; // Last.fm launched in 2005
-        const toDate = to || new Date().toISOString().split('T')[0]; // Today
-        cmdArgs.push('--from', fromDate, '--to', toDate);
-      } else if (period !== 'overall') {
-        cmdArgs.push('--period', period);
-      }
+      addDateRangeArgs(cmdArgs, { year, from, to, period });
 
       const output = await executeLfmCommand(cmdArgs);
       const result = parseJsonOutput(output);
@@ -1412,18 +1397,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         ]
       };
     } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              success: false,
-              error: error.message
-            }, null, 2)
-          }
-        ],
-        isError: true
-      };
+      return createErrorResponse(error);
     }
   }
 
@@ -1470,16 +1444,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       // Handle date range parameters
-      if (year) {
-        cmdArgs.push('--year', year);
-      } else if (from || to) {
-        // CLI requires both from and to when using date ranges
-        const fromDate = from || '2005-01-01'; // Last.fm launched in 2005
-        const toDate = to || new Date().toISOString().split('T')[0]; // Today
-        cmdArgs.push('--from', fromDate, '--to', toDate);
-      } else if (period !== 'overall') {
-        cmdArgs.push('--period', period);
-      }
+      addDateRangeArgs(cmdArgs, { year, from, to, period });
 
       const output = await executeLfmCommand(cmdArgs);
       const result = parseJsonOutput(output);
@@ -1499,18 +1464,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         ]
       };
     } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              success: false,
-              error: error.message
-            }, null, 2)
-          }
-        ],
-        isError: true
-      };
+      return createErrorResponse(error);
     }
   }
 
@@ -1553,16 +1507,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       // Handle date range parameters
-      if (year) {
-        cmdArgs.push('--year', year);
-      } else if (from || to) {
-        // CLI requires both from and to when using date ranges
-        const fromDate = from || '2005-01-01'; // Last.fm launched in 2005
-        const toDate = to || new Date().toISOString().split('T')[0]; // Today
-        cmdArgs.push('--from', fromDate, '--to', toDate);
-      } else if (period !== 'overall') {
-        cmdArgs.push('--period', period);
-      }
+      addDateRangeArgs(cmdArgs, { year, from, to, period });
 
       const output = await executeLfmCommand(cmdArgs);
       const result = parseJsonOutput(output);
@@ -1584,18 +1529,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         ]
       };
     } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              success: false,
-              error: error.message
-            }, null, 2)
-          }
-        ],
-        isError: true
-      };
+      return createErrorResponse(error);
     }
   }
 
@@ -1743,15 +1677,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         ]
       };
     } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Error checking listening history: ${error.message}`
-          }
-        ],
-        isError: true
-      };
+      return createErrorResponse(error, 'checking listening history');
     }
   }
 
@@ -1801,15 +1727,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         ]
       };
     } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Error in bulk check: ${error.message}`
-          }
-        ],
-        isError: true
-      };
+      return createErrorResponse(error, 'in bulk check');
     }
   }
 
@@ -1859,15 +1777,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         ]
       };
     } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Error creating playlist: ${error.message}`
-          }
-        ],
-        isError: true
-      };
+      return createErrorResponse(error, 'creating playlist');
     }
   }
 
@@ -1895,18 +1805,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         ]
       };
     } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              success: false,
-              error: error.message
-            }, null, 2)
-          }
-        ],
-        isError: true
-      };
+      return createErrorResponse(error);
     }
   }
 
@@ -1971,18 +1870,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
     } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              success: false,
-              error: error.message
-            }, null, 2)
-          }
-        ],
-        isError: true
-      };
+      return createErrorResponse(error);
     }
   }
 
@@ -2047,18 +1935,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
     } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              success: false,
-              error: error.message
-            }, null, 2)
-          }
-        ],
-        isError: true
-      };
+      return createErrorResponse(error);
     }
   }
 
@@ -2066,7 +1943,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     try {
       // Deduplication: Prevent flooding context with 23K token guidelines on repeated calls
       //
-      // STATEFUL TRANSPORTS (stdio, SSE): This check prevents repeated dumps of full guidelines
+      // STATEFUL TRANSPORTS (stdio, Streamable HTTP): This check prevents repeated dumps of full guidelines
       // within the same session. Second+ calls return brief confirmation (~10 tokens).
       //
       // STATELESS TRANSPORTS (MCPO): Each request spawns fresh process, so this check
@@ -2111,15 +1988,7 @@ ${guidelinesContent}`;
         ]
       };
     } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Error initializing session: ${error.message}`
-          }
-        ],
-        isError: true
-      };
+      return createErrorResponse(error, 'initializing session');
     }
   }
 
@@ -2182,18 +2051,7 @@ ${guidelinesContent}`;
         ]
       };
     } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              success: false,
-              error: error.message
-            }, null, 2)
-          }
-        ],
-        isError: true
-      };
+      return createErrorResponse(error);
     }
   }
 
@@ -2256,18 +2114,7 @@ ${guidelinesContent}`;
         ]
       };
     } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              success: false,
-              error: error.message
-            }, null, 2)
-          }
-        ],
-        isError: true
-      };
+      return createErrorResponse(error);
     }
   }
 
@@ -2314,18 +2161,7 @@ ${guidelinesContent}`;
         ]
       };
     } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              success: false,
-              error: error.message
-            }, null, 2)
-          }
-        ],
-        isError: true
-      };
+      return createErrorResponse(error);
     }
   }
 
@@ -2346,18 +2182,7 @@ ${guidelinesContent}`;
         ]
       };
     } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              success: false,
-              error: error.message
-            }, null, 2)
-          }
-        ],
-        isError: true
-      };
+      return createErrorResponse(error);
     }
   }
 
@@ -2383,18 +2208,7 @@ ${guidelinesContent}`;
         ]
       };
     } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              success: false,
-              error: error.message
-            }, null, 2)
-          }
-        ],
-        isError: true
-      };
+      return createErrorResponse(error);
     }
   }
 
@@ -2426,18 +2240,7 @@ ${guidelinesContent}`;
         ]
       };
     } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              success: false,
-              error: error.message
-            }, null, 2)
-          }
-        ],
-        isError: true
-      };
+      return createErrorResponse(error);
     }
   }
 
@@ -2468,18 +2271,7 @@ ${guidelinesContent}`;
         ]
       };
     } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              success: false,
-              error: error.message
-            }, null, 2)
-          }
-        ],
-        isError: true
-      };
+      return createErrorResponse(error);
     }
   }
 
@@ -2510,18 +2302,7 @@ ${guidelinesContent}`;
         ]
       };
     } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              success: false,
-              error: error.message
-            }, null, 2)
-          }
-        ],
-        isError: true
-      };
+      return createErrorResponse(error);
     }
   }
 
@@ -2557,18 +2338,7 @@ ${guidelinesContent}`;
         ]
       };
     } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              success: false,
-              error: error.message
-            }, null, 2)
-          }
-        ],
-        isError: true
-      };
+      return createErrorResponse(error);
     }
   }
 
@@ -2601,18 +2371,7 @@ ${guidelinesContent}`;
         ]
       };
     } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              success: false,
-              error: error.message
-            }, null, 2)
-          }
-        ],
-        isError: true
-      };
+      return createErrorResponse(error);
     }
   }
 
@@ -2643,18 +2402,7 @@ ${guidelinesContent}`;
         ]
       };
     } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              success: false,
-              error: error.message
-            }, null, 2)
-          }
-        ],
-        isError: true
-      };
+      return createErrorResponse(error);
     }
   }
   */

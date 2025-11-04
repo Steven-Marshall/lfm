@@ -1,6 +1,6 @@
 services:
-  # LFM MCP Server - HTTP/SSE Transport
-  # For Claude Desktop and Claude Code remote access
+  # LFM MCP Server - Streamable HTTP Transport (MCP Spec 2025-03-26)
+  # For Claude Desktop, Claude Code, and other MCP clients
   lfm-mcp-http:
     build:
       context: ..
@@ -15,6 +15,7 @@ services:
       - HTTP_PORT=8002
       - AUTH_TOKEN=${LFM_AUTH_TOKEN}
       - ALLOWED_ORIGINS=*
+      # - SESSION_TIMEOUT_MINUTES=480  # Default: 480 (8 hours). Uncomment to override.
     volumes:
       # Mount local config.json directly (contains all settings)
       - ./config.json:/app/config/config.json:ro
