@@ -1010,4 +1010,194 @@ public class ConfigCommand
             Console.WriteLine($"{_symbols.Error} Error: {ex.Message}");
         }
     }
+
+    public async Task ExportConfigAsync(string? outputPath, bool toDocker, bool restart)
+    {
+        try
+        {
+            var sourcePath = _configManager.GetConfigPath();
+
+            if (!File.Exists(sourcePath))
+            {
+                Console.WriteLine($"{_symbols.Error} Config file not found at: {sourcePath}");
+                Console.WriteLine($"{_symbols.Tip} Run 'lfm config set-api-key' to create initial configuration.");
+                return;
+            }
+
+            string destinationPath;
+
+            if (toDocker)
+            {
+                // Check if we're in the project directory
+                var projectRoot = FindProjectRoot();
+                if (projectRoot == null)
+                {
+                    Console.WriteLine($"{_symbols.Error} Could not find LFM project directory (lfm-mcp-release/).");
+                    Console.WriteLine($"{_symbols.Tip} This command only works from the LFM project directory.");
+                    Console.WriteLine($"      Use 'lfm config export --output <path>' for general export instead.");
+                    return;
+                }
+
+                destinationPath = Path.Combine(projectRoot, "lfm-mcp-release", "config.json");
+            }
+            else if (!string.IsNullOrWhiteSpace(outputPath))
+            {
+                destinationPath = outputPath;
+            }
+            else
+            {
+                Console.WriteLine($"{_symbols.Error} Must specify either --output <path> or --to-docker");
+                return;
+            }
+
+            // Copy the config file
+            File.Copy(sourcePath, destinationPath, overwrite: true);
+            Console.WriteLine($"{_symbols.Success} Config exported successfully");
+            Console.WriteLine($"  From: {sourcePath}");
+            Console.WriteLine($"  To:   {destinationPath}");
+
+            // Restart Docker container if requested
+            if (toDocker && restart)
+            {
+                Console.WriteLine();
+                Console.WriteLine($"{_symbols.Tip} Restarting Docker container...");
+
+                var dockerComposePath = Path.Combine(Path.GetDirectoryName(destinationPath)!, "docker-compose.yml");
+                if (!File.Exists(dockerComposePath))
+                {
+                    Console.WriteLine($"{_symbols.Error} docker-compose.yml not found at: {dockerComposePath}");
+                    return;
+                }
+
+                var process = new System.Diagnostics.Process
+                {
+                    StartInfo = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "docker-compose",
+                        Arguments = $"-f \"{dockerComposePath}\" restart lfm-mcp-http",
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true
+                    }
+                };
+
+                process.Start();
+                await process.WaitForExitAsync();
+
+                if (process.ExitCode == 0)
+                {
+                    Console.WriteLine($"{_symbols.Success} Docker container restarted successfully");
+                }
+                else
+                {
+                    Console.WriteLine($"{_symbols.Error} Docker restart failed (exit code: {process.ExitCode})");
+                    var error = await process.StandardError.ReadToEndAsync();
+                    if (!string.IsNullOrWhiteSpace(error))
+                    {
+                        Console.WriteLine($"  Error: {error}");
+                    }
+                }
+            }
+            else if (toDocker)
+            {
+                Console.WriteLine();
+                Console.WriteLine($"{_symbols.Tip} Restart the Docker container to apply changes:");
+                Console.WriteLine("  docker-compose -f lfm-mcp-release/docker-compose.yml restart lfm-mcp-http");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error exporting config");
+            Console.WriteLine($"{_symbols.Error} Error: {ex.Message}");
+        }
+    }
+
+    public async Task ImportConfigAsync(string inputPath)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(inputPath))
+            {
+                Console.WriteLine($"{_symbols.Error} Input path cannot be empty");
+                return;
+            }
+
+            if (!File.Exists(inputPath))
+            {
+                Console.WriteLine($"{_symbols.Error} Config file not found at: {inputPath}");
+                return;
+            }
+
+            // Validate it's valid JSON before importing
+            try
+            {
+                var json = await File.ReadAllTextAsync(inputPath);
+                var testConfig = System.Text.Json.JsonSerializer.Deserialize<LfmConfig>(json);
+                if (testConfig == null)
+                {
+                    Console.WriteLine($"{_symbols.Error} Invalid config file format");
+                    return;
+                }
+            }
+            catch (System.Text.Json.JsonException ex)
+            {
+                Console.WriteLine($"{_symbols.Error} Invalid JSON in config file: {ex.Message}");
+                return;
+            }
+
+            var destinationPath = _configManager.GetConfigPath();
+
+            // Backup existing config if it exists
+            if (File.Exists(destinationPath))
+            {
+                var backupPath = $"{destinationPath}.backup.{DateTime.Now:yyyyMMdd-HHmmss}";
+                File.Copy(destinationPath, backupPath, overwrite: true);
+                Console.WriteLine($"{_symbols.Success} Backed up existing config to:");
+                Console.WriteLine($"  {backupPath}");
+            }
+
+            // Import the config
+            File.Copy(inputPath, destinationPath, overwrite: true);
+
+            Console.WriteLine($"{_symbols.Success} Config imported successfully");
+            Console.WriteLine($"  From: {inputPath}");
+            Console.WriteLine($"  To:   {destinationPath}");
+
+            // Verify it loads correctly
+            var config = await _configManager.LoadAsync();
+            Console.WriteLine();
+            Console.WriteLine($"{_symbols.Success} Config validated - ready to use");
+            Console.WriteLine($"  User: {(string.IsNullOrEmpty(config.DefaultUsername) ? "Not set" : config.DefaultUsername)}");
+            Console.WriteLine($"  API Key: {(string.IsNullOrEmpty(config.ApiKey) ? "Not set" : "Set")}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error importing config");
+            Console.WriteLine($"{_symbols.Error} Error: {ex.Message}");
+        }
+    }
+
+    private string? FindProjectRoot()
+    {
+        var currentDir = Directory.GetCurrentDirectory();
+
+        // Check if we're already in the project root
+        if (Directory.Exists(Path.Combine(currentDir, "lfm-mcp-release")))
+        {
+            return currentDir;
+        }
+
+        // Search up the directory tree
+        var dir = new DirectoryInfo(currentDir);
+        while (dir != null)
+        {
+            if (Directory.Exists(Path.Combine(dir.FullName, "lfm-mcp-release")))
+            {
+                return dir.FullName;
+            }
+            dir = dir.Parent;
+        }
+
+        return null;
+    }
 }

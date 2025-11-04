@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "lfm-docker": {
+      "type": "http",
+      "url": "http://localhost:8002/mcp",
+      "headers": {
+        "Authorization": "Bearer nfy+UPfbAROruupX2JhfRVhbG5075mdIaHM1RTabUWI="
+      }
+    }
+  }
+}

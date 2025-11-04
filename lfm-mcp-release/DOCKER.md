@@ -1,14 +1,14 @@
 # LFM MCP Server - Docker Deployment
 
-This directory contains Docker configuration for deploying the LFM MCP server with HTTP/SSE transport, enabling remote access from Claude Desktop, Claude Code, and browser-based LLM interfaces.
+This directory contains Docker configuration for deploying the LFM MCP server with Streamable HTTP transport, enabling remote access from Claude Code and other MCP clients.
 
 ## Architecture
 
 The Docker deployment provides two interfaces to the same LFM CLI backend:
 
-1. **HTTP/SSE Transport** (`server-http.js`) - Port 8002
-   - For Claude Desktop and Claude Code remote access
-   - Native MCP protocol over Server-Sent Events
+1. **Streamable HTTP Transport** (`server-http.js`) - Port 8002
+   - For Claude Code and MCP clients remote access
+   - Native MCP protocol with Streamable HTTP (MCP Spec 2025-03-26)
    - Bearer token authentication
    - RESTful health check endpoint
 
@@ -50,7 +50,26 @@ cat %LOCALAPPDATA%/lfm/config.json
 # Look for: "RefreshToken": "BQD..."
 ```
 
-### 2. Create Environment File
+### 2. Export Your Configuration
+
+The easiest way to prepare your Docker deployment is to export your local configuration:
+
+```bash
+# Export your current config to the Docker directory
+lfm config export --to-docker
+
+# This will:
+# - Copy your local config (including API keys, Spotify tokens, etc.)
+# - Place it in lfm-mcp-release/config.json (Docker mount location)
+# - Prompt you to restart the container if it's running
+```
+
+**With automatic container restart:**
+```bash
+lfm config export --to-docker --restart
+```
+
+**Alternatively**, create environment file manually:
 
 ```bash
 cd lfm-mcp-release
@@ -79,6 +98,55 @@ docker-compose logs -f lfm-mcp-http
 # Check health
 curl http://localhost:8002/health
 ```
+
+## Configuration Options
+
+### Environment Variables
+
+The HTTP server supports the following environment variables (configured in `.env` or `docker-compose.yml`):
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `HTTP_PORT` | `8002` | Port for HTTP server |
+| `AUTH_TOKEN` | _(none)_ | Bearer token for authentication (required for production) |
+| `ALLOWED_ORIGINS` | `*` | Comma-separated CORS origins |
+| `SESSION_TIMEOUT_MINUTES` | `480` (8 hours) | Session inactivity timeout |
+| `LASTFM_USERNAME` | _(none)_ | Your Last.fm username |
+| `LASTFM_API_KEY` | _(none)_ | Your Last.fm API key |
+| `SPOTIFY_REFRESH_TOKEN` | _(none)_ | Spotify OAuth refresh token (optional) |
+| `SONOS_API_URL` | _(none)_ | node-sonos-http-api URL (optional) |
+
+### Session Timeout
+
+The HTTP server automatically cleans up inactive sessions to prevent memory leaks. By default, sessions are closed after **8 hours of inactivity** (no requests from the client).
+
+**Why this matters:**
+- If a client crashes or disconnects improperly, the session stays in memory
+- The timeout automatically cleans up abandoned sessions
+- The timer resets on each request, so active sessions are never interrupted
+
+**Adjusting the timeout:**
+
+For different use cases, you can override the default:
+
+```bash
+# Short timeout (2 hours) for higher-traffic scenarios
+SESSION_TIMEOUT_MINUTES=120
+
+# Longer timeout (24 hours) for all-day usage
+SESSION_TIMEOUT_MINUTES=1440
+
+# Test with short timeout (5 minutes)
+SESSION_TIMEOUT_MINUTES=5
+```
+
+**In docker-compose.yml:**
+```yaml
+environment:
+  - SESSION_TIMEOUT_MINUTES=480  # 8 hours (default)
+```
+
+**Note:** This only affects the HTTP transport (`server-http.js`). The stdio transport (`server.js`) doesn't need timeouts because the process dies when the parent process (Claude Desktop) exits.
 
 ## Architecture Selection
 
@@ -115,47 +183,52 @@ Response:
 ```json
 {
   "status": "healthy",
-  "transport": "sse",
+  "transport": "streamable-http",
   "activeSessions": 0,
   "version": "0.3.0",
-  "authentication": "enabled"
+  "authentication": "enabled",
+  "spec": "2025-03-26"
 }
 ```
 
-### SSE Connection (Requires Auth)
-```bash
-curl -N -H "Authorization: Bearer your-token" \
-  http://your-server:8002/sse
-```
+### MCP Connection (Requires Auth)
 
-### POST Messages (Requires Auth)
+The Streamable HTTP transport uses a single `/mcp` endpoint for all communication:
+
 ```bash
+# Initialize session with POST
 curl -X POST \
   -H "Authorization: Bearer your-token" \
   -H "Content-Type: application/json" \
-  -d '{"method":"tools/list"}' \
-  http://your-server:8002/message
+  -d '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}' \
+  http://your-server:8002/mcp
+
+# Establish Streamable HTTP event stream with GET (using session ID from POST response)
+curl -N \
+  -H "Authorization: Bearer your-token" \
+  -H "mcp-session-id: your-session-id" \
+  http://your-server:8002/mcp
 ```
 
-## Claude Desktop/Code Configuration
+## Claude Code Configuration
 
-Update your `.claude.json` to use the remote SSE transport:
+Update your `.claude.json` to use the remote Streamable HTTP transport:
 
 ```json
 {
   "mcpServers": {
-    "lfm": {
-      "url": "http://your-server-ip:8002/sse",
-      "transport": {
-        "type": "sse",
-        "headers": {
-          "Authorization": "Bearer your-auth-token"
-        }
+    "lfm-remote": {
+      "type": "http",
+      "url": "http://your-server-ip:8002/mcp",
+      "headers": {
+        "Authorization": "Bearer your-auth-token"
       }
     }
   }
 }
 ```
+
+**Note**: Claude Desktop does not currently support Streamable HTTP transport. Use Claude Code for remote access, or stdio transport for local Claude Desktop use.
 
 ## Deployment to Spark (or other ARM64 server)
 
@@ -281,6 +354,8 @@ docker-compose logs -f lfm-mcp-http
 
 ## Updating
 
+### Code Updates
+
 ```bash
 # Pull latest changes
 git pull
@@ -291,12 +366,32 @@ docker-compose build
 docker-compose up -d
 ```
 
+### Configuration Updates
+
+If you've changed your local configuration (API keys, Spotify tokens, Sonos settings, etc.):
+
+```bash
+# Export updated config and restart container
+lfm config export --to-docker --restart
+```
+
+Or manually:
+
+```bash
+# Copy updated config
+cp "%APPDATA%\Roaming\lfm\config.json" lfm-mcp-release/config.json
+
+# Restart container
+docker-compose -f lfm-mcp-release/docker-compose.yml restart lfm-mcp-http
+```
+
 ## Production Considerations
 
 1. **VPN Only**: Do not expose port 8002 to the public internet
 2. **Strong Auth Token**: Use `openssl rand -base64 32` or similar
 3. **HTTPS Reverse Proxy**: Use nginx/traefik for TLS termination
-4. **Resource Limits**: Add to docker-compose.yml:
+4. **Session Timeout**: Default 8 hours works for most use cases, adjust via `SESSION_TIMEOUT_MINUTES` if needed
+5. **Resource Limits**: Add to docker-compose.yml:
    ```yaml
    deploy:
      resources:

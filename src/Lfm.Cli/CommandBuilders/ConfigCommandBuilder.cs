@@ -111,6 +111,19 @@ public static class ConfigCommandBuilder
         var playerTypeArg = new Argument<string>("player", "Player type: Spotify or Sonos");
         setDefaultPlayerCommand.AddArgument(playerTypeArg);
 
+        // Export/Import commands
+        var exportCommand = new Command("export", "Export configuration to a file");
+        var exportOutputOption = new Option<string?>("--output", "Output file path for the exported config");
+        var exportToDockerOption = new Option<bool>("--to-docker", "Export to lfm-mcp-release/config.json for Docker deployment");
+        var exportRestartOption = new Option<bool>("--restart", "Restart Docker container after export (only with --to-docker)");
+        exportCommand.AddOption(exportOutputOption);
+        exportCommand.AddOption(exportToDockerOption);
+        exportCommand.AddOption(exportRestartOption);
+
+        var importCommand = new Command("import", "Import configuration from a file");
+        var importPathArg = new Argument<string>("file-path", "Path to the config file to import");
+        importCommand.AddArgument(importPathArg);
+
         setApiKeyCommand.SetHandler(async (string apiKey) =>
         {
             var configCommand = services.GetRequiredService<ConfigCommand>();
@@ -291,6 +304,18 @@ public static class ConfigCommandBuilder
             await configCommand.SetDefaultPlayerAsync(playerType);
         }, playerTypeArg);
 
+        exportCommand.SetHandler(async (string? output, bool toDocker, bool restart) =>
+        {
+            var configCommand = services.GetRequiredService<ConfigCommand>();
+            await configCommand.ExportConfigAsync(output, toDocker, restart);
+        }, exportOutputOption, exportToDockerOption, exportRestartOption);
+
+        importCommand.SetHandler(async (string filePath) =>
+        {
+            var configCommand = services.GetRequiredService<ConfigCommand>();
+            await configCommand.ImportConfigAsync(filePath);
+        }, importPathArg);
+
         command.AddCommand(setApiKeyCommand);
         command.AddCommand(setUserCommand);
         command.AddCommand(showCommand);
@@ -321,6 +346,8 @@ public static class ConfigCommandBuilder
         command.AddCommand(setSonosDefaultRoomCommand);
         command.AddCommand(clearSonosDefaultRoomCommand);
         command.AddCommand(setDefaultPlayerCommand);
+        command.AddCommand(exportCommand);
+        command.AddCommand(importCommand);
 
         return command;
     }
