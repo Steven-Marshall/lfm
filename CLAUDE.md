@@ -26,6 +26,198 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
 
 ## Recent Sessions
 
+### Session: 2025-11-04 (Config Export/Import Commands)
+- **Status**: ✅ COMPLETE - CLI commands for config management and Docker deployment
+- **Major Features Implemented**:
+  - **Config Export Command**: Export configuration to any location or Docker deployment
+  - **Config Import Command**: Import configuration with validation and automatic backup
+  - **Docker Integration**: Direct export to Docker mount point with optional container restart
+  - **Project Root Detection**: Automatically finds lfm-mcp-release/ directory
+- **CLI Commands Added**:
+  - `lfm config export --to-docker` - Export to lfm-mcp-release/config.json
+  - `lfm config export --to-docker --restart` - Export and restart container
+  - `lfm config export --output <path>` - Export to custom location
+  - `lfm config import <file>` - Import with validation and backup
+- **Key Technical Components**:
+  - `ConfigCommand.ExportConfigAsync()` - Export logic with project root detection
+  - `ConfigCommand.ImportConfigAsync()` - Import with JSON validation and backup
+  - `ConfigCommand.FindProjectRoot()` - Recursive directory search for lfm-mcp-release/
+  - Docker restart integration using `docker-compose` CLI
+- **Implementation Details**:
+  - Project root detection searches up directory tree for lfm-mcp-release/
+  - Import validates JSON before copying (prevents corrupting config)
+  - Automatic timestamped backups on import
+  - Helpful error messages suggest alternatives when project root not found
+- **Documentation Updates**:
+  - Updated DOCKER.md with new Quick Start section showing export command
+  - Added "Configuration Updates" section to Updating workflow
+  - Moved from "Future Enhancement Plans" to "Implemented" in CLAUDE.md
+- **Testing Results**:
+  - ✅ Export to Docker working correctly
+  - ✅ Docker restart integration functional
+  - ✅ Project root detection working (finds lfm-mcp-release/ from subdirectories)
+  - ✅ Error handling for missing project directory
+- **User Value**:
+  - Eliminates manual config file copying for Docker deployments
+  - Simplifies workflow: `lfm config export --to-docker --restart` (one command)
+  - Safe import with automatic backups
+  - Works from any directory within project
+- **Build Status**: ✅ Clean build (0 errors, 10 pre-existing nullable warnings)
+- **Files Modified**:
+  - `src/Lfm.Cli/Commands/ConfigCommand.cs` - Added export/import methods
+  - `src/Lfm.Cli/CommandBuilders/ConfigCommandBuilder.cs` - Added CLI subcommands
+  - `lfm-mcp-release/DOCKER.md` - Added Quick Start export section
+  - `CLAUDE.md` - Moved from TODO to implemented
+
+### Session: 2025-11-02 (Streamable HTTP Upgrade & Local Model Testing)
+- **Status**: ✅ COMPLETE - MCP SDK upgraded, local model limitations identified, server validated
+- **Major Accomplishments**:
+  - **MCP SDK Upgrade**: 0.6.1 → 1.20.2 (Streamable HTTP transport)
+  - **Transport Migration**: SSE → Streamable HTTP (MCP Spec 2025-03-26)
+  - **Multi-Platform Testing**: Tested with AnythingLLM, Open WebUI, and Claude Code
+  - **Critical Finding**: Local open-source models have unreliable tool-calling behavior
+- **Architecture Changes**:
+  - Removed MCPO service (not needed for Streamable HTTP)
+  - Migrated from `SSEServerTransport` to `StreamableHTTPServerTransport`
+  - Single `/mcp` endpoint for all communication (POST, GET, DELETE)
+  - Updated docker-compose.yml to remove MCPO bloat
+- **Key Technical Changes**:
+  - `server-http.js`: Migrated to StreamableHTTPServerTransport with session management
+  - Fixed express.json() body parsing issue (was consuming request stream)
+  - Proper session cleanup with `cleanupSession()` function
+  - Updated transport endpoints: POST /mcp (init/messages), GET /mcp (SSE stream), DELETE /mcp (close)
+- **Testing Results**:
+  - ✅ **Claude Code**: Perfect integration, reliable tool calling
+  - ⚠️ **AnythingLLM + Qwen 30B**: First query works, subsequent queries fabricate data
+  - ⚠️ **AnythingLLM + GPT-OSS 120B**: Queries 1-2 work, complex query 3 fabricates
+  - ⚠️ **Open WebUI + GPT-OSS 120B**: lfm_init works, next query fabricates despite connection working
+  - ✅ **Open WebUI + Claude Sonnet 4.5**: Flawless execution across multiple complex queries
+- **Root Cause Analysis**:
+  - **NOT a server issue**: Connection works, auth passes, sessions maintained
+  - **NOT a transport issue**: Streamable HTTP protocol working correctly
+  - **Model behavior issue**: Local models choose to fabricate instead of calling available tools
+  - Evidence: All platforms showed "Request body: undefined" in logs, but tools still executed successfully
+  - The misleading log is just timing (body logged before transport reads stream internally)
+- **AnythingLLM Issues Discovered**:
+  - Agent mode auto-deactivates after brief timeout
+  - Requires `@agent` prefix on every query to maintain tool access
+  - Even with `@agent`, tool-calling unreliable after first success
+  - Session state bug: First query after reset works, subsequent queries fail
+- **Open WebUI Issues Discovered**:
+  - Same pattern: Connection works, but models don't reliably call tools
+  - 120B model thinking: "We need to fetch data... must assume we have access... provide plausible output"
+  - Model knows tools exist, knows what they do, but chooses fabrication
+- **Validation Testing with Claude**:
+  - User tested Claude Sonnet 4.5 via Claude Code against same MCP server
+  - Complex multi-query test: "Top 25 artists, top 25 albums, compare to last 3 months"
+  - Result: ✅ Perfect execution - called all appropriate tools, compared datasets, identified patterns
+  - Demonstrates server is production-ready and working perfectly
+- **Key Insights**:
+  - **Tool-calling is a frontier capability** where Claude maintains significant edge
+  - Local models (even 120B parameters) lack reliable tool-calling behavior
+  - Problem worsens with query complexity (simple queries work, complex analysis fails)
+  - The "Request body: undefined" debug log was a red herring - not the actual problem
+- **Files Modified**:
+  - `lfm-mcp-release/package.json` - MCP SDK 0.6.1 → 1.20.2
+  - `lfm-mcp-release/server-http.js` - Migrated to StreamableHTTPServerTransport
+  - `lfm-mcp-release/docker-compose.yml` - Removed MCPO service
+  - Fixed body parsing middleware to not consume request stream
+- **Configuration Tested**:
+  - AnythingLLM: `plugins/anythingllm_mcp_servers.json` with streamable-http type
+  - Open WebUI: v0.6.34 (confirmed MCP support)
+  - Claude Code: `.claude.json` with http transport type
+- **Production Recommendations**:
+  - ✅ Deploy to Spark for Claude Code use (proven reliable)
+  - ❌ Don't rely on local models for MCP tool-calling (unreliable)
+  - ⏸️ Future test: Claude Sonnet 4.5 via Open WebUI (isolate platform vs model variable)
+- **Next Steps**:
+  - Deploy to Spark (ARM64) for Claude Code remote access
+  - Optional: Test Claude via Open WebUI to confirm platform vs model hypothesis
+  - Document findings for future local model MCP development
+- **Build Status**: ✅ Clean build, Docker container working perfectly
+- **Branch**: `feature/sse-transport` (renamed from SSE, now Streamable HTTP)
+
+### Session: 2025-11-01 (SSE/MCPO Docker Deployment - LOCAL TESTING COMPLETE)
+- **Status**: 🟡 IN PROGRESS - Local x64 testing complete, ready for Spark ARM64 deployment
+- **Major Features Implemented**:
+  - **SSE Transport for Remote Access**: HTTP/SSE server for Claude Code/Desktop remote connectivity
+  - **MCPO Integration**: MCP over OpenAPI for Open WebUI browser-based LLM chat
+  - **Docker Multi-Transport Architecture**: Single codebase supporting stdio, SSE, and OpenAPI
+  - **Multi-Architecture Support**: Build system supports both linux-x64 and linux-arm64
+- **Architecture Overview**:
+  ```
+  Current Setup (Windows x64):
+  ├── lfm-mcp-http (port 8002) → Claude Code via SSE ✅ TESTED
+  └── lfm-mcpo (port 8001) → Open WebUI via OpenAPI ✅ TESTED
+
+  Future Setup (Spark ARM64):
+  ├── lfm-mcp-http (port 8002) → Remote Claude access
+  └── lfm-mcpo (port 8001) → Open WebUI integration
+  ```
+- **Key Technical Components**:
+  - `lfm-mcp-release/server-core.js` - Shared MCP logic extracted from server.js
+  - `lfm-mcp-release/server-http.js` - SSE transport implementation (HTTP server wrapping MCP)
+  - `lfm-mcp-release/Dockerfile` - Multi-stage build (.NET SDK → Node.js runtime)
+  - `lfm-mcp-release/Dockerfile.mcpo` - Multi-stage build (.NET SDK → Python 3.11 + Node.js + mcpo)
+  - `lfm-mcp-release/docker-entrypoint.sh` - Startup script for SSE server
+  - `lfm-mcp-release/docker-entrypoint-mcpo.sh` - Startup script for MCPO server
+  - `lfm-mcp-release/docker-compose.yml` - Orchestrates both services with shared config/cache
+  - `lfm-mcp-release/.env` - TARGET_ARCH configuration (linux-x64 or linux-arm64)
+- **Critical Fixes During Implementation**:
+  1. **Session Routing Bug**: POST messages routed to `sessionArray[0]` (oldest) → fixed to use `sessionArray[sessionArray.length - 1]` (newest)
+  2. **Config File Path**: LFM CLI hardcodes `/root/.config/lfm/config.json` → entrypoint copies mounted config to expected location
+  3. **Environment Variables**: Node.js spawn() wasn't passing env vars → added `env: process.env` parameter
+  4. **libicu Dependency**: Python 3.11-slim uses Debian Trixie with libicu74 → changed from `libicu72` to `libicu-dev`
+  5. **Claude Desktop SSE**: Discovered Claude Desktop only supports stdio, not SSE (Zod validation rejects)
+- **Testing Results** (Local x64):
+  - ✅ SSE Server (port 8002):
+    - Claude Code successfully connected via `.claude.json` config
+    - Last.fm API: 10/10 endpoints healthy
+    - Sonos playback: Successfully played "Hallogallo" by NEU!
+    - Spotify playback: Successfully played "Every You Every Me" by Placebo
+  - ✅ MCPO Server (port 8001):
+    - OpenAPI docs available at http://localhost:8001/docs
+    - Tested `POST /lfm_tracks` - Returned top 5 tracks correctly
+    - Tested `POST /lfm_current_track` - Showed "Hallogallo" paused on Sonos
+    - All 30+ MCP tools exposed as REST endpoints
+- **Configuration Files**:
+  - `.claude.json` (Claude Code) - SSE transport config:
+    ```json
+    "lfm-docker": {
+      "type": "sse",
+      "url": "http://localhost:8002/sse",
+      "headers": {
+        "Authorization": "Bearer <token>"
+      }
+    }
+    ```
+  - `claude_desktop_config.json` - Stdio only (SSE not supported by Claude Desktop)
+- **Docker Configuration**:
+  - Shared volumes: `config.json` (read-only) and `lfm-cache` (persistent)
+  - Environment variables: `HTTP_PORT`, `AUTH_TOKEN`, `ALLOWED_ORIGINS`, `MCPO_PORT`, `LFM_CACHE_PATH`
+  - Health checks: SSE uses Node.js HTTP check, MCPO uses curl (but MCPO doesn't have /health endpoint - this is expected)
+- **⏸️ NEXT STEPS (After Break)**:
+  1. **Test MCPO from WebUI on Laptop**: Verify Open WebUI can connect to http://localhost:8001 and use LFM tools
+  2. **Verify Spotify Integration in WebUI**: Ensure playback commands work through OpenAPI endpoints
+  3. **Deploy to Spark (ARM64)**:
+     - Update `.env`: Change `TARGET_ARCH=linux-arm64`
+     - Rebuild both containers: `docker-compose build`
+     - Copy `docker-compose.yml`, `.env`, `config.json` to Spark
+     - Start services on Spark: `docker-compose up -d`
+     - Update Claude Code config to point to Spark's IP: `http://<spark-ip>:8002/sse`
+     - Configure Open WebUI to use Spark's MCPO: `http://<spark-ip>:8001`
+- **Build Status**: ✅ Clean build on x64, ready for ARM64 rebuild
+- **Branch**: `feature/sse-transport` (ready to merge after Spark deployment tested)
+- **Files Modified**:
+  - `lfm-mcp-release/server-core.js` - Environment variable passing fix (line 22-25)
+  - `lfm-mcp-release/server-http.js` - Session routing fix (line 210), debug logging (lines 257-258)
+  - `lfm-mcp-release/docker-entrypoint.sh` - Config file copy (lines 20-29)
+  - `lfm-mcp-release/Dockerfile` - Multi-arch build arg support (lines 4-5, 10, 28-31)
+  - `lfm-mcp-release/Dockerfile.mcpo` - NEW - MCPO Docker build (98 lines)
+  - `lfm-mcp-release/docker-entrypoint-mcpo.sh` - NEW - MCPO startup script (36 lines)
+  - `lfm-mcp-release/docker-compose.yml` - Enabled MCPO service, added build args (lines 7-11, 36-58)
+  - `lfm-mcp-release/.env` - Documented TARGET_ARCH configuration (lines 11-18)
+
 ### Session: 2025-10-30 (Spotify Playlist Management)
 - **Status**: ✅ COMPLETE - Full playlist playback and listing functionality
 - **Major Features Implemented**:
@@ -489,7 +681,21 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
 - **Architecture**: IProgressReporter interface with Console/Null implementations
 - **Integration**: Leverages existing throttling points for minimal code changes
 
-#### 2. **Additional Features** (Future Considerations)
+#### 2. **Config Export/Import Commands** ✅
+- **Status**: ✅ IMPLEMENTED (Session 2025-11-04)
+- **Commands Available**:
+  - `lfm config export --to-docker` - Export to lfm-mcp-release/config.json for Docker
+  - `lfm config export --to-docker --restart` - Export and restart container automatically
+  - `lfm config export --output <path>` - Export to any file location
+  - `lfm config import <file>` - Import config from file (with validation and backup)
+- **Key Features**:
+  - Automatic project root detection (searches up directory tree)
+  - Docker container restart integration
+  - JSON validation before import
+  - Automatic backup of existing config on import
+  - Helpful error messages with fallback suggestions
+
+#### 3. **Additional Features** (Future Considerations)
 - **Enhanced Filtering**: More sophisticated recommendation filters
 - **Export Functionality**: JSON/CSV export for query results
 - **Playlist Generation**: Create playlists from recommendations

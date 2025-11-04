@@ -65,3 +65,13 @@ test-output.txt
 
 # Legacy MCP prototype (kept locally, not in git)
 lfm-mcp-prototype/
+
+# Node.js dependencies
+node_modules/
+
+# Docker secrets (config files with API keys/tokens)
+lfm-mcp-release/config.json
+
+# Local MCP temp files
+CLAUDE.bak
+CLAUDE - Copy.md

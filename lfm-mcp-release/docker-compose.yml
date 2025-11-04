@@ -1,0 +1,34 @@
+services:
+  # LFM MCP Server - Streamable HTTP Transport (MCP Spec 2025-03-26)
+  # For Claude Desktop, Claude Code, and other MCP clients
+  lfm-mcp-http:
+    build:
+      context: ..
+      dockerfile: lfm-mcp-release/Dockerfile
+      args:
+        TARGET_ARCH: ${TARGET_ARCH:-linux-x64}
+    container_name: lfm-mcp-http
+    ports:
+      - "8002:8002"
+    environment:
+      # HTTP Server Configuration
+      - HTTP_PORT=8002
+      - AUTH_TOKEN=${LFM_AUTH_TOKEN}
+      - ALLOWED_ORIGINS=*
+      # - SESSION_TIMEOUT_MINUTES=480  # Default: 480 (8 hours). Uncomment to override.
+    volumes:
+      # Mount local config.json directly (contains all settings)
+      - ./config.json:/app/config/config.json:ro
+      # Persistent cache
+      - lfm-cache:/app/cache
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8002/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  lfm-cache:
+    driver: local
