@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// Load environment variables from .env file (for local development)
+require('dotenv').config();
+
 /**
  * LFM MCP Server - Streamable HTTP Transport
  *
@@ -48,10 +51,6 @@ const args = process.argv.slice(2);
 const port = args.includes('--port')
   ? parseInt(args[args.indexOf('--port') + 1])
   : parseInt(process.env.HTTP_PORT || '8002');
-
-const authToken = args.includes('--auth-token')
-  ? args[args.indexOf('--auth-token') + 1]
-  : process.env.AUTH_TOKEN;
 
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || '*').split(',').map(o => o.trim());
 
@@ -121,6 +120,9 @@ function touchSession(sessionId) {
 
 const app = express();
 
+// Trust proxy (required when behind Tailscale Funnel or other reverse proxy)
+app.set('trust proxy', true);
+
 // CORS configuration
 const corsOptions = {
   origin: (origin, callback) => {
@@ -156,41 +158,12 @@ app.use((req, res, next) => {
 });
 
 // ============================================
-// AUTHENTICATION MIDDLEWARE
+// AUTHENTICATION
 // ============================================
 
-function authenticate(req, res, next) {
-  // Skip auth for health endpoint
-  if (req.path === '/health') {
-    return next();
-  }
-
-  // Check auth token if configured
-  if (authToken) {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.error(`AUTH FAILED: Missing or invalid Authorization header`);
-      return res.status(401).json({
-        error: 'Missing or invalid Authorization header',
-        message: 'Include "Authorization: Bearer <token>" header'
-      });
-    }
-
-    const token = authHeader.substring(7); // Remove "Bearer " prefix
-    if (token !== authToken) {
-      console.error(`AUTH FAILED: Invalid token`);
-      return res.status(403).json({
-        error: 'Invalid authentication token',
-        message: 'The provided token is not valid'
-      });
-    }
-    console.error(`AUTH OK: ${req.method} ${req.path}`);
-  }
-
-  next();
-}
-
-app.use(authenticate);
+// Authentication disabled - MCP server is publicly accessible
+// Future: Implement Auth0 resource server pattern for production
+console.error('[Auth] ⚠️  Authentication DISABLED (not recommended for production)');
 
 // ============================================
 // HEALTH CHECK ENDPOINT
@@ -202,7 +175,7 @@ app.get('/health', (req, res) => {
     transport: 'streamable-http',
     activeSessions: sessions.size,
     version: version,
-    authentication: authToken ? 'enabled' : 'disabled',
+    authentication: 'disabled',
     spec: '2025-03-26'
   });
 });
@@ -381,7 +354,7 @@ const server = app.listen(port, '0.0.0.0', () => {
   console.error(`Port:        ${port}`);
   console.error(`Endpoint:    http://localhost:${port}/mcp`);
   console.error(`Health:      http://localhost:${port}/health`);
-  console.error(`Auth:        ${authToken ? 'Enabled' : 'DISABLED (⚠️  not recommended for production)'}`)
+  console.error(`Auth:        DISABLED (⚠️  not recommended for production)`);
   console.error(`CORS:        ${allowedOrigins.join(', ')}`);
   console.error(`Timeout:     ${SESSION_TIMEOUT_MS / 60000} minutes`);
   console.error(`Spec:        2025-03-26 (Streamable HTTP)`);
