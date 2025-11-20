@@ -26,6 +26,140 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
 
 ## Recent Sessions
 
+### Session: 2025-11-12 (Logging Fix & Date Range Query Debugging)
+- **Status**: 🟡 IN PROGRESS - Logging fix deployed, intermittent MCP failures under investigation
+- **Initial Problem**: Year-based queries (`--year 2025`) returning empty results via MCP, appeared intermittent
+- **Root Cause Discovered**: .NET console logger writes to stdout by default, polluting JSON output for MCP server
+- **The Fix**: `src/Lfm.Cli/Program.cs` (lines 216-218)
+  ```csharp
+  logging.AddConsole(options => {
+      options.LogToStandardErrorThreshold = LogLevel.Trace;  // Redirect ALL logs to stderr
+  });
+  ```
+- **Why This Matters**:
+  - MCP server's `parseJsonOutput()` expects clean JSON in stdout
+  - Date range queries trigger "Aggregating..." logs (always, even without debug mode)
+  - These logs contaminated stdout → `parseJsonOutput()` failed → empty results
+- **Investigation Journey**:
+  1. **Initial Suspicion**: Blamed Last.fm API for 500 errors (user corrected: "it's ALWAYS OUR CODE")
+  2. **Discovery**: Logs going to stdout instead of stderr
+  3. **Testing**: Local Windows CLI showed logs mixed with JSON in stdout
+  4. **Solution**: Single line fix to redirect logs to stderr
+  5. **Deployment**: Synced to Spark, rebuilt Docker container (ARM64)
+  6. **Validation**: CLI works perfectly when tested directly via SSH
+  7. **Mystery**: MCP still returns empty results intermittently
+- **Key Testing Results**:
+  - ✅ **CLI Direct (SSH)**: `lfm artists --year 2025 --limit 10` returns clean JSON with 10 artists
+    - Stdout: Clean JSON only
+    - Stderr: Logs only (or empty when debug logging disabled)
+  - ⚠️ **MCP via Claude Desktop**: Still intermittent empty results
+    - Sometimes works (especially with cache hit)
+    - Often fails with `{"success": true, "artists": [], "count": 0}`
+- **Debug Logging Insights** (enabled temporarily):
+  - Retry logic IS working correctly:
+    - Page 1: 500 error → retry after 1000ms → 200 success ✅
+    - Page 2: 500 error → retry after 1000ms → 200 success ✅
+  - Year 2025 queries take 90+ seconds (many API pages, each with potential retries)
+  - When Last.fm is stable: All retries succeed → full results
+  - When Last.fm is flaky: Some pages fail after 3 retries → empty results
+- **Files Modified**:
+  - `src/Lfm.Cli/Program.cs` - Logging stderr redirect (line 216-218)
+  - `src/Lfm.Cli/Commands/ConfigCommand.cs` - Added `DiffConfigAsync()` method
+  - `src/Lfm.Cli/CommandBuilders/ConfigCommandBuilder.cs` - Wired up config diff command
+  - `lfm-mcp-release/Dockerfile` - Changed SDK 9.0 → 8.0 (line 8)
+  - `C:\Users\steve\AppData\Roaming\Claude\claude_desktop_config.json` - Removed local MCP servers
+- **Spark Deployment Status**:
+  - Source synced: Nov 12 11:01 (Program.cs with logging fix)
+  - Binary built: Nov 12 12:33 (in Docker container)
+  - Container: Recreated with `--force-recreate`, using new image
+  - URL: `https://spark.taild15745.ts.net/mcp` (Tailscale Funnel)
+- **Source File Verification** (all match local via md5sum):
+  - `src/Lfm.Cli/Program.cs` - Nov 12 11:01 ✅
+  - `src/Lfm.Core/Services/LastFmApiClient.cs` - Nov 11 15:05 ✅
+  - `src/Lfm.Cli/Commands/ConfigCommand.cs` - Nov 12 11:47 ✅
+  - `lfm-mcp-release/server-core.js` - Nov 4 17:35 ✅
+  - `lfm-mcp-release/server-http.js` - Nov 11 12:41 ✅
+- **Remaining Mystery**:
+  - MCP server logs show NO tool execution logging (only session connect/disconnect)
+  - CLI works perfectly, MCP fails intermittently
+  - Suggests issue in MCP server layer (server-http.js → server-core.js → CLI)
+  - Need to investigate why tool calls aren't being logged
+- **🔍 CRITICAL FINDING** (End of Session):
+  - **`--year 2025` fails intermittently** via MCP → returns empty results
+  - **`--from 2025-01-01 --to 2025-12-31` WORKS reliably** via MCP → returns full results
+  - Same date range, different parameter syntax, different behavior
+  - **Hypothesis**: `--year` parameter handling differs from `--from/--to` in CLI or MCP layer
+  - This suggests the bug is NOT in Last.fm API or network issues (those would affect both)
+  - Points to specific code path difference in how year vs date range parameters are processed
+- **Next Steps** (When Resuming):
+  1. **PRIORITY**: Investigate `--year` vs `--from/--to` parameter processing differences
+  2. Check if `--year` parameter is being passed correctly to CLI from MCP
+  3. Compare CLI output for `--year 2025` vs `--from 2025-01-01 --to 2025-12-31` directly
+  4. Test MCP server directly (curl/HTTP) with both parameter styles
+  5. Add MCP-level logging to trace parameter passing
+  6. Evaluate timeout handling for long-running queries (90+ seconds)
+- **User Insights**:
+  - "it's ALWAYS OUR CODE until definitely proven otherwise" (debugging philosophy)
+  - Emphasized step-by-step investigation without running ahead
+  - Confirmed intermittent behavior: some queries work, others fail with same parameters
+- **Build Status**: ✅ Clean build, binary deployed to Spark, CLI works perfectly via SSH
+
+### Session: 2025-11-10 (Tailscale Funnel Remote MCP Access)
+- **Status**: ✅ COMPLETE - Remote MCP access working on iPhone via Tailscale Funnel
+- **Major Accomplishments**:
+  - **Tailscale Funnel Setup**: Public HTTPS exposure for MCP server without port forwarding
+  - **Claude iOS Integration**: Successfully configured custom connector for remote MCP access
+  - **Cloudflare Cleanup**: Removed temporary Cloudflare tunnel setup
+  - **Sonos Configuration Fix**: Corrected network configuration for Docker environment
+  - **Comprehensive Documentation**: Created TAILSCALE_SETUP.md deployment guide
+- **Key Technical Details**:
+  - **Public URL**: `https://laptopstudio.taild15745.ts.net` (Tailscale Funnel)
+  - **Port Configuration**: Changed from 8002:8002 to 8443:8002 (Funnel requires 443/8443/10000)
+  - **Authentication**: Temporarily disabled (Claude.ai only supports OAuth, not Bearer tokens)
+  - **Sonos Bridge**: Corrected to `http://192.168.1.24:5005` (pitorrent, not pihole)
+  - **Docker Networking**: Container can reach network IPs but not localhost on host
+- **Implementation Steps**:
+  1. Cleaned up Cloudflare Tunnel (stopped quick tunnel, deleted config files)
+  2. Installed Tailscale on Windows via `winget install tailscale.tailscale`
+  3. Authenticated Tailscale and enabled Funnel (required one-time tailnet approval)
+  4. Tested connectivity: Health endpoint ✅, MCP endpoint with auth ✅
+  5. Disabled authentication for Claude.ai compatibility
+  6. Configured custom connector: `https://laptopstudio.taild15745.ts.net/mcp`
+  7. Tested on iPhone Claude app: **"working very well"** ✅
+  8. Fixed Sonos bridge IP (discovered .21 was pihole, .24 is pitorrent with bridge)
+- **Configuration Changes**:
+  - `docker-compose.yml`:
+    - Port mapping: `8443:8002` (Tailscale Funnel compatible)
+    - Authentication disabled: `# - AUTH_TOKEN=${LFM_AUTH_TOKEN}`
+  - Both config files updated:
+    - Sonos bridge: `http://192.168.1.24:5005` (pitorrent)
+    - Works from both Windows host and Docker container
+  - Created `TAILSCALE_SETUP.md` (350+ lines):
+    - Complete installation guide for Windows
+    - Testing procedures and troubleshooting
+    - Configuration management strategies
+    - Environment variable override documentation
+    - Spark (ARM64) migration plan
+- **Security Considerations**:
+  - **Current**: HTTPS via Tailscale Funnel (end-to-end encrypted), no app-level auth
+  - **Future**: Add oauth2-proxy sidecar for production authentication
+  - Tailscale provides secure tunnel (cannot decrypt traffic)
+  - URL is obscure but publicly accessible
+- **Next Steps**:
+  - Test Sonos playback from iPhone via MCP tools
+  - Deploy to Spark (ARM64) for production use
+  - Consider OAuth proxy for production authentication
+  - Update Claude.ai connector to Spark's URL when ready
+- **Files Modified**:
+  - `lfm-mcp-release/docker-compose.yml` - Port mapping and auth disabled
+  - `lfm-mcp-release/config.json` - Sonos bridge IP corrected to .24
+  - `C:\Users\steve\AppData\Roaming\lfm\config.json` - Sonos bridge IP corrected
+  - `TAILSCALE_SETUP.md` - NEW - Complete deployment guide (353 lines)
+- **User Feedback**:
+  - "holy moly. it's working!!" (iPhone test success)
+  - "working very well" (final verification)
+- **Build Status**: ✅ Docker container running, Tailscale Funnel active
+
 ### Session: 2025-11-04 (Config Export/Import Commands)
 - **Status**: ✅ COMPLETE - CLI commands for config management and Docker deployment
 - **Major Features Implemented**:
@@ -695,7 +829,31 @@ Last.fm CLI tool written in C# (.NET) for retrieving music statistics. The proje
   - Automatic backup of existing config on import
   - Helpful error messages with fallback suggestions
 
-#### 3. **Additional Features** (Future Considerations)
+#### 3. **Setlist.fm Integration** 🎸
+- **Status**: 📋 PLANNED - Next major feature
+- **Documentation**: See [SETLIST_INTEGRATION.md](SETLIST_INTEGRATION.md) for complete plan
+- **Goal**: Integrate setlist.fm API for concert discovery and playlist creation
+- **Priority**: HIGH - Unique value proposition, clean architecture fit
+- **Estimated Effort**: 5-7 days full implementation
+- **Key Features**:
+  - `lfm_artist_concerts` - Search/filter artist concerts with dates, venues
+  - `lfm_setlist` - Get full tracklist for specific concert
+  - Automatic playlist creation from live setlists
+  - MusicBrainz ID integration (links to Last.fm data)
+  - Concert attendance tracking (if API supports)
+- **User Workflows**:
+  - "Get me Radiohead's latest setlist and make a playlist"
+  - "Archive all concerts from a tour as playlists"
+  - "What was played at Madison Square Garden last year?"
+- **Implementation Phases**:
+  1. API key acquisition and rate limit testing
+  2. Core API client and data models
+  3. CLI commands with rich output
+  4. MCP tool integration
+  5. Documentation and polish
+- **Next Steps**: Register for API key, validate data quality
+
+#### 4. **Additional Features** (Future Considerations)
 - **Enhanced Filtering**: More sophisticated recommendation filters
 - **Export Functionality**: JSON/CSV export for query results
 - **Playlist Generation**: Create playlists from recommendations

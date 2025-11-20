@@ -118,6 +118,7 @@ public class ConfigCommand
             Console.WriteLine($"Default Period: {config.DefaultPeriod}");
             Console.WriteLine($"Default Limit: {config.DefaultLimit}");
             Console.WriteLine($"API Throttle: {config.ApiThrottleMs}ms delay between requests");
+            Console.WriteLine($"Max API Retries: {config.MaxApiRetries} ({(config.MaxApiRetries == 0 ? "disabled" : $"with {config.RetryBaseDelayMs}ms base delay")})");
             Console.WriteLine($"Parallel API Calls: {config.ParallelApiCalls} ({(config.ParallelApiCalls == 1 ? "sequential" : $"batches of {config.ParallelApiCalls}")})");
             Console.WriteLine($"Normal Search Depth: {config.NormalSearchDepth:N0} items");
             Console.WriteLine($"Deep Search Timeout: {config.DeepSearchTimeoutSeconds} seconds");
@@ -229,6 +230,62 @@ public class ConfigCommand
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error setting API throttle");
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.GenericError, ex.Message));
+        }
+    }
+
+    public async Task SetMaxApiRetriesAsync(int maxRetries)
+    {
+        try
+        {
+            if (maxRetries < 0 || maxRetries > 10)
+            {
+                Console.WriteLine("❌ Max API retries must be between 0 and 10.");
+                Console.WriteLine("   Use 0 to disable retries, 3 for default, 10 for maximum resilience.");
+                return;
+            }
+
+            var config = await _configManager.LoadAsync();
+            config.MaxApiRetries = maxRetries;
+            await _configManager.SaveAsync(config);
+
+            var retriesDesc = maxRetries == 0 ? "disabled (no retries)" : $"set to {maxRetries}";
+            Console.WriteLine($"✅ Max API retries {retriesDesc}.");
+            if (maxRetries > 0)
+            {
+                Console.WriteLine($"   ℹ️  Will retry HTTP 500 errors up to {maxRetries} times with exponential backoff.");
+            }
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.ConfigSavedTo, _configManager.GetConfigPath()));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error setting max API retries");
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.GenericError, ex.Message));
+        }
+    }
+
+    public async Task SetRetryBaseDelayAsync(int delayMs)
+    {
+        try
+        {
+            if (delayMs < 100 || delayMs > 10000)
+            {
+                Console.WriteLine("❌ Retry base delay must be between 100 and 10000 milliseconds.");
+                Console.WriteLine("   Use 1000ms (1 second) for default, higher for more conservative backoff.");
+                return;
+            }
+
+            var config = await _configManager.LoadAsync();
+            config.RetryBaseDelayMs = delayMs;
+            await _configManager.SaveAsync(config);
+
+            Console.WriteLine($"✅ Retry base delay set to {delayMs}ms.");
+            Console.WriteLine($"   ℹ️  Exponential backoff: {delayMs}ms, {delayMs * 2}ms, {delayMs * 4}ms, etc.");
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.ConfigSavedTo, _configManager.GetConfigPath()));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error setting retry base delay");
             Console.WriteLine(ErrorMessages.Format(ErrorMessages.GenericError, ex.Message));
         }
     }
@@ -1175,6 +1232,141 @@ public class ConfigCommand
             _logger.LogError(ex, "Error importing config");
             Console.WriteLine($"{_symbols.Error} Error: {ex.Message}");
         }
+    }
+
+    public async Task DiffConfigAsync()
+    {
+        try
+        {
+            var localPath = _configManager.GetConfigPath();
+
+            if (!File.Exists(localPath))
+            {
+                Console.WriteLine($"{_symbols.Error} Local config not found at: {localPath}");
+                return;
+            }
+
+            var projectRoot = FindProjectRoot();
+            if (projectRoot == null)
+            {
+                Console.WriteLine($"{_symbols.Error} Could not find LFM project directory (lfm-mcp-release/).");
+                Console.WriteLine($"{_symbols.Tip} This command only works from the LFM project directory.");
+                return;
+            }
+
+            var dockerPath = Path.Combine(projectRoot, "lfm-mcp-release", "config.json");
+            if (!File.Exists(dockerPath))
+            {
+                Console.WriteLine($"{_symbols.Error} Docker config not found at: {dockerPath}");
+                Console.WriteLine($"{_symbols.Tip} Run 'lfm config export --to-docker' to create it.");
+                return;
+            }
+
+            // Load both configs as dictionaries for flexible comparison
+            var localJson = await File.ReadAllTextAsync(localPath);
+            var dockerJson = await File.ReadAllTextAsync(dockerPath);
+
+            var localDict = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, System.Text.Json.JsonElement>>(localJson);
+            var dockerDict = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, System.Text.Json.JsonElement>>(dockerJson);
+
+            if (localDict == null || dockerDict == null)
+            {
+                Console.WriteLine($"{_symbols.Error} Failed to parse config files");
+                return;
+            }
+
+            Console.WriteLine($"{_symbols.Settings} Config Diff: Local vs Docker");
+            Console.WriteLine($"  Local:  {localPath}");
+            Console.WriteLine($"  Docker: {dockerPath}");
+            Console.WriteLine();
+
+            var differences = new List<string>();
+            var onlyInLocal = new List<string>();
+            var onlyInDocker = new List<string>();
+
+            // Find differences and fields only in local
+            foreach (var kvp in localDict)
+            {
+                if (!dockerDict.ContainsKey(kvp.Key))
+                {
+                    onlyInLocal.Add(kvp.Key);
+                }
+                else if (!System.Text.Json.JsonSerializer.Serialize(kvp.Value).Equals(
+                    System.Text.Json.JsonSerializer.Serialize(dockerDict[kvp.Key])))
+                {
+                    differences.Add($"{kvp.Key}:\n  Local:  {FormatJsonValue(kvp.Value)}\n  Docker: {FormatJsonValue(dockerDict[kvp.Key])}");
+                }
+            }
+
+            // Find fields only in Docker
+            foreach (var key in dockerDict.Keys)
+            {
+                if (!localDict.ContainsKey(key))
+                {
+                    onlyInDocker.Add(key);
+                }
+            }
+
+            // Display results
+            if (differences.Count == 0 && onlyInLocal.Count == 0 && onlyInDocker.Count == 0)
+            {
+                Console.WriteLine($"{_symbols.Success} No differences found - configs are identical");
+                return;
+            }
+
+            if (differences.Count > 0)
+            {
+                Console.WriteLine($"{_symbols.StopSign} Differing values ({differences.Count}):");
+                foreach (var diff in differences)
+                {
+                    Console.WriteLine($"  {diff}");
+                    Console.WriteLine();
+                }
+            }
+
+            if (onlyInLocal.Count > 0)
+            {
+                Console.WriteLine($"{_symbols.Error} Only in Local ({onlyInLocal.Count}):");
+                foreach (var key in onlyInLocal)
+                {
+                    Console.WriteLine($"  + {key}: {FormatJsonValue(localDict[key])}");
+                }
+                Console.WriteLine();
+            }
+
+            if (onlyInDocker.Count > 0)
+            {
+                Console.WriteLine($"{_symbols.Error} Only in Docker ({onlyInDocker.Count}):");
+                foreach (var key in onlyInDocker)
+                {
+                    Console.WriteLine($"  - {key}: {FormatJsonValue(dockerDict[key])}");
+                }
+                Console.WriteLine();
+            }
+
+            Console.WriteLine($"{_symbols.Tip} To sync Docker config with local:");
+            Console.WriteLine("  lfm config export --to-docker");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error comparing configs");
+            Console.WriteLine($"{_symbols.Error} Error: {ex.Message}");
+        }
+    }
+
+    private string FormatJsonValue(System.Text.Json.JsonElement element)
+    {
+        return element.ValueKind switch
+        {
+            System.Text.Json.JsonValueKind.String => $"\"{element.GetString()}\"",
+            System.Text.Json.JsonValueKind.Number => element.ToString(),
+            System.Text.Json.JsonValueKind.True => "true",
+            System.Text.Json.JsonValueKind.False => "false",
+            System.Text.Json.JsonValueKind.Null => "null",
+            System.Text.Json.JsonValueKind.Object => $"{{ ... }} ({element.EnumerateObject().Count()} properties)",
+            System.Text.Json.JsonValueKind.Array => $"[ ... ] ({element.GetArrayLength()} items)",
+            _ => element.ToString()
+        };
     }
 
     private string? FindProjectRoot()

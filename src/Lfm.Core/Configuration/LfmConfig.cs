@@ -26,6 +26,8 @@ public class LfmConfig
     public int DefaultLimit { get; set; } = 10;
     public int ApiThrottleMs { get; set; } = 200;
     public int ParallelApiCalls { get; set; } = 5;
+    public int MaxApiRetries { get; set; } = 3;
+    public int RetryBaseDelayMs { get; set; } = 1000;
     public int NormalSearchDepth { get; set; } = 10000;
     public int DeepSearchTimeoutSeconds { get; set; } = 300;
     

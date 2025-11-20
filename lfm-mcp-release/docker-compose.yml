@@ -9,18 +9,27 @@ services:
         TARGET_ARCH: ${TARGET_ARCH:-linux-x64}
     container_name: lfm-mcp-http
     ports:
-      - "8002:8002"
+      - "8443:8002"  # Tailscale Funnel requires 443, 8443, or 10000
     environment:
       # HTTP Server Configuration
       - HTTP_PORT=8002
-      - AUTH_TOKEN=${LFM_AUTH_TOKEN}
       - ALLOWED_ORIGINS=*
       # - SESSION_TIMEOUT_MINUTES=480  # Default: 480 (8 hours). Uncomment to override.
+
+      # Authentication Configuration
+      # Currently DISABLED - all auth variables commented out
+      # Future: Add Auth0 environment variables here when implementing OAuth
+
+      # Option 1: Auth0 OAuth (Future implementation)
+      # - AUTH0_DOMAIN=${AUTH0_DOMAIN}
+      # - AUTH0_AUDIENCE=${AUTH0_AUDIENCE}
+      # - AUTH0_CLIENT_ID=${AUTH0_CLIENT_ID}
+      # - AUTH0_CLIENT_SECRET=${AUTH0_CLIENT_SECRET}
     volumes:
       # Mount local config.json directly (contains all settings)
       - ./config.json:/app/config/config.json:ro
       # Persistent cache
-      - lfm-cache:/app/cache
+      - cache:/app/cache
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:8002/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
@@ -30,5 +39,5 @@ services:
       start_period: 5s
 
 volumes:
-  lfm-cache:
+  cache:
     driver: local

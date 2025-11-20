@@ -54,6 +54,8 @@ public class LastFmApiClient : ILastFmApiClient
     private readonly string _apiKey;
     private readonly int _apiThrottleMs;
     private readonly bool _enableDebugLogging;
+    private readonly int _maxApiRetries;
+    private readonly int _retryBaseDelayMs;
     private const string BaseUrl = "https://ws.audioscrobbler.com/2.0/";
 
     // Timing properties for last API call (used by CachedLastFmApiClient for detailed breakdown)
@@ -61,13 +63,15 @@ public class LastFmApiClient : ILastFmApiClient
     public long LastJsonReadMs { get; private set; }
     public long LastJsonParseMs { get; private set; }
 
-    public LastFmApiClient(HttpClient httpClient, ILogger<LastFmApiClient> logger, string apiKey, int apiThrottleMs = 100, bool enableDebugLogging = false)
+    public LastFmApiClient(HttpClient httpClient, ILogger<LastFmApiClient> logger, string apiKey, int apiThrottleMs = 100, bool enableDebugLogging = false, int maxApiRetries = 3, int retryBaseDelayMs = 1000)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _apiKey = apiKey ?? throw new ArgumentNullException(nameof(apiKey));
         _apiThrottleMs = apiThrottleMs;
         _enableDebugLogging = enableDebugLogging;
+        _maxApiRetries = maxApiRetries;
+        _retryBaseDelayMs = retryBaseDelayMs;
     }
 
     public async Task<TopArtists?> GetTopArtistsAsync(string username, string period = "overall", int limit = 10, int page = 1)
@@ -776,74 +780,110 @@ public class LastFmApiClient : ILastFmApiClient
 
         _logger.LogDebug("Making request to: {Url}", maskedUrl);
 
-        var httpStopwatch = System.Diagnostics.Stopwatch.StartNew();
-
-        try
+        // Retry loop with exponential backoff for 500 errors
+        HttpRequestException? lastException = null;
+        for (int attempt = 0; attempt <= _maxApiRetries; attempt++)
         {
-            var response = await _httpClient.GetAsync(url);
-            httpStopwatch.Stop();
-            var httpMs = httpStopwatch.ElapsedMilliseconds;
+            var httpStopwatch = System.Diagnostics.Stopwatch.StartNew();
 
-            // Debug logging - response information
-            if (_enableDebugLogging)
+            try
             {
-                _logger.LogInformation("API DEBUG - Response Details:");
-                _logger.LogInformation("  Status: {StatusCode} {StatusText}", (int)response.StatusCode, response.StatusCode);
-                _logger.LogInformation("  HTTP Time: {ElapsedMs}ms", httpMs);
+                var response = await _httpClient.GetAsync(url);
+                httpStopwatch.Stop();
+                var httpMs = httpStopwatch.ElapsedMilliseconds;
 
-                // Log response headers if debug is enabled
-                foreach (var header in response.Headers)
+                // Debug logging - response information
+                if (_enableDebugLogging)
                 {
-                    _logger.LogDebug("  Header {HeaderName}: {HeaderValue}", header.Key, string.Join(", ", header.Value));
+                    _logger.LogInformation("API DEBUG - Response Details:");
+                    _logger.LogInformation("  Status: {StatusCode} {StatusText}", (int)response.StatusCode, response.StatusCode);
+                    _logger.LogInformation("  HTTP Time: {ElapsedMs}ms", httpMs);
+
+                    // Log response headers if debug is enabled
+                    foreach (var header in response.Headers)
+                    {
+                        _logger.LogDebug("  Header {HeaderName}: {HeaderValue}", header.Key, string.Join(", ", header.Value));
+                    }
+                    foreach (var header in response.Content.Headers)
+                    {
+                        _logger.LogDebug("  Content-Header {HeaderName}: {HeaderValue}", header.Key, string.Join(", ", header.Value));
+                    }
                 }
-                foreach (var header in response.Content.Headers)
+
+                // Check for 500 error before calling EnsureSuccessStatusCode
+                if ((int)response.StatusCode == 500 && attempt < _maxApiRetries)
                 {
-                    _logger.LogDebug("  Content-Header {HeaderName}: {HeaderValue}", header.Key, string.Join(", ", header.Value));
+                    var retryDelayMs = _retryBaseDelayMs * (int)Math.Pow(2, attempt);
+                    _logger.LogInformation("HTTP 500 error, retrying after {DelayMs}ms (attempt {Attempt}/{MaxRetries})",
+                        retryDelayMs, attempt + 1, _maxApiRetries);
+                    await Task.Delay(retryDelayMs);
+                    continue;
                 }
+
+                response.EnsureSuccessStatusCode();
+
+                var jsonReadStopwatch = System.Diagnostics.Stopwatch.StartNew();
+                var content = await response.Content.ReadAsStringAsync();
+                jsonReadStopwatch.Stop();
+
+                // Store timing for CachedLastFmApiClient to use
+                LastHttpMs = httpMs;
+                LastJsonReadMs = jsonReadStopwatch.ElapsedMilliseconds;
+
+                if (_enableDebugLogging)
+                {
+                    _logger.LogInformation("API DEBUG - Content Length: {ContentLength} characters", content?.Length ?? 0);
+                    _logger.LogInformation("  JSON Read Time: {ElapsedMs}ms", jsonReadStopwatch.ElapsedMilliseconds);
+
+                    // Log first 200 characters of response for debugging (avoid huge logs)
+                    if (!string.IsNullOrEmpty(content))
+                    {
+                        var preview = content.Length > 200 ? content.Substring(0, 200) + "..." : content;
+                        _logger.LogDebug("API DEBUG - Response Preview: {Preview}", preview);
+                    }
+                }
+
+                return content;
             }
-
-            response.EnsureSuccessStatusCode();
-
-            var jsonReadStopwatch = System.Diagnostics.Stopwatch.StartNew();
-            var content = await response.Content.ReadAsStringAsync();
-            jsonReadStopwatch.Stop();
-
-            // Store timing for CachedLastFmApiClient to use
-            LastHttpMs = httpMs;
-            LastJsonReadMs = jsonReadStopwatch.ElapsedMilliseconds;
-
-            if (_enableDebugLogging)
+            catch (HttpRequestException ex)
             {
-                _logger.LogInformation("API DEBUG - Content Length: {ContentLength} characters", content?.Length ?? 0);
-                _logger.LogInformation("  JSON Read Time: {ElapsedMs}ms", jsonReadStopwatch.ElapsedMilliseconds);
+                httpStopwatch.Stop();
+                lastException = ex;
 
-                // Log first 200 characters of response for debugging (avoid huge logs)
-                if (!string.IsNullOrEmpty(content))
+                // Only retry on 500 errors
+                if (ex.StatusCode == System.Net.HttpStatusCode.InternalServerError && attempt < _maxApiRetries)
                 {
-                    var preview = content.Length > 200 ? content.Substring(0, 200) + "..." : content;
-                    _logger.LogDebug("API DEBUG - Response Preview: {Preview}", preview);
+                    var retryDelayMs = _retryBaseDelayMs * (int)Math.Pow(2, attempt);
+                    _logger.LogInformation("HTTP 500 error, retrying after {DelayMs}ms (attempt {Attempt}/{MaxRetries})",
+                        retryDelayMs, attempt + 1, _maxApiRetries);
+                    await Task.Delay(retryDelayMs);
+                    continue;
                 }
-            }
 
-            return content;
+                // Non-500 error or max retries reached
+                _logger.LogError(ex, "HTTP error making request to Last.fm API (took {ElapsedMs}ms)", httpStopwatch.ElapsedMilliseconds);
+
+                if (_enableDebugLogging)
+                {
+                    _logger.LogInformation("API DEBUG - HTTP Error Details:");
+                    _logger.LogInformation("  Request: {Method} for {Artist}",
+                        parameters.GetValueOrDefault("method", "unknown"),
+                        parameters.GetValueOrDefault("artist", parameters.GetValueOrDefault("user", "n/a")));
+                    _logger.LogInformation("  URL: {Url}", maskedUrl);
+                    _logger.LogInformation("  Error: {ErrorMessage}", ex.Message);
+                }
+
+                return null;
+            }
         }
-        catch (HttpRequestException ex)
+
+        // Max retries exceeded
+        if (lastException != null)
         {
-            httpStopwatch.Stop();
-            _logger.LogError(ex, "HTTP error making request to Last.fm API (took {ElapsedMs}ms)", httpStopwatch.ElapsedMilliseconds);
-
-            if (_enableDebugLogging)
-            {
-                _logger.LogInformation("API DEBUG - HTTP Error Details:");
-                _logger.LogInformation("  Request: {Method} for {Artist}",
-                    parameters.GetValueOrDefault("method", "unknown"),
-                    parameters.GetValueOrDefault("artist", parameters.GetValueOrDefault("user", "n/a")));
-                _logger.LogInformation("  URL: {Url}", maskedUrl);
-                _logger.LogInformation("  Error: {ErrorMessage}", ex.Message);
-            }
-
-            return null;
+            _logger.LogError("Max retries ({MaxRetries}) exceeded for {Url}", _maxApiRetries, maskedUrl);
         }
+
+        return null;
     }
 
     // New Result-based methods for better error handling

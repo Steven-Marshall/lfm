@@ -23,7 +23,15 @@ public static class ConfigCommandBuilder
         var setThrottleCommand = new Command("set-throttle", "Set API request throttle delay in milliseconds");
         var throttleArg = new Argument<int>("milliseconds", "Delay between API requests in milliseconds (0 = no throttling)");
         setThrottleCommand.AddArgument(throttleArg);
-        
+
+        var setMaxRetriesCommand = new Command("set-max-retries", "Set maximum API retry attempts for HTTP 500 errors");
+        var maxRetriesArg = new Argument<int>("count", "Maximum retry attempts (0-10, 0 = disabled, default: 3)");
+        setMaxRetriesCommand.AddArgument(maxRetriesArg);
+
+        var setRetryDelayCommand = new Command("set-retry-delay", "Set base delay for retry exponential backoff");
+        var retryDelayArg = new Argument<int>("milliseconds", "Base delay in milliseconds (100-10000, default: 1000)");
+        setRetryDelayCommand.AddArgument(retryDelayArg);
+
         var setDepthCommand = new Command("set-search-depth", "Set normal search depth (number of items to search through)");
         var depthArg = new Argument<int>("items", "Number of items to search through in normal searches");
         setDepthCommand.AddArgument(depthArg);
@@ -124,6 +132,8 @@ public static class ConfigCommandBuilder
         var importPathArg = new Argument<string>("file-path", "Path to the config file to import");
         importCommand.AddArgument(importPathArg);
 
+        var diffCommand = new Command("diff", "Compare local config with Docker config");
+
         setApiKeyCommand.SetHandler(async (string apiKey) =>
         {
             var configCommand = services.GetRequiredService<ConfigCommand>();
@@ -147,7 +157,19 @@ public static class ConfigCommandBuilder
             var configCommand = services.GetRequiredService<ConfigCommand>();
             await configCommand.SetApiThrottleAsync(throttleMs);
         }, throttleArg);
-        
+
+        setMaxRetriesCommand.SetHandler(async (int maxRetries) =>
+        {
+            var configCommand = services.GetRequiredService<ConfigCommand>();
+            await configCommand.SetMaxApiRetriesAsync(maxRetries);
+        }, maxRetriesArg);
+
+        setRetryDelayCommand.SetHandler(async (int delayMs) =>
+        {
+            var configCommand = services.GetRequiredService<ConfigCommand>();
+            await configCommand.SetRetryBaseDelayAsync(delayMs);
+        }, retryDelayArg);
+
         setDepthCommand.SetHandler(async (int depth) =>
         {
             var configCommand = services.GetRequiredService<ConfigCommand>();
@@ -316,10 +338,18 @@ public static class ConfigCommandBuilder
             await configCommand.ImportConfigAsync(filePath);
         }, importPathArg);
 
+        diffCommand.SetHandler(async () =>
+        {
+            var configCommand = services.GetRequiredService<ConfigCommand>();
+            await configCommand.DiffConfigAsync();
+        });
+
         command.AddCommand(setApiKeyCommand);
         command.AddCommand(setUserCommand);
         command.AddCommand(showCommand);
         command.AddCommand(setThrottleCommand);
+        command.AddCommand(setMaxRetriesCommand);
+        command.AddCommand(setRetryDelayCommand);
         command.AddCommand(setDepthCommand);
         command.AddCommand(setTimeoutCommand);
         command.AddCommand(setParallelCallsCommand);
@@ -348,6 +378,7 @@ public static class ConfigCommandBuilder
         command.AddCommand(setDefaultPlayerCommand);
         command.AddCommand(exportCommand);
         command.AddCommand(importCommand);
+        command.AddCommand(diffCommand);
 
         return command;
     }

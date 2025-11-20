@@ -15,6 +15,7 @@ public abstract class BaseCommand
     protected readonly IConfigurationManager _configManager;
     protected readonly ILogger _logger;
     protected readonly ISymbolProvider _symbols;
+    protected bool _isJsonMode = false;
 
     protected BaseCommand(
         ILastFmApiClient apiClient,
@@ -279,7 +280,17 @@ public abstract class BaseCommand
     protected void HandleCommandError(Exception ex, string operation)
     {
         _logger.LogError(ex, "Error executing {Operation}", operation);
-        Console.WriteLine(ErrorMessages.Format(ErrorMessages.GenericError, ex.Message));
+
+        if (_isJsonMode)
+        {
+            var errorOutput = new { success = false, error = ex.Message };
+            Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(errorOutput,
+                new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        }
+        else
+        {
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.GenericError, ex.Message));
+        }
     }
 
     /// <summary>

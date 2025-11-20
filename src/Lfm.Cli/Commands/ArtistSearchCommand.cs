@@ -47,6 +47,7 @@ public class ArtistSearchCommand<T, TResponse> : BaseCommand
 
     public async Task ExecuteAsync(string artist, int limit, bool deep = false, int? delayMs = null, int? depth = null, int? timeoutSeconds = null, bool verbose = false, bool timing = false, bool forceCache = false, bool forceApi = false, bool noCache = false, bool timer = false, bool json = false)
     {
+        _isJsonMode = json;
         await ExecuteWithErrorHandlingAndTimerAsync($"artist-{_itemTypeName} command", async () =>
         {
             // Configure cache behavior and timing

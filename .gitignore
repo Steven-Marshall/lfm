@@ -71,7 +71,15 @@ node_modules/
 
 # Docker secrets (config files with API keys/tokens)
 lfm-mcp-release/config.json
+.env
+lfm-mcp-release/.env
 
-# Local MCP temp files
+# Local MCP temp files and backups
 CLAUDE.bak
 CLAUDE - Copy.md
+*.bak
+*.backup-*
+
+# Test files and directories
+test/
+test_timestamps.ps1

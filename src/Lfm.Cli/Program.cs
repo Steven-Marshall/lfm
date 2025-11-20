@@ -80,8 +80,8 @@ class Program
                     var logger = serviceProvider.GetRequiredService<ILogger<LastFmApiClient>>();
                     var configManager = serviceProvider.GetRequiredService<IConfigurationManager>();
                     var config = configManager.LoadAsync().GetAwaiter().GetResult();
-                    
-                    return new LastFmApiClient(httpClient, logger, config.ApiKey, config.ApiThrottleMs);
+
+                    return new LastFmApiClient(httpClient, logger, config.ApiKey, config.ApiThrottleMs, config.EnableApiDebugLogging, config.MaxApiRetries, config.RetryBaseDelayMs);
                 });
 
                 // Register the cached wrapper as the main interface
@@ -213,7 +213,10 @@ class Program
             .ConfigureLogging((context, logging) =>
             {
                 logging.ClearProviders();
-                logging.AddConsole();
+                logging.AddConsole(options =>
+                {
+                    options.LogToStandardErrorThreshold = LogLevel.Trace;  // Redirect all logs to stderr
+                });
 
                 // Check if API debug logging is enabled in config
                 try

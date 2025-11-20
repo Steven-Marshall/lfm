@@ -1240,6 +1240,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const output = await executeLfmCommand(cmdArgs);
       const result = parseJsonOutput(output);
 
+      // Check if CLI returned an error
+      if (result.success === false) {
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify(result, null, 2)
+          }]
+        };
+      }
+
       const response = {
         content: [
           {
@@ -1278,6 +1288,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const output = await executeLfmCommand(cmdArgs);
       const result = parseJsonOutput(output);
 
+      // Check if CLI returned an error
+      if (result.success === false) {
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify(result, null, 2)
+          }]
+        };
+      }
+
       return {
         content: [
           {
@@ -1313,6 +1333,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       const output = await executeLfmCommand(cmdArgs);
       const result = parseJsonOutput(output);
+
+      // Check if CLI returned an error
+      if (result.success === false) {
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify(result, null, 2)
+          }]
+        };
+      }
 
       return {
         content: [

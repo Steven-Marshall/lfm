@@ -5,7 +5,7 @@
 ARG TARGET_ARCH=linux-x64
 
 # Stage 1: Build .NET CLI binary
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build-dotnet
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build-dotnet
 
 ARG TARGET_ARCH
 WORKDIR /src
@@ -77,7 +77,7 @@ ENV PATH="/app/lfm:${PATH}"
 
 # Copy startup script
 COPY lfm-mcp-release/docker-entrypoint.sh ./
-RUN chmod +x docker-entrypoint.sh
+RUN sed -i 's/\r$//' docker-entrypoint.sh && chmod +x docker-entrypoint.sh
 
 # Expose HTTP port
 EXPOSE 8002
@@ -87,4 +87,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:8002/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"
 
 # Default: Run Streamable HTTP server
-CMD ["/app/docker-entrypoint.sh"]
+ENTRYPOINT []
+CMD ["/bin/sh", "/app/docker-entrypoint.sh"]

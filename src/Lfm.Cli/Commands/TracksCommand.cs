@@ -26,6 +26,7 @@ public class TracksCommand : BaseCommand
 
     public async Task ExecuteAsync(int limit, string? period, string? username, string? artist, string? range = null, int? delayMs = null, bool verbose = false, bool timing = false, bool forceCache = false, bool forceApi = false, bool noCache = false, bool timer = false, string? from = null, string? to = null, string? year = null, bool json = false)
     {
+        _isJsonMode = json;
         await ExecuteWithErrorHandlingAndTimerAsync("tracks command", async () =>
         {
             // Configure cache behavior and timing
