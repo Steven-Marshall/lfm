@@ -45,6 +45,31 @@ public class ConfigCommand
         }
     }
 
+    public async Task SetSetlistFmApiKeyAsync(string apiKey)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(apiKey))
+            {
+                Console.WriteLine($"{_symbols.Error} Setlist.fm API key cannot be empty.");
+                Console.WriteLine($"{_symbols.Tip} Get your API key from: https://www.setlist.fm/settings/api");
+                return;
+            }
+
+            var config = await _configManager.LoadAsync();
+            config.SetlistFmApiKey = apiKey.Trim();
+            await _configManager.SaveAsync(config);
+
+            Console.WriteLine($"{_symbols.Success} Setlist.fm API key saved successfully.");
+            Console.WriteLine(ErrorMessages.Format(ErrorMessages.ConfigSavedTo, _configManager.GetConfigPath()));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error setting Setlist.fm API key");
+            Console.WriteLine($"{_symbols.Error} Error: {ex.Message}");
+        }
+    }
+
     public async Task SetUsernameAsync(string username)
     {
         try
@@ -113,7 +138,8 @@ public class ConfigCommand
             Console.WriteLine($"Config file: {_configManager.GetConfigPath()}");
             Console.WriteLine();
             
-            Console.WriteLine($"API Key: {(string.IsNullOrEmpty(config.ApiKey) ? "❌ Not set" : "✅ Set")}");
+            Console.WriteLine($"Last.fm API Key: {(string.IsNullOrEmpty(config.ApiKey) ? "❌ Not set" : "✅ Set")}");
+            Console.WriteLine($"Setlist.fm API Key: {(string.IsNullOrEmpty(config.SetlistFmApiKey) ? "❌ Not set" : "✅ Set")}");
             Console.WriteLine($"Default Username: {(string.IsNullOrEmpty(config.DefaultUsername) ? "❌ Not set" : config.DefaultUsername)}");
             Console.WriteLine($"Default Period: {config.DefaultPeriod}");
             Console.WriteLine($"Default Limit: {config.DefaultLimit}");

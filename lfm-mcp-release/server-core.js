@@ -1195,6 +1195,64 @@ Reading these guidelines will help you provide accurate interpretations, avoid b
             }
           }
         }
+      },
+      {
+        name: 'lfm_concerts',
+        description: 'Search for concerts by artist with optional filters using Setlist.fm API. Returns concert details including date, venue, city, country, tour name, and track count.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            artist: {
+              type: 'string',
+              description: 'Artist name to search for (required)'
+            },
+            city: {
+              type: 'string',
+              description: 'Filter by city name'
+            },
+            country: {
+              type: 'string',
+              description: 'Filter by country code (e.g., "US", "GB", "DE")'
+            },
+            venue: {
+              type: 'string',
+              description: 'Filter by venue name'
+            },
+            tour: {
+              type: 'string',
+              description: 'Filter by tour name'
+            },
+            date: {
+              type: 'string',
+              description: 'Filter by specific date (format: dd-MM-yyyy)'
+            },
+            year: {
+              type: 'string',
+              description: 'Filter by year (format: yyyy)'
+            },
+            page: {
+              type: 'number',
+              description: 'Page number for pagination (default: 1)',
+              default: 1,
+              minimum: 1
+            }
+          },
+          required: ['artist']
+        }
+      },
+      {
+        name: 'lfm_setlist',
+        description: 'Get detailed setlist information for a specific concert by setlist ID. Returns concert details, full tracklist with track numbers, covers, encores, and venue information.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            setlistId: {
+              type: 'string',
+              description: 'Setlist ID from Setlist.fm (required). You can find setlist IDs using lfm_concerts.'
+            }
+          },
+          required: ['setlistId']
+        }
       }
     ]
   };
@@ -2436,6 +2494,87 @@ ${guidelinesContent}`;
     }
   }
   */
+
+  if (name === 'lfm_concerts') {
+    try {
+      const artist = args.artist;
+      const city = args.city;
+      const country = args.country;
+      const venue = args.venue;
+      const tour = args.tour;
+      const date = args.date;
+      const year = args.year;
+      const page = args.page || 1;
+
+      if (!artist) {
+        throw new Error('Artist name is required');
+      }
+
+      // Build command arguments
+      const cmdArgs = ['concerts', artist, '--page', page.toString(), '--json'];
+
+      // Add optional filters
+      if (city) {
+        cmdArgs.push('--city', city);
+      }
+      if (country) {
+        cmdArgs.push('--country', country);
+      }
+      if (venue) {
+        cmdArgs.push('--venue', venue);
+      }
+      if (tour) {
+        cmdArgs.push('--tour', tour);
+      }
+      if (date) {
+        cmdArgs.push('--date', date);
+      }
+      if (year) {
+        cmdArgs.push('--year', year);
+      }
+
+      const output = await executeLfmCommand(cmdArgs);
+      const result = parseJsonOutput(output);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2)
+          }
+        ]
+      };
+    } catch (error) {
+      return createErrorResponse(error, 'searching concerts');
+    }
+  }
+
+  if (name === 'lfm_setlist') {
+    try {
+      const setlistId = args.setlistId;
+
+      if (!setlistId) {
+        throw new Error('Setlist ID is required');
+      }
+
+      // Build command arguments
+      const cmdArgs = ['setlist', setlistId, '--json'];
+
+      const output = await executeLfmCommand(cmdArgs);
+      const result = parseJsonOutput(output);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2)
+          }
+        ]
+      };
+    } catch (error) {
+      return createErrorResponse(error, 'fetching setlist');
+    }
+  }
 
   throw new Error(`Unknown tool: ${name}`);
 });
