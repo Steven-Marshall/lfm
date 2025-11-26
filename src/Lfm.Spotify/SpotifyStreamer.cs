@@ -1172,8 +1172,16 @@ public class SpotifyStreamer : IPlaylistStreamer
             var json = await playbackResponse.Content.ReadAsStringAsync();
             if (!string.IsNullOrEmpty(json))
             {
-                // Playback is active
-                return true;
+                // Parse playback state to check if actually playing (not just paused)
+                var playbackState = JsonSerializer.Deserialize<SpotifyPlaybackState>(json);
+                if (playbackState?.IsPlaying == true)
+                {
+                    // Playback is actually active
+                    return true;
+                }
+                // Paused - return false so caller can start new playback
+                // StartPlaybackAsync handles device selection if needed
+                return false;
             }
         }
 
@@ -1355,11 +1363,19 @@ public class SpotifyStreamer : IPlaylistStreamer
 
         try
         {
-            // Prepare the play request with multiple URIs (supports up to 100 tracks)
-            var playRequest = new
+            // Prepare the play request
+            // Use context_uri for playlist/album/artist, uris for tracks
+            object playRequest;
+            if (trackUris.Count == 1 && (trackUris[0].Contains(":playlist:") || trackUris[0].Contains(":album:") || trackUris[0].Contains(":artist:")))
             {
-                uris = trackUris
-            };
+                // Single context URI (playlist, album, or artist)
+                playRequest = new { context_uri = trackUris[0] };
+            }
+            else
+            {
+                // Track URIs (supports up to 100 tracks)
+                playRequest = new { uris = trackUris };
+            }
 
             // If a specific device is requested, include it
             string playUrl = "https://api.spotify.com/v1/me/player/play";
