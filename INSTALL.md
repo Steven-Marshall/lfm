@@ -197,6 +197,7 @@ LFM is a command-line tool for accessing your Last.fm music statistics. This gui
 The LFM tool gives you access to:
 - Your Last.fm music statistics (top artists, tracks, albums)
 - Music recommendations based on your listening
+- Concert search and setlist lookup via Setlist.fm (optional)
 - Spotify playback control (optional)
 - Sonos playback control (optional)
 - Natural language music queries via Claude (optional MCP integration)

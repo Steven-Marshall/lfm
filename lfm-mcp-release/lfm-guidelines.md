@@ -1,26 +1,6 @@
 # Last.fm MCP Guidelines
 
-**IMPORTANT:** Call `lfm_init` at the start of each session to load these guidelines and user preferences.
-
----
-
-## 🎵 User Music Preferences
-
-Use this section to remember the user's taste and avoid bad recommendations:
-
-### Artists to Avoid
-- **Never recommend**: [User will specify artists they dislike]
-- **Context matters**: Some artists may be okay in specific contexts
-
-### Listening Style
-- **Discovery preference**: [How adventurous? Safe recommendations vs experimental?]
-- **Time investment**: [Quick picks vs deep dives into artist catalogs?]
-- **Playlist size**: [Prefer shorter focused playlists or longer exploration sets?]
-
-### Genre Preferences
-- **Love**: [Genres user gravitates toward]
-- **Avoid**: [Genres that don't resonate]
-- **Curious about**: [Genres to explore carefully]
+**IMPORTANT:** Call `lfm_init` at the start of each session to load these guidelines.
 
 ---
 
@@ -119,89 +99,35 @@ When you can see the complete pattern → speak with authority.
 
 **Note**: All playback commands support both Spotify and Sonos. The user's config determines the default player, but you can specify `player: "Spotify"` or `player: "Sonos"` if needed. For Sonos, you can also specify `room: "Room Name"`.
 
-### Using lfm_recommendations - LLM Reasoning First
+**Concert & Setlist Tools (Setlist.fm):**
+- `lfm_concerts` - Search for concerts by artist
+  - Filters: `city`, `country` (code like "US", "GB"), `venue`, `tour`, `year`, `date`
+  - Returns: Concert list with venue, date, city, country, tour name, setlist ID
+  - Use the setlist ID to get full tracklist with `lfm_setlist`
+- `lfm_setlist` - Get detailed setlist by ID
+  - Returns: Full tracklist with track numbers, covers, encores, venue details
+  - Use for "what did they play at [concert]?" questions
 
-**IMPORTANT: Your musical knowledge is more valuable than raw similarity scores.**
+**Concert Tool Usage Tips:**
+- Year filter: `year: "2024"` (not date range)
+- Country codes: Use ISO 2-letter codes ("US", "GB", "DE", "JP")
+- Setlist IDs come from `lfm_concerts` results
+- Empty setlists are common for recent/unverified concerts - the `_note` field explains this
+- Great for: "What songs did X play on their last tour?", "Did they play [song] at [venue]?"
 
-**Key Principle:**
-In general, `lfm_recommendations` is **not a great starting point**. Use your own musical reasoning first (9 out of 10 times, it's better than algorithmic recommendations).
+### Using lfm_recommendations
 
-**Why Recommendations Are Limited:**
-- Based purely on Last.fm's similarity algorithms
-- No understanding of musical context, progression, or user's current mood
-- Misses obvious connections that any music-knowledgeable person would make
-- Can't read the room or interpret nuanced user preferences
+**Your musical knowledge > algorithmic similarity scores.** Use `lfm_recommendations` as supplementary input, not a starting point.
 
-**When NOT to Use Recommendations:**
-❌ User asks about well-known artists where you have musical knowledge:
-- "What Beatles album should I try next?" → You know Beatles discography! Use listening patterns + your knowledge
-- "Similar to Pink Floyd?" → You know prog rock, psychedelia, art rock connections
-- "What Monkees album next?" → Reason about Beach Boys connections, listening patterns, user's taste
+**When NOT to use:**
+- Well-known artists (Beatles, Pink Floyd) → You know the discography
+- Context-based requests ("what next?", "in a chill mood") → Use recent_tracks + your judgment
 
-❌ User asks for progression based on listening context:
-- "I just finished this album, what next?" → Check recent_tracks, use musical judgment
-- "In a [mood/vibe] mood" → Your knowledge of mood/genre connections > algorithms
+**When it helps:**
+- Truly obscure artists you don't know → Use as ONE input, then curate
+- As a starting pool to augment AND filter with your judgment
 
-**When It MIGHT Help (Rarely):**
-✅ Discovery mode for truly obscure artists you don't know:
-- "Similar artists to [very obscure band]?" → Use as ONE input, then augment with your research
-
-✅ As a starting pool to augment and filter:
-- Get raw recommendations
-- Apply your musical knowledge to filter
-- Add artists the algorithm missed
-- Consider user context and preferences
-- Present YOUR curated selection, not raw results
-
-**The Right Workflow:**
-```
-1. User asks for recommendations
-2. Check recent_tracks/current_track for context
-3. Use YOUR musical knowledge first:
-   - Genre connections
-   - Musical progression
-   - User's listening patterns
-   - Obvious artist relationships
-4. OPTIONALLY get lfm_recommendations as supplementary input
-5. Augment AND filter with your judgment
-6. Present curated selection with reasoning
-```
-
-**Examples:**
-
-❌ **BAD (over-reliance on tool):**
-```
-User: "What should I listen to after The Beatles?"
-LLM: [Calls lfm_recommendations]
-"Based on your listening, here are similar artists: [raw algorithm results]"
-```
-
-✅ **GOOD (LLM reasoning first):**
-```
-User: "What should I listen to after The Beatles?"
-LLM: [Checks recent Beatles tracks, thinks about connections]
-"I see you've been listening to their psychedelic period. Have you explored their
-influences and contemporaries? The Zombies' 'Odessey and Oracle' would be perfect -
-similar baroque pop sophistication. Or The Kinks for British Invasion with more
-working-class grit."
-```
-
-✅ **ACCEPTABLE (tool as supplement):**
-```
-User: "Find me artists like [extremely obscure band you don't know]"
-LLM: [Gets recommendations as starting point]
-[Researches the artists returned]
-[Filters based on user's known preferences]
-[Adds artists from your knowledge that fit the style]
-"Here's what I've curated: [your selection] - I started with similarity data but
-filtered for [user preference] and added [artist] because [musical reasoning]."
-```
-
-**Remember:**
-- Recommendations tool = raw data input, not the answer
-- Your job = music curator with judgment, not data presenter
-- User context + musical knowledge > algorithms
-- When in doubt, reason it out yourself
+**Workflow:** Check context (recent_tracks) → Use your knowledge → Optionally supplement with tool → Present curated selection
 
 ### Using lfm_check - When It Works and When It Doesn't
 
@@ -359,83 +285,25 @@ When users request music playback, the choice of tool depends on their intent:
    Right: lfm_create_playlist
 ```
 
-### Playback State Awareness - Check BEFORE Suggesting
+### Playback State Awareness
 
-**CRITICAL: Before making playback suggestions, ALWAYS check current state first.**
+**Before making playback suggestions, check current state first.**
 
-**The Problem:**
-LLMs frequently make playback suggestions ("I've queued up X", "Want me to queue Y?") without checking what's currently playing or what just finished. This leads to:
-- Making assumptions about queue state
-- Missing contextual opportunities (e.g., user just finished an album you could reference)
-- Appearing unaware of the listening session
+**Trigger phrases that require state check:** "I've queued", "Want me to queue", "Shall I play"
 
-**Trigger Words - STOP and Check State:**
-Before using these phrases, you MUST check playback state first:
-- "I've queued"
-- "Want me to queue"
-- "Shall I play"
-- "Should I add"
-- "I'll queue up"
+**Workflow:**
+1. `lfm_recent_tracks(hours: 1-2)` → What did they just finish?
+2. `lfm_current_track()` → What's playing now?
+3. Make informed suggestion: "I see you just finished [X]. Shall I [action]?"
 
-**Mandatory Workflow:**
-```
-1. lfm_recent_tracks(hours: 1-2) → What did they just finish?
-2. lfm_current_track() → What's playing now?
-3. Make informed suggestion with context
-```
-
-**Good vs Bad Examples:**
-
-❌ **BAD (from real conversation):**
-```
-User: "yes!"
-
-LLM: "Perfect! I've queued up both albums for you:
-1. Aztec Camera - 'High Land, Hard Rain' (17 tracks)
-2. Badfinger - 'Straight Up' (18 tracks)
-
-You're going from Scottish 80s jangle → sophistication → 70s power pop..."
-
-[Later, user asks what they're listening to]
-
-LLM: [Checks current_track] "You're listening to 'Down the Dip' by Aztec Camera..."
-```
-
-**Problem**: Queued albums, made assumptions, never checked if queue actually worked or what was already playing.
-
-✅ **GOOD (data-informed):**
-```
-User: "yes!"
-
-LLM: [Checks recent_tracks + current_track FIRST]
-"I see you just finished Orange Juice (8 tracks in your recent history) and you're
-currently listening to Aztec Camera 'Down the Dip'. Perfect timing - shall I queue up
-Badfinger 'Straight Up' next? It's a natural progression: Scottish jangle → Scottish
-sophistication → Beatles-inspired power pop."
-```
-
-**The "Championship Vinyl" DJ Approach:**
-- **Data-informed**: Check what's playing/finished before suggesting
+**The DJ approach:**
+- **Data-informed**: Check what's playing before suggesting
 - **Permission-seeking**: "Shall I queue" not "I've queued"
-- **Confident but polite**: Use data to be confident, but still ask permission
-- **Aware**: Show you're paying attention to their listening session
+- **Contextual**: Reference what they just listened to
 
-**Response Template:**
-```
-[Check state tools first]
-"I see you just finished [X]. [One-line context]. Shall I [action]?"
-```
+**When to check:** Before playback suggestions, at start of music conversations, when making recommendations.
 
-**When to Check:**
-- Before ANY playback suggestion
-- When user asks for recommendations (check if current track provides context)
-- When user mentions they just finished something (verify with recent_tracks)
-- Start of music conversations (be aware of current listening)
-
-**When NOT to Check:**
-- User explicitly tells you what they're listening to
-- You just checked in the last 1-2 messages
-- User is asking about historical data (not current session)
+**Skip checking if:** User just told you what's playing, you checked recently, or they're asking about historical data.
 
 ### Album Disambiguation - Handling Multiple Versions
 
@@ -667,27 +535,6 @@ Pink Floyd - Wish You Were Here (5 tracks):
 3. **Maintain conversational context** - if user says "I don't like X", filter it out
 4. **Provide clear feedback** about what was found/created
 5. **Trust the data** - high album plays = they loved it, even if some tracks show 0
-6. **Engage with what's playing NOW** - Use `lfm_current_track` proactively for contextual conversations
-
-### Contextual Engagement
-
-**Proactively check what's playing** to create engaging, contextual conversations:
-
-**Examples:**
-- "Oh, I see you're listening to Dark Side of the Moon! That was your #3 album last month. In a concept album mood today? Want me to queue up something similar after?"
-- "I notice you've got [artist] playing - that track was your favorite from last week!"
-- "Listening to [track]? I remember that one barely made your top 50 last year, but looks like it's getting more love lately!"
-
-**When to check:**
-- At the start of music-related conversations
-- When making recommendations (see if current track provides context)
-- When user mentions moods or contexts ("feeling nostalgic", "need energy")
-- Periodically during longer conversations about music
-
-**DON'T:**
-- Check current track repeatedly in short succession
-- Make it feel like surveillance - keep it natural and conversational
-- Interrupt user requests to check what's playing
 
 ---
 

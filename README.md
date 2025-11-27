@@ -9,6 +9,7 @@ LFM brings your Last.fm listening data to the command line with features like:
 - 🎵 **Music Statistics** - Top artists, tracks, and albums with play counts
 - 🔍 **Discovery** - Find similar artists and get personalized recommendations
 - 📊 **Listening History** - Check if you've listened to specific artists, tracks, or albums
+- 🎤 **Concert & Setlists** - Search concerts and view setlists via Setlist.fm
 - 🎧 **Playback Integration** - Queue music directly to Spotify or Sonos
 - 🤖 **AI Integration** - Use with Claude Code or Claude Desktop for natural language queries
 - 🚀 **Smart Caching** - Fast performance with intelligent cache management
@@ -83,6 +84,19 @@ lfm toptracks --period 1month --totaltracks 25 --tracks-per-artist 1
 lfm mixtape --limit 30 --bias 0.5
 ```
 
+### Concerts & Setlists
+
+```bash
+# Search for concerts by an artist
+lfm concerts "Radiohead" --year 2024
+
+# Filter by city or country
+lfm concerts "Taylor Swift" --country US --year 2024
+
+# Get a specific setlist by ID
+lfm setlist 13582d35
+```
+
 ### Playback (Spotify/Sonos)
 
 ```bash
@@ -138,6 +152,12 @@ See the [MCP Setup Guide](MCP_SETUP.md) for installation instructions.
 - Play count verification
 - Identify which tracks you've heard from an album
 
+### Concert & Setlist Integration
+- Search concerts by artist with filters (city, country, venue, tour, year)
+- View full setlists with track listings and encore information
+- Concert details including venue, date, and tour name
+- Powered by Setlist.fm API
+
 ### Playback Integration
 - **Spotify Integration** - Queue tracks and albums, manage playlists, control playback
 - **Sonos Integration** - Play music directly on Sonos speakers
@@ -177,6 +197,9 @@ lfm config set-spotify-default-device "Device Name"
 # Configure Sonos (requires node-sonos-http-api)
 lfm config set-sonos-api-url "http://192.168.1.24:5005"
 lfm config set-sonos-default-room "Living Room"
+
+# Configure Setlist.fm (for concert/setlist lookup)
+lfm config set-setlistfm-api-key YOUR_API_KEY
 
 # Configure default settings
 lfm config set default-period 1month

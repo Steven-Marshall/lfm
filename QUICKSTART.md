@@ -171,11 +171,28 @@ lfm tracks --from 2024-01-01 --to 2024-06-30 --limit 20
 | Artist's top tracks | `lfm artist-tracks "Artist Name"` |
 | List all playlists | `lfm playlists` |
 | Play a playlist | `lfm playlist --name "Playlist Name"` |
+| Search concerts | `lfm concerts "Artist Name"` |
+| View a setlist | `lfm setlist <setlist-id>` |
 | Help with any command | `lfm <command> --help` |
 
 ---
 
 ## Next Steps
+
+### Optional: Setlist.fm Integration
+
+Search for concerts and view setlists:
+
+```bash
+# Configure Setlist.fm (get API key from https://www.setlist.fm/settings/api)
+lfm config set-setlistfm-api-key YOUR_API_KEY
+
+# Search for concerts by an artist
+lfm concerts "Radiohead" --year 2024
+
+# Get a specific setlist
+lfm setlist 13582d35
+```
 
 ### Optional: Spotify Integration
 
