@@ -50,7 +50,9 @@ class Program
             PauseCommandBuilder.Build(host.Services),
             ResumeCommandBuilder.Build(host.Services),
             SkipCommandBuilder.Build(host.Services),
-            CurrentCommandBuilder.Build(host.Services)
+            CurrentCommandBuilder.Build(host.Services),
+            ConcertsCommandBuilder.Build(host.Services),
+            SetlistCommandBuilder.Build(host.Services)
         };
 
         return await rootCommand.InvokeAsync(args);
@@ -116,6 +118,25 @@ class Program
                     return new Lfm.Sonos.SonosStreamer(config.Sonos, logger);
                 });
 
+                // Setlist.fm services
+                services.AddSingleton<ISetlistFmApiClient>(serviceProvider =>
+                {
+                    var httpClientFactory = serviceProvider.GetRequiredService<IHttpClientFactory>();
+                    var httpClient = httpClientFactory.CreateClient();
+                    httpClient.DefaultRequestHeaders.Add("User-Agent", "lfm-cli/1.0");
+
+                    var logger = serviceProvider.GetRequiredService<ILogger<SetlistFmApiClient>>();
+                    var configManager = serviceProvider.GetRequiredService<IConfigurationManager>();
+                    var config = configManager.LoadAsync().GetAwaiter().GetResult();
+
+                    if (string.IsNullOrWhiteSpace(config.SetlistFmApiKey))
+                    {
+                        throw new InvalidOperationException("Setlist.fm API key not configured. Run 'lfm config set-setlistfm-api-key YOUR_KEY' to set it.");
+                    }
+
+                    return new SetlistFmApiClient(httpClient, logger, config.SetlistFmApiKey);
+                });
+
                 // Service layer
                 services.AddTransient<ILastFmService>(serviceProvider =>
                 {
@@ -159,6 +180,11 @@ class Program
                 services.AddTransient<CurrentCommand>();
                 services.AddTransient<SonosRoomsCommand>();
                 services.AddTransient<SonosStatusCommand>();
+
+                // Setlist.fm commands
+                services.AddTransient<ConcertsCommand>();
+                services.AddTransient<SetlistCommand>();
+
                 // Artist search commands using generic implementation
                 services.AddTransient<ArtistSearchCommand<Track, TopTracks>>(serviceProvider =>
                 {

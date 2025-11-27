@@ -30,7 +30,10 @@ public class LfmConfig
     public int RetryBaseDelayMs { get; set; } = 1000;
     public int NormalSearchDepth { get; set; } = 10000;
     public int DeepSearchTimeoutSeconds { get; set; } = 300;
-    
+
+    // Setlist.fm Configuration
+    public string? SetlistFmApiKey { get; set; }
+
     // Cache Configuration
     public bool CacheEnabled { get; set; } = true;
     public int CacheExpiryMinutes { get; set; } = 10;

@@ -13,7 +13,11 @@ public static class ConfigCommandBuilder
         var setApiKeyCommand = new Command("set-api-key", "Set your Last.fm API key (get from https://www.last.fm/api/account/create)");
         var apiKeyArg = new Argument<string>("api-key", "Your Last.fm API key");
         setApiKeyCommand.AddArgument(apiKeyArg);
-        
+
+        var setSetlistFmApiKeyCommand = new Command("set-setlistfm-api-key", "Set your Setlist.fm API key (get from https://www.setlist.fm/settings/api)");
+        var setlistFmApiKeyArg = new Argument<string>("api-key", "Your Setlist.fm API key");
+        setSetlistFmApiKeyCommand.AddArgument(setlistFmApiKeyArg);
+
         var setUserCommand = new Command("set-user", "Set your default Last.fm username");
         var userArg = new Argument<string>("username", "Your Last.fm username");
         setUserCommand.AddArgument(userArg);
@@ -139,6 +143,12 @@ public static class ConfigCommandBuilder
             var configCommand = services.GetRequiredService<ConfigCommand>();
             await configCommand.SetApiKeyAsync(apiKey);
         }, apiKeyArg);
+
+        setSetlistFmApiKeyCommand.SetHandler(async (string apiKey) =>
+        {
+            var configCommand = services.GetRequiredService<ConfigCommand>();
+            await configCommand.SetSetlistFmApiKeyAsync(apiKey);
+        }, setlistFmApiKeyArg);
 
         setUserCommand.SetHandler(async (string username) =>
         {
@@ -345,6 +355,7 @@ public static class ConfigCommandBuilder
         });
 
         command.AddCommand(setApiKeyCommand);
+        command.AddCommand(setSetlistFmApiKeyCommand);
         command.AddCommand(setUserCommand);
         command.AddCommand(showCommand);
         command.AddCommand(setThrottleCommand);
