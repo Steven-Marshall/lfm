@@ -1282,7 +1282,7 @@ public class SpotifyStreamer : IPlaylistStreamer
             {
                 Console.WriteLine($"✅ Activated device: {activeDevice.Name}");
                 await Task.Delay(1000); // Give Spotify a moment to activate the device
-                return true;
+                return false; // Device ready, but no playback - caller should start first track
             }
         }
 
