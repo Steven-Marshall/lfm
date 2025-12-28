@@ -15,9 +15,7 @@ async function main() {
   const server = createMcpServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
-
-  // Don't log to console - it breaks MCP JSON communication over stdio
   // Server is now running and listening on stdin/stdout
 }
 
-main().catch(console.error);
+main().catch(() => {});
