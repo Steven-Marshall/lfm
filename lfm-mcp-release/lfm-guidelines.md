@@ -400,6 +400,14 @@ Pink Floyd - DSOTM: 109 "plays" (10 tracks) = ~11 full album listens
 - Determining if album is truly a favorite (high plays vs just long)
 - Checking for "hardcore" listening patterns vs casual plays
 
+**Use "listens" in narrative, not "plays":**
+
+Once you've converted to album listens, stay in that framing:
+- ❌ "8 plays means you heard it but didn't connect"
+- ✅ "One listen means you heard it but didn't connect"
+
+"Plays" sounds like repeated attempts. "Listens" reflects what actually happened.
+
 ### Interpreting `unaccountedPlays`
 
 When using `verbose: true` on `lfm_check`, you may see:
