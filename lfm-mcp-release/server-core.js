@@ -987,7 +987,7 @@ Reading these guidelines will help you provide accurate interpretations, avoid b
       },
       {
         name: 'lfm_play_now',
-        description: 'Play a track or album immediately on Spotify or Sonos. IMPORTANT: If multiple album versions exist for a track (e.g., studio, live, greatest hits), you MUST specify the album parameter. Users typically prefer studio albums over live/greatest hits versions unless explicitly requested.',
+        description: 'Play a track or album immediately on Spotify or Sonos. IMPORTANT: If multiple album versions exist for a track (e.g., studio, live, greatest hits), you MUST specify the album parameter. Users typically prefer studio albums over live/greatest hits versions unless explicitly requested. SPOTIFY REQUIREMENT: The Spotify app must be running on the target device (can be paused/idle, but not closed). The Web API cannot wake a closed app.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -1027,7 +1027,7 @@ Reading these guidelines will help you provide accurate interpretations, avoid b
       },
       {
         name: 'lfm_queue',
-        description: 'Add a track or album to the end of the Spotify or Sonos queue. IMPORTANT: If multiple album versions exist for a track (e.g., studio, live, greatest hits), you MUST specify the album parameter. Users typically prefer studio albums over live/greatest hits versions unless explicitly requested.',
+        description: 'Add a track or album to the Spotify or Sonos queue. IMPORTANT: If multiple album versions exist for a track (e.g., studio, live, greatest hits), you MUST specify the album parameter. Users typically prefer studio albums over live/greatest hits versions unless explicitly requested. SPOTIFY LIMITATION: Adds after the current track, NOT the end of the queue. Cannot "line up an album to play after the current album finishes" - tracks insert immediately and in reverse order. Best for single "play next" tracks only; use lfm_play_now for albums.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -1107,7 +1107,7 @@ Reading these guidelines will help you provide accurate interpretations, avoid b
       },
       {
         name: 'lfm_activate_device',
-        description: 'Wake up / activate a Spotify device to make it ready to receive commands (solves "no active device" issues)',
+        description: 'Wake up / activate a Spotify device to make it ready to receive commands (solves "no active device" issues). NOTE: Only works if the Spotify app is running on the device (can be paused/idle). Cannot wake a device where the app is fully closed.',
         inputSchema: {
           type: 'object',
           properties: {
