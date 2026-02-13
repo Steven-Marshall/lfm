@@ -523,16 +523,8 @@ public class SpotifyStreamer : IPlaylistStreamer
 
             Console.WriteLine($"🎵 Creating Spotify playlist '{playlistName}' with {tracks.Count} tracks...");
 
-            // Get user ID
-            var userId = await GetCurrentUserIdAsync();
-            if (string.IsNullOrEmpty(userId))
-            {
-                result.Message = "Failed to get Spotify user ID";
-                return result;
-            }
-
             // Create playlist
-            var playlist = await CreatePlaylistAsync(userId, playlistName);
+            var playlist = await CreatePlaylistAsync(playlistName);
             if (playlist == null)
             {
                 result.Message = "Failed to create Spotify playlist";
@@ -651,7 +643,7 @@ public class SpotifyStreamer : IPlaylistStreamer
                      $"client_id={_config.ClientId}&" +
                      $"response_type=code&" +
                      $"redirect_uri={HttpUtility.UrlEncode(redirectUri)}&" +
-                     $"scope={HttpUtility.UrlEncode("user-modify-playback-state user-read-playback-state playlist-modify-private playlist-modify-public playlist-read-private playlist-read-collaborative")}";
+                     $"scope={HttpUtility.UrlEncode("user-modify-playback-state user-read-playback-state playlist-modify-private playlist-modify-public playlist-read-private playlist-read-collaborative user-library-modify")}";
 
         Console.WriteLine("\n🎵 Spotify Authentication Required!");
         Console.WriteLine("═══════════════════════════════════════════════════════════════");
@@ -1305,7 +1297,7 @@ public class SpotifyStreamer : IPlaylistStreamer
         return null;
     }
 
-    private async Task<SpotifyPlaylist?> CreatePlaylistAsync(string userId, string playlistName)
+    private async Task<SpotifyPlaylist?> CreatePlaylistAsync(string playlistName)
     {
         _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
 
@@ -1319,7 +1311,7 @@ public class SpotifyStreamer : IPlaylistStreamer
         var json = JsonSerializer.Serialize(request);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-        var response = await _httpClient.PostAsync($"https://api.spotify.com/v1/users/{userId}/playlists", content);
+        var response = await _httpClient.PostAsync("https://api.spotify.com/v1/me/playlists", content);
         var responseJson = await response.Content.ReadAsStringAsync();
 
         if (response.IsSuccessStatusCode)
@@ -1338,7 +1330,7 @@ public class SpotifyStreamer : IPlaylistStreamer
         var json = JsonSerializer.Serialize(request);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-        var response = await _httpClient.PostAsync($"https://api.spotify.com/v1/playlists/{playlistId}/tracks", content);
+        var response = await _httpClient.PostAsync($"https://api.spotify.com/v1/playlists/{playlistId}/items", content);
         return response.IsSuccessStatusCode;
     }
 
