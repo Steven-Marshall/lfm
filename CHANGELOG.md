@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.0] - 2026-02-28
+
+### Fixed
+- **Complete Spotify API Migration** - All breaking changes from Spotify's Feb 2026 API update now addressed ahead of March 9 deadline
+  - Playlist delete endpoint migrated from `DELETE /v1/playlists/{id}/followers` to `DELETE /v1/me/library?uris=` (note: `uris` must be a query parameter, not request body — undocumented by Spotify)
+  - Playlist object field rename from `tracks` to `items` in `SpotifyPlaylistItem` model (`SpotifyModels.cs`)
+  - Previously completed: playlist creation endpoint (`/me/playlists`) and add tracks endpoint (`/items`)
+
+### MCP Server (v0.5.1)
+- Spotify endpoint changes apply to MCP tools that create playlists and manage tracks
+- No new tools or tool changes — all 32 tools remain the same
+
 ## [1.6.0] - 2025-10-31
 
 ### Added
