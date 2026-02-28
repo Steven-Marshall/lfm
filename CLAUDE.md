@@ -68,28 +68,17 @@ dotnet publish src/Lfm.Cli -c Release -r linux-x64 -o publish/linux-x64 --self-c
 - File-based caching (119x improvement)
 - Config export/import, Docker deployment
 
-### ⚠️ Spotify API Migration (Deadline: March 9, 2026)
-Spotify announced breaking changes: https://developer.spotify.com/blog/2026-02-06-update-on-developer-access-and-platform-security
+### ✅ Spotify API Migration (Complete as of 2026-02-28)
+Spotify breaking changes: https://developer.spotify.com/blog/2026-02-06-update-on-developer-access-and-platform-security
 
-Three changes required once the new API is live (expected ~Feb 11, 2026):
-1. **Playlist creation endpoint removed**: `POST /v1/users/{userId}/playlists` → `POST /v1/me/playlists`
-   - `SpotifyStreamer.cs:1322` - change URL, drop `userId` parameter
-   - `SpotifyStreamer.cs:527-532` - remove `GetCurrentUserIdAsync()` call (keep method for playlist `IsOwned` check)
-2. **Add tracks endpoint renamed**: `POST /v1/playlists/{id}/tracks` → `POST /v1/playlists/{id}/items`
-   - `SpotifyStreamer.cs:1341` - change `/tracks` to `/items` in URL
-3. **Unfollow playlist endpoint removed**: `DELETE /v1/playlists/{id}/followers` → `DELETE /v1/me/library`
-   - `SpotifyStreamer.cs:484` - change URL, add request body with playlist URI (`spotify:playlist:{id}`)
-   - CLI only (`lfm spotify delete-playlists`), not exposed via MCP
+All four changes complete and tested:
+1. **Playlist creation endpoint**: `POST /v1/users/{userId}/playlists` → `POST /v1/me/playlists` — DONE (2026-02-13)
+2. **Add tracks endpoint**: `POST /v1/playlists/{id}/tracks` → `POST /v1/playlists/{id}/items` — DONE (2026-02-13)
+3. **Unfollow playlist endpoint**: `DELETE /v1/playlists/{id}/followers` → `DELETE /v1/me/library?uris=spotify:playlist:{id}` — DONE (2026-02-28). Note: `uris` must be a query parameter, not request body.
+4. **Playlist field rename**: `[JsonPropertyName("tracks")]` → `[JsonPropertyName("items")]` on `SpotifyPlaylistItem` in `SpotifyModels.cs:153` — DONE (2026-02-28). API now returns both fields during transition.
 
-No impact: playback, search, album tracks, get playlists, devices, models. Sonos bridge unaffected.
-- `GET /v1/me/player/*` (play, pause, next, previous, queue, devices, currently-playing, transfer) - unchanged
-- `GET /v1/search` - unchanged
-- `GET /v1/albums/{id}/tracks` - unchanged
-- `GET /v1/me/playlists` - unchanged (already using `/me/` not `/users/{id}/`)
-- `GET /v1/me` - unchanged (still needed for `IsOwned` check on playlist listing)
-- `GET /v1/playlists/{id}` - unchanged
-- `SpotifyModels.cs` - no field renames needed; `tracks` on playlist object stays as-is
-Also removed (already disabled in code): `GET /browse/new-releases`.
+- OAuth scope `user-library-modify` added
+- Spark deployment needs re-auth with new refresh token
 
 ### 📋 Future Enhancements
 - **Progress Bars**: Long-running operation feedback (see `progressbarproject.md`)

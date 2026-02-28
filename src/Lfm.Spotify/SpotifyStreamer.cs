@@ -481,7 +481,8 @@ public class SpotifyStreamer : IPlaylistStreamer
             await EnsureValidAccessTokenAsync();
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
 
-            var response = await _httpClient.DeleteAsync($"https://api.spotify.com/v1/playlists/{playlistId}/followers");
+            var playlistUri = Uri.EscapeDataString($"spotify:playlist:{playlistId}");
+            var response = await _httpClient.DeleteAsync($"https://api.spotify.com/v1/me/library?uris={playlistUri}");
             return response.IsSuccessStatusCode;
         }
         catch

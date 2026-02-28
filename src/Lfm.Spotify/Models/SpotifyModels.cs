@@ -150,7 +150,7 @@ public class SpotifyPlaylistItem
     [JsonPropertyName("name")]
     public string Name { get; set; } = string.Empty;
 
-    [JsonPropertyName("tracks")]
+    [JsonPropertyName("items")]
     public SpotifyPlaylistTracks Tracks { get; set; } = new();
 
     [JsonPropertyName("owner")]
