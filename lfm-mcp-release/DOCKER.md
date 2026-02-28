@@ -366,6 +366,10 @@ docker-compose build
 docker-compose up -d
 ```
 
+**After redeploying**, MCP clients must reconnect (existing sessions become stale):
+- **Claude.ai**: Disconnect and reconnect the custom connector
+- **Claude Code**: Run `/mcp` to reconnect
+
 ### Configuration Updates
 
 If you've changed your local configuration (API keys, Spotify tokens, Sonos settings, etc.):
