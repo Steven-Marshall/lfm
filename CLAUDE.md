@@ -1,7 +1,7 @@
 # Last.fm CLI - Claude Session Notes
 
 ## Project Overview
-Last.fm CLI tool (.NET) for music statistics. Production-ready with Spotify/Sonos playback, 32-tool MCP server, and file-based caching (119x performance improvement).
+Last.fm CLI tool (.NET) for music statistics. Production-ready with Spotify/Sonos playback, 33-tool MCP server, and file-based caching (119x performance improvement).
 
 ## Architecture
 - **Lfm.Cli**: CLI commands using System.CommandLine
@@ -23,16 +23,38 @@ Last.fm CLI tool (.NET) for music statistics. Production-ready with Spotify/Sono
 # Development
 dotnet build -c Release
 
-# Publish
+# Publish — win-arm64 is the primary delivery target (laptop is ARM as of 2026-06)
+dotnet publish src/Lfm.Cli -c Release -r win-arm64 -o publish/win-arm64 --self-contained false
+
+# Other targets (kept for office laptop / Spark Linux deployment)
 dotnet publish src/Lfm.Cli -c Release -r win-x64 -o publish/win-x64 --self-contained false
 dotnet publish src/Lfm.Cli -c Release -r linux-x64 -o publish/linux-x64 --self-contained false
 ```
 
-**Executables**: `./publish/win-x64/lfm.exe` or `./publish/linux-x64/lfm`
+**Executables**: `./publish/win-arm64/lfm.exe` (primary), `./publish/win-x64/lfm.exe`, or `./publish/linux-x64/lfm`
+
+**Installing locally**: the MCP server spawns `lfm` from PATH, so the published binary needs to be on PATH (or the `lfm` shim updated to point at it) before a reconnect picks up CLI changes.
 
 ---
 
 ## Recent Sessions
+
+### Session: 2026-06-18 (Album Tracks Tool + Spotify Reauth Handling)
+- **Status**: ✅ COMPLETE — deployed to Spark (arm64 container rebuilt + healthy)
+- **CLI v1.11.0 / MCP v0.6.0**
+- **New tool**: `lfm_album_tracks` — canonical Spotify tracklist (track #, disc #, durations, per-track artists) to plug LLM blind spot on track positions
+  - CLI: `lfm album-tracks <artist> <album> [--exact-match] [--json]`
+  - Spotify endpoint: `/v1/albums/{id}/tracks` with pagination via `next`
+  - Same disambiguation contract as `lfm_play_now` (multipleVersionsDetected + exactMatch retry)
+- **Spotify reauth handling** (ahead of 2026-07-20 6-month refresh-token expiry):
+  - New `SpotifyReauthRequiredException` thrown specifically on `invalid_grant`
+  - `EnsureValidAccessTokenAsync` distinguishes interactive CLI from headless MCP via `Console.IsInputRedirected` — interactive falls through to OAuth flow, headless throws cleanly (no more deadlock on `Console.ReadLine`)
+  - Dead refresh tokens cleared from saved config on confirmed `invalid_grant`
+  - PlayCommand emits structured `{ errorCode: "spotify_reauth_required", action: "..." }` JSON
+  - `executeLfmCommand` in server-core.js now passes structured-JSON stdout through to MCP on non-zero exit (also fixes the existing `multipleVersionsDetected` round-trip that was being lost)
+- **Album disambiguation case-insensitivity** — flipped all 5 sites from `StringComparison.Ordinal` to `OrdinalIgnoreCase` (matches the existing playlist-disambiguation convention; "Out of Season" now resolves to Spotify's "Out Of Season")
+- **Build target** — win-arm64 is now the primary local target (laptop is ARM as of 2026-06)
+- **Guidelines updated** — `lfm-guidelines.md` track-positions section routes canonical-position questions to `lfm_album_tracks`, keeps `lfm_check verbose` for scrobble-coverage
 
 ### Session: 2025-12-28 (MCP Exit Error Investigation)
 - **Status**: ⚠️ KNOWN UPSTREAM ISSUE
@@ -79,6 +101,9 @@ All four changes complete and tested:
 
 - OAuth scope `user-library-modify` added
 - Spark deployment needs re-auth with new refresh token
+
+### 📋 TODO
+- **Local build on office laptop** — `git pull` + `dotnet publish` for win-x64 to pick up v1.11.0 (Spotify migration + album-tracks tool)
 
 ### 📋 Future Enhancements
 - **Progress Bars**: Long-running operation feedback (see `progressbarproject.md`)

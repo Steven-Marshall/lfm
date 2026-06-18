@@ -69,6 +69,7 @@ When you can see the complete pattern → speak with authority.
 - `lfm_artist_tracks` - Tracks by specific artist (use `deep: true` for full history)
 - `lfm_albums` - Top albums overall
 - `lfm_artist_albums` - Albums by specific artist (use `deep: true` for full history)
+- `lfm_album_tracks` - Canonical Spotify tracklist for an album (track #, disc #, duration) — use BEFORE claiming any track position
 
 **Checking History:**
 - `lfm_check` - Single artist/track/album
@@ -190,24 +191,32 @@ Albums and tracks have **severe metadata matching issues**:
 **NEVER reference track numbers or positions without verification.**
 
 Track-level metadata is NOT in LLM knowledge bases reliably. This includes:
-- Track positions ("track 5 is...", "the third song...")
+- Track positions ("track 5 is...", "the third song...", "the closer is...")
 - Track counts ("this 12-track album...")
+- Track durations
 - Which songs appear on which albums (varies by edition)
 
-**Always verify with:**
-- `lfm_check(artist, album, verbose: true)` → Full tracklist with play counts
-- `lfm_current_track()` → Current playback position
-- `lfm_recent_tracks(hours: 1-2)` → Recent listening context (mid-album vs single track?)
+**Pick the right tool for the question:**
 
-**Why:** Track positions are edge-case data for LLMs. You'll hallucinate with false confidence.
+| Question                                          | Tool                                  | Source            |
+|---------------------------------------------------|---------------------------------------|-------------------|
+| "Which track is #4? What's the closer?"           | `lfm_album_tracks`                    | Spotify canonical |
+| "How long is the title track?"                    | `lfm_album_tracks`                    | Spotify canonical |
+| "Have I listened to this album / which tracks?"   | `lfm_check(verbose: true)`            | User scrobbles    |
+| "What's playing right now?"                       | `lfm_current_track()`                 | Live playback     |
+| "Mid-album or just one track?"                    | `lfm_recent_tracks(hours: 1-2)`       | User scrobbles    |
 
-**Example workflow:**
-1. Check what's playing: `lfm_current_track()`
-2. Check recent history: `lfm_recent_tracks(hours: 1)`
-   - See if user is mid-album (5 tracks from same album in a row)
-   - Or just playing one track
-3. Get album structure: `lfm_check(artist, album, verbose: true)`
-4. Now discuss with actual data
+`lfm_album_tracks` returns canonical Spotify track order — matches what plays on Spotify/Sonos. Use it before quoting any positional fact ("track 4", "the closer", "the 11-minute opener").
+
+`lfm_check(verbose: true)` returns scrobble-side data — your play counts per track, with metadata as you actually scrobbled it. Different question, different tool.
+
+**Why this matters:** Track positions are edge-case data for LLMs. You will hallucinate them with false confidence. A wrong "the closer is X" claim while introducing an album to play is a recurring failure mode — the user notices immediately when the album finishes on a different track.
+
+**Example workflow when introducing an album:**
+1. `lfm_current_track()` → Confirm what's playing
+2. `lfm_album_tracks(artist, album)` → Get canonical tracklist (one call, authoritative for positions/durations)
+3. `lfm_check(artist, album, verbose: true)` → Add scrobble context if relevant ("you've heard this 4 times")
+4. Now discuss positions with verified data
 
 **Good workflow:**
 1. LLM: Make recommendation based on listening patterns

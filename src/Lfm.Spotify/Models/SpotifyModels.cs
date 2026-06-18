@@ -249,6 +249,9 @@ public class SpotifyAlbumTracksResponse
 {
     [JsonPropertyName("items")]
     public List<SpotifyAlbumTrack> Items { get; set; } = new();
+
+    [JsonPropertyName("next")]
+    public string? Next { get; set; }
 }
 
 public class SpotifyAlbumTrack
@@ -258,6 +261,53 @@ public class SpotifyAlbumTrack
 
     [JsonPropertyName("name")]
     public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("track_number")]
+    public int TrackNumber { get; set; }
+
+    [JsonPropertyName("disc_number")]
+    public int DiscNumber { get; set; }
+
+    [JsonPropertyName("duration_ms")]
+    public int DurationMs { get; set; }
+
+    [JsonPropertyName("is_playable")]
+    public bool? IsPlayable { get; set; }
+
+    [JsonPropertyName("artists")]
+    public List<SpotifyArtistRef> Artists { get; set; } = new();
+}
+
+public class SpotifyArtistRef
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+}
+
+/// Result returned by GetAlbumTracksAsync. Either holds an ordered tracklist for
+/// a single resolved album, or HasMultipleVersions=true with a list of candidate
+/// versions for the caller to disambiguate (same pattern as AlbumSearchResult).
+public class AlbumTracksResult
+{
+    public string? SpotifyUri { get; set; }
+    public string? AlbumName { get; set; }
+    public List<string> Artists { get; set; } = new();
+    public string? ReleaseDate { get; set; }
+    public int TotalTracks { get; set; }
+    public List<AlbumTrackInfo> Tracks { get; set; } = new();
+    public bool HasMultipleVersions { get; set; }
+    public List<AlbumVersionInfo> AlbumVersions { get; set; } = new();
+}
+
+public class AlbumTrackInfo
+{
+    public int TrackNumber { get; set; }
+    public int DiscNumber { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public List<string> Artists { get; set; } = new();
+    public int DurationMs { get; set; }
+    public string Uri { get; set; } = string.Empty;
+    public bool? IsPlayable { get; set; }
 }
 
 // Playback State Response

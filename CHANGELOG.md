@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.0] - 2026-06-18
+
+### Added
+- **`lfm album-tracks` command / `lfm_album_tracks` MCP tool** — canonical Spotify tracklist for an album, returning track number, disc number, duration, and per-track artist attribution
+  - Plugs the well-known LLM blind spot on album track positions (the "Tom The Model is the closer" failure mode)
+  - Uses `GET /v1/albums/{id}/tracks` with pagination via `next` for albums >50 tracks
+  - Same disambiguation contract as `lfm_play_now` (multiple-versions error + `exactMatch` retry)
+  - Updated `lfm-guidelines.md` to route canonical-position questions to the new tool, keeping `lfm_check verbose` for scrobble-coverage questions
+
+### Changed
+- **Spotify reauthentication handling** (preparing for Spotify's 2026-07-20 6-month refresh-token expiry policy)
+  - New `SpotifyReauthRequiredException` thrown specifically on Spotify's `invalid_grant` response
+  - `EnsureValidAccessTokenAsync` distinguishes interactive CLI from headless MCP via `Console.IsInputRedirected`: interactive falls through to OAuth prompt as before; headless throws a clean structured error instead of deadlocking on `Console.ReadLine`
+  - Dead refresh tokens are now discarded from saved config on confirmed `invalid_grant` (per Spotify's "discard expired tokens" guidance)
+  - `PlayCommand` emits structured `{ errorCode: "spotify_reauth_required", action: "..." }` JSON for MCP consumption
+- **Album disambiguation is now case-insensitive** — flipped all 5 album exact-match sites from `StringComparison.Ordinal` to `OrdinalIgnoreCase`, matching the existing playlist-disambiguation convention. ("Out of Season" now resolves to Spotify's "Out Of Season" without the user needing to mirror Spotify's title-case.)
+- **Primary build target is now win-arm64** (laptop upgraded to ARM as of 2026-06)
+
+### MCP Server (v0.6.0)
+- New tool: `lfm_album_tracks` (33 tools total)
+- `executeLfmCommand` now passes structured-JSON stdout through to the MCP layer on non-zero CLI exit, surfacing handled-error JSON (multiple album versions, Spotify reauth required) instead of swallowing it as a generic "command failed" message
+
 ## [1.10.0] - 2026-02-28
 
 ### Fixed

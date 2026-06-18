@@ -45,6 +45,7 @@ class Program
             CreatePlaylistCommandBuilder.Build(host.Services),
             SimilarCommandBuilder.Build(host.Services),
             PlayCommandBuilder.Build(host.Services),
+            AlbumTracksCommandBuilder.Build(host.Services),
             PlaylistCommandBuilder.Build(host.Services),
             PlaylistsCommandBuilder.Build(host.Services),
             PauseCommandBuilder.Build(host.Services),
@@ -172,6 +173,7 @@ class Program
                 services.AddTransient<CreatePlaylistCommand>();
                 services.AddTransient<SimilarCommand>();
                 services.AddTransient<PlayCommand>();
+                services.AddTransient<AlbumTracksCommand>();
                 services.AddTransient<PlaylistCommand>();
                 services.AddTransient<PlaylistsCommand>();
                 services.AddTransient<PauseCommand>();

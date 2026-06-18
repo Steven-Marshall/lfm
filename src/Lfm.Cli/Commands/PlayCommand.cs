@@ -409,6 +409,20 @@ public class PlayCommand : BaseCommand
                 return 1;
             }
         }
+        catch (SpotifyReauthRequiredException ex)
+        {
+            _logger.LogError(ex, "Spotify reauthentication required");
+            if (json)
+            {
+                OutputJsonReauth(ex.Message);
+            }
+            else
+            {
+                Console.WriteLine($"{_symbols.Error} {ex.Message}");
+                Console.WriteLine($"{_symbols.Tip} Run: lfm config spotify-auth");
+            }
+            return 1;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error executing play command");
@@ -422,6 +436,18 @@ public class PlayCommand : BaseCommand
             }
             return 1;
         }
+    }
+
+    private void OutputJsonReauth(string message)
+    {
+        var output = new
+        {
+            success = false,
+            errorCode = "spotify_reauth_required",
+            error = message,
+            action = "Spotify needs re-authentication. Ask the user to run `lfm config spotify-auth` on the host where the MCP server runs."
+        };
+        Console.WriteLine(JsonSerializer.Serialize(output, new JsonSerializerOptions { WriteIndented = true }));
     }
 
     private void OutputJson(bool success, string message, string? artist = null, string? track = null, string? album = null, int? trackCount = null, Lfm.Spotify.Models.TrackSearchResult? searchResult = null)

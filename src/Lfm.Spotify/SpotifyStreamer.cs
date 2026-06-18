@@ -586,24 +586,54 @@ public class SpotifyStreamer : IPlaylistStreamer
 
         if (!string.IsNullOrEmpty(_config.RefreshToken))
         {
-            // Try to refresh the token
             try
             {
                 await RefreshAccessTokenAsync();
+                return;
+            }
+            catch (SpotifyReauthRequiredException)
+            {
+                // Spotify confirmed the refresh token is dead (invalid_grant).
+                // Discard it from saved config so we don't keep retrying a dead token.
+                await ClearStoredRefreshTokenAsync();
+
+                if (Console.IsInputRedirected)
+                {
+                    throw new SpotifyReauthRequiredException(
+                        "Spotify refresh token expired or revoked, and no interactive terminal is available. " +
+                        "Run `lfm config spotify-auth` on the host to re-authenticate.");
+                }
+
+                Console.WriteLine("⚠️  Spotify refresh token expired or revoked.");
+                Console.WriteLine("Starting OAuth flow to re-authenticate...\n");
+                await DoInitialOAuthFlowAsync();
+                return;
             }
             catch (Exception ex)
             {
-                // Refresh failed (expired/revoked token), fall back to OAuth flow
-                Console.WriteLine($"⚠️  Refresh token invalid or expired: {ex.Message}");
-                Console.WriteLine($"Starting OAuth flow to re-authenticate...\n");
+                // Other refresh failure (network, transient API error). Don't discard
+                // the refresh token — it may still be valid on the next attempt.
+                if (Console.IsInputRedirected)
+                {
+                    throw;
+                }
+
+                Console.WriteLine($"⚠️  Spotify token refresh failed: {ex.Message}");
+                Console.WriteLine("Starting OAuth flow to re-authenticate...\n");
                 await DoInitialOAuthFlowAsync();
+                return;
             }
         }
-        else
+
+        // No refresh token stored — needs initial OAuth.
+        if (Console.IsInputRedirected)
         {
-            // Need to do initial OAuth flow
-            await DoInitialOAuthFlowAsync();
+            throw new SpotifyReauthRequiredException(
+                "Spotify is not authenticated, and no interactive terminal is available. " +
+                "Run `lfm config spotify-auth` on the host to authenticate.");
         }
+
+        await DoInitialOAuthFlowAsync();
     }
 
     private async Task RefreshAccessTokenAsync()
@@ -628,10 +658,52 @@ public class SpotifyStreamer : IPlaylistStreamer
                 _accessToken = tokenResponse.AccessToken;
                 _tokenExpiry = DateTime.UtcNow.AddSeconds(tokenResponse.ExpiresIn - 60); // 60 second buffer
             }
+            return;
         }
-        else
+
+        // Spotify returns 400 with { "error": "invalid_grant", ... } when the
+        // refresh token is expired or revoked — that's the "needs re-auth"
+        // signal per https://developer.spotify.com/blog/2026-06-18.
+        if (IsInvalidGrantError(json))
         {
-            throw new Exception($"Failed to refresh Spotify token: {json}");
+            throw new SpotifyReauthRequiredException($"Spotify rejected refresh token (invalid_grant): {json}");
+        }
+
+        throw new Exception($"Failed to refresh Spotify token: {json}");
+    }
+
+    private static bool IsInvalidGrantError(string responseBody)
+    {
+        if (string.IsNullOrWhiteSpace(responseBody))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(responseBody);
+            return doc.RootElement.TryGetProperty("error", out var errorProp)
+                && errorProp.ValueKind == JsonValueKind.String
+                && errorProp.GetString() == "invalid_grant";
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private async Task ClearStoredRefreshTokenAsync()
+    {
+        try
+        {
+            var config = await _configManager.LoadAsync();
+            config.Spotify.RefreshToken = string.Empty;
+            await _configManager.SaveAsync(config);
+            _config.RefreshToken = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"⚠️  Warning: Could not clear expired refresh token from config: {ex.Message}");
         }
     }
 
@@ -854,7 +926,7 @@ public class SpotifyStreamer : IPlaylistStreamer
                 {
                     // Filter for exact match if requested
                     var candidateAlbums = exactMatch
-                        ? albums.Where(a => a.Name.Equals(albumName, StringComparison.Ordinal)).ToList()
+                        ? albums.Where(a => a.Name.Equals(albumName, StringComparison.OrdinalIgnoreCase)).ToList()
                         : albums;
 
                     if (candidateAlbums.Count == 1)
@@ -910,7 +982,7 @@ public class SpotifyStreamer : IPlaylistStreamer
                     {
                         // Filter for exact match if requested
                         var candidateAlbums = exactMatch
-                            ? albums.Where(a => a.Name.Equals(albumName, StringComparison.Ordinal)).ToList()
+                            ? albums.Where(a => a.Name.Equals(albumName, StringComparison.OrdinalIgnoreCase)).ToList()
                             : albums;
 
                         if (candidateAlbums.Count == 1)
@@ -985,7 +1057,7 @@ public class SpotifyStreamer : IPlaylistStreamer
                 {
                     // Filter for exact match if requested
                     var candidateAlbums = exactMatch
-                        ? albums.Where(a => a.Name.Equals(albumName, StringComparison.Ordinal)).ToList()
+                        ? albums.Where(a => a.Name.Equals(albumName, StringComparison.OrdinalIgnoreCase)).ToList()
                         : albums;
 
                     if (candidateAlbums.Count == 1)
@@ -1061,7 +1133,7 @@ public class SpotifyStreamer : IPlaylistStreamer
                     {
                         // Filter for exact match if requested
                         var candidateAlbums = exactMatch
-                            ? albums.Where(a => a.Name.Equals(albumName, StringComparison.Ordinal)).ToList()
+                            ? albums.Where(a => a.Name.Equals(albumName, StringComparison.OrdinalIgnoreCase)).ToList()
                             : albums;
 
                         if (candidateAlbums.Count == 1)
@@ -1406,6 +1478,149 @@ public class SpotifyStreamer : IPlaylistStreamer
             Console.WriteLine($"⚠️  Error starting playback: {ex.Message}");
             return false;
         }
+    }
+
+    /// Get the canonical ordered tracklist for an album from Spotify, including
+    /// track number, disc number, duration, and per-track artist attribution.
+    /// Uses the same album disambiguation pattern as SearchSpotifyAlbumUri/Tracks:
+    /// if multiple candidates match and exactMatch is false, returns
+    /// HasMultipleVersions=true with the candidate list.
+    public async Task<AlbumTracksResult> GetAlbumTracksAsync(string artistName, string albumName, bool exactMatch = false)
+    {
+        await EnsureValidAccessTokenAsync();
+        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
+
+        var album = await ResolveAlbumAsync(artistName, albumName, exactMatch);
+        if (album is null)
+        {
+            return new AlbumTracksResult();
+        }
+
+        if (album.MultipleVersions is not null)
+        {
+            return new AlbumTracksResult
+            {
+                HasMultipleVersions = true,
+                AlbumVersions = album.MultipleVersions
+            };
+        }
+
+        var tracks = await FetchAllAlbumTracksAsync(album.Album!.Id);
+        return new AlbumTracksResult
+        {
+            SpotifyUri = album.Album.Uri,
+            AlbumName = album.Album.Name,
+            ReleaseDate = album.Album.ReleaseDate,
+            TotalTracks = album.Album.TotalTracks,
+            Tracks = tracks
+                .OrderBy(t => t.DiscNumber)
+                .ThenBy(t => t.TrackNumber)
+                .Select(t => new AlbumTrackInfo
+                {
+                    TrackNumber = t.TrackNumber,
+                    DiscNumber = t.DiscNumber,
+                    Name = t.Name,
+                    Artists = t.Artists.Select(a => a.Name).ToList(),
+                    DurationMs = t.DurationMs,
+                    Uri = t.Uri,
+                    IsPlayable = t.IsPlayable
+                })
+                .ToList()
+        };
+    }
+
+    private async Task<AlbumResolution?> ResolveAlbumAsync(string artistName, string albumName, bool exactMatch)
+    {
+        var preciseQuery = HttpUtility.UrlEncode($"artist:\"{artistName}\" album:\"{albumName}\"");
+        var result = await TryResolveAlbumAsync(preciseQuery, albumName, exactMatch);
+        if (result is not null)
+        {
+            return result;
+        }
+
+        if (_config.FallbackToLooseSearch)
+        {
+            var looseQuery = HttpUtility.UrlEncode($"{artistName} {albumName}");
+            return await TryResolveAlbumAsync(looseQuery, albumName, exactMatch);
+        }
+
+        return null;
+    }
+
+    private async Task<AlbumResolution?> TryResolveAlbumAsync(string encodedQuery, string albumName, bool exactMatch)
+    {
+        var searchUrl = $"https://api.spotify.com/v1/search?q={encodedQuery}&type=album&limit=10";
+        var response = await _httpClient.GetAsync(searchUrl);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        var json = await response.Content.ReadAsStringAsync();
+        var searchResponse = JsonSerializer.Deserialize<SpotifyAlbumSearchResponse>(json);
+        var albums = searchResponse?.Albums?.Items ?? new List<SpotifyAlbumItem>();
+        if (!albums.Any())
+        {
+            return null;
+        }
+
+        var candidates = exactMatch
+            ? albums.Where(a => a.Name.Equals(albumName, StringComparison.OrdinalIgnoreCase)).ToList()
+            : albums;
+
+        if (candidates.Count == 0)
+        {
+            return null;
+        }
+
+        if (candidates.Count == 1 || exactMatch)
+        {
+            return new AlbumResolution { Album = candidates.First() };
+        }
+
+        return new AlbumResolution
+        {
+            MultipleVersions = candidates.Select(a => new AlbumVersionInfo
+            {
+                Name = a.Name,
+                ReleaseDate = a.ReleaseDate,
+                Uri = a.Uri,
+                TrackCount = a.TotalTracks
+            }).ToList()
+        };
+    }
+
+    private async Task<List<SpotifyAlbumTrack>> FetchAllAlbumTracksAsync(string albumId)
+    {
+        var all = new List<SpotifyAlbumTrack>();
+        var nextUrl = $"https://api.spotify.com/v1/albums/{albumId}/tracks?limit=50";
+
+        while (!string.IsNullOrEmpty(nextUrl))
+        {
+            var response = await _httpClient.GetAsync(nextUrl);
+            if (!response.IsSuccessStatusCode)
+            {
+                break;
+            }
+
+            var json = await response.Content.ReadAsStringAsync();
+            var page = JsonSerializer.Deserialize<SpotifyAlbumTracksResponse>(json);
+            if (page is null)
+            {
+                break;
+            }
+
+            all.AddRange(page.Items);
+            nextUrl = page.Next;
+        }
+
+        return all;
+    }
+
+    private sealed class AlbumResolution
+    {
+        public SpotifyAlbumItem? Album { get; set; }
+        public List<AlbumVersionInfo>? MultipleVersions { get; set; }
     }
 
     /// <summary>

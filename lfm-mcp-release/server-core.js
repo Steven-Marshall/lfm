@@ -90,12 +90,22 @@ async function executeLfmCommand(args) {
     });
 
     childProcess.on('close', (code) => {
-      if (code !== 0) {
-        reject(new Error(`Command failed with code ${code}: ${stderr}`));
-      } else {
-        // Return stdout only, ignore stderr (which may contain logging/warnings)
+      if (code === 0) {
         resolve(stdout);
+        return;
       }
+
+      // CLI emits structured JSON on stdout for handled failures (multiple album
+      // versions, Spotify reauth required, etc.) and still returns a non-zero
+      // exit code. Surface that JSON to the MCP layer so the LLM gets the
+      // structured signal rather than a generic "command failed" message.
+      const trimmed = stdout.trim();
+      if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        resolve(stdout);
+        return;
+      }
+
+      reject(new Error(`Command failed with code ${code}: ${stderr}`));
     });
   });
 }
@@ -965,6 +975,38 @@ Quick reference:
             }
           },
           required: ['artist']
+        }
+      },
+      {
+        name: 'lfm_album_tracks',
+        description: `Get an album's canonical ordered tracklist from Spotify, with track numbers, disc numbers, durations, and per-track artist attribution.
+
+USE THIS instead of recalling track positions from memory. LLM training data is unreliable for track positions, especially:
+- Which track is the closer
+- Track numbers ("the third song", "track 5 is...")
+- Which tracks appear on which version (deluxe vs standard, remasters)
+
+Returns canonical Spotify data (matches what plays on Spotify/Sonos), not vinyl-era or Last.fm canonical entries. Use lfm_check with verbose:true instead for SCROBBLE-side data (your play counts per track).
+
+Disambiguation: if multiple album versions exist, the response includes multipleVersionsDetected:true with an albumVersions array — pick the right version and retry with exactMatch:true.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            artist: {
+              type: 'string',
+              description: 'Artist name'
+            },
+            album: {
+              type: 'string',
+              description: 'Album name'
+            },
+            exactMatch: {
+              type: 'boolean',
+              description: 'Force exact album name matching. Use after receiving "multiple versions detected" error.',
+              default: false
+            }
+          },
+          required: ['artist', 'album']
         }
       },
       {
@@ -2022,6 +2064,40 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           ]
         };
       }
+    } catch (error) {
+      return createErrorResponse(error);
+    }
+  }
+
+  if (name === 'lfm_album_tracks') {
+    try {
+      const artist = args.artist;
+      const album = args.album;
+      const exactMatch = args.exactMatch || false;
+
+      if (!artist) {
+        throw new Error('Artist name is required');
+      }
+      if (!album) {
+        throw new Error('Album name is required');
+      }
+
+      const cmdArgs = ['album-tracks', artist, album, '--json'];
+      if (exactMatch) {
+        cmdArgs.push('--exact-match');
+      }
+
+      const output = await executeLfmCommand(cmdArgs);
+      const result = parseJsonOutput(output);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2)
+          }
+        ]
+      };
     } catch (error) {
       return createErrorResponse(error);
     }

@@ -1,6 +1,6 @@
 {
   "name": "lfm-mcp-server",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Model Context Protocol server for Last.fm CLI integration",
   "main": "server.js",
   "scripts": {
