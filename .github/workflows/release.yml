@@ -28,6 +28,12 @@ jobs:
           cd publish/win-x64
           zip -r ../../lfm-windows-x64.zip lfm.exe
 
+      - name: Build Windows ARM64
+        run: |
+          dotnet publish src/Lfm.Cli -c Release -r win-arm64 -o publish/win-arm64 --self-contained true
+          cd publish/win-arm64
+          zip -r ../../lfm-windows-arm64.zip lfm.exe
+
       - name: Build macOS Intel
         run: |
           dotnet publish src/Lfm.Cli -c Release -r osx-x64 -o publish/osx-x64 --self-contained true
@@ -50,6 +56,8 @@ jobs:
         run: |
           mkdir -p lfm-mcp-server
           cp lfm-mcp-release/server.js lfm-mcp-server/
+          cp lfm-mcp-release/server-core.js lfm-mcp-server/
+          cp lfm-mcp-release/server-http.js lfm-mcp-server/
           cp lfm-mcp-release/lfm-guidelines.md lfm-mcp-server/
           cp lfm-mcp-release/package.json lfm-mcp-server/
           cp lfm-mcp-release/package-lock.json lfm-mcp-server/
@@ -68,7 +76,8 @@ jobs:
           Choose your platform and download the appropriate file:
 
           **Windows:**
-          - Download `lfm-windows-x64.zip`
+          - Intel/AMD (x64): Download `lfm-windows-x64.zip`
+          - ARM (Snapdragon X / Surface Pro 11+): Download `lfm-windows-arm64.zip`
           - Extract to `C:\Users\YourName\lfm`
           - Add to PATH
           - Or use the one-liner installer (see [INSTALL.md](INSTALL.md))
@@ -120,6 +129,7 @@ jobs:
           body_path: release-notes.md
           files: |
             lfm-windows-x64.zip
+            lfm-windows-arm64.zip
             lfm-macos-intel.zip
             lfm-macos-apple-silicon.zip
             lfm-linux-x64.tar.gz
